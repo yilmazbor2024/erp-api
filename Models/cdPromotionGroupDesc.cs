@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Api.Models
+namespace ErpMobile.Api.Models
 {
     [Table("cdPromotionGroupDesc")]
     public class cdPromotionGroupDesc

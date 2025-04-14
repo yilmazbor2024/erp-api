@@ -1,6 +1,5 @@
 using System.Text;
 using ErpMobile.Api.Data;
-using ErpMobile.Api.Data.Context;
 using ErpMobile.Api.Services.Auth;
 using ErpMobile.Api.Services.Menu;
 using ErpMobile.Api.Services.Email;
@@ -10,7 +9,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using ErpMobile.Api.Entities;
-using Api.Data;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using ErpMobile.Api.Services;
+using ErpMobile.Api.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -76,11 +80,12 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<NanoServiceDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("NanoServiceConnection")));
 
-builder.Services.AddDbContext<ErpDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("ErpConnection")));
-
-builder.Services.AddDbContext<ErpDbContext1>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("ErpConnection")));
+// Register ErpDbContext
+builder.Services.AddScoped<ErpDbContext>(provider => 
+    new ErpDbContext(
+        builder.Configuration.GetConnectionString("ErpConnection"), 
+        provider.GetRequiredService<ILogger<ErpDbContext>>()
+    ));
 
 // Configure Identity
 builder.Services.AddIdentity<User, Role>(options =>
@@ -128,6 +133,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<ICustomerService, CustomerService>();
 
 var app = builder.Build();
 

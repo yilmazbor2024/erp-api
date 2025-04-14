@@ -4,12 +4,22 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ErpMobile.Api.Models
 {
-    [Table("cdPromotionGroup")]
-    public class cdPromotionGroup
+    [Table("cdDistrictDesc")]
+    public class cdDistrictDesc
     {
         [Key]
-        [StringLength(10)]
-        public string PromotionGroupCode { get; set; }
+        [Column(Order = 1)]
+        [StringLength(30)]
+        public string DistrictCode { get; set; }
+
+        [Key]
+        [Column(Order = 2)]
+        [StringLength(5)]
+        public string LangCode { get; set; }
+
+        [Required]
+        [StringLength(100)]
+        public string DistrictDescription { get; set; }
 
         [Required]
         [StringLength(20)]
@@ -27,5 +37,9 @@ namespace ErpMobile.Api.Models
 
         [Required]
         public Guid RowGuid { get; set; }
+
+        // Navigation Properties
+        [ForeignKey("DistrictCode")]
+        public virtual cdDistrict District { get; set; }
     }
 } 

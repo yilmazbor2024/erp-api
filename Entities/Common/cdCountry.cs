@@ -2,14 +2,25 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace ErpMobile.Api.Models
+namespace ErpMobile.Api.Models  
 {
-    [Table("cdPromotionGroup")]
-    public class cdPromotionGroup
+    [Table("cdCountry")]
+    public class cdCountry
     {
         [Key]
         [StringLength(10)]
-        public string PromotionGroupCode { get; set; }
+        public string CountryCode { get; set; }
+
+        [Required]
+        [StringLength(3)]
+        public string ISOCode { get; set; }
+
+        [Required]
+        [StringLength(3)]
+        public string ISOCode3 { get; set; }
+
+        [Required]
+        public short PhoneCode { get; set; }
 
         [Required]
         [StringLength(20)]

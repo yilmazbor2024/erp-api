@@ -1,7 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using ErpMobile.Api.Models.Customer;
 
-namespace Api.Models
+namespace ErpMobile.Api.Models
 {
     [Table("cdPriceGroup")]
     public class cdPriceGroup

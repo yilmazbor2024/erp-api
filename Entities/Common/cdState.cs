@@ -4,12 +4,16 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ErpMobile.Api.Models
 {
-    [Table("cdPromotionGroup")]
-    public class cdPromotionGroup
+    [Table("cdState")]
+    public class cdState
     {
         [Key]
         [StringLength(10)]
-        public string PromotionGroupCode { get; set; }
+        public string StateCode { get; set; }
+
+        [Required]
+        [StringLength(10)]
+        public string CountryCode { get; set; }
 
         [Required]
         [StringLength(20)]
@@ -27,5 +31,9 @@ namespace ErpMobile.Api.Models
 
         [Required]
         public Guid RowGuid { get; set; }
+
+        // Navigation Properties
+        [ForeignKey("CountryCode")]
+        public virtual cdCountry Country { get; set; }
     }
 } 

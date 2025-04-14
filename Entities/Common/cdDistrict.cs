@@ -1,15 +1,18 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-
 namespace ErpMobile.Api.Models
 {
-    [Table("cdPromotionGroup")]
-    public class cdPromotionGroup
+    [Table("cdDistrict")]
+    public class cdDistrict
     {
         [Key]
+        [StringLength(30)]
+        public string DistrictCode { get; set; }
+
+        [Required]
         [StringLength(10)]
-        public string PromotionGroupCode { get; set; }
+        public string CityCode { get; set; }
 
         [Required]
         [StringLength(20)]
@@ -27,5 +30,9 @@ namespace ErpMobile.Api.Models
 
         [Required]
         public Guid RowGuid { get; set; }
+
+        // Navigation Properties
+        [ForeignKey("CityCode")]
+        public virtual cdCity City { get; set; }
     }
 } 

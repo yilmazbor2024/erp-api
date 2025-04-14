@@ -1,9 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace ErpMobile.Api.Models{
-    [Table("prCustomerVendorAccount")]
-    public class prCustomerVendorAccount
+namespace ErpMobile.Api.Models
+{
+    [Table("cdCurrAccDesc")]
+    public class cdCurrAccDesc
     {
         [Key]
         [Column(Order = 1)]
@@ -14,8 +15,13 @@ namespace ErpMobile.Api.Models{
         [StringLength(30)]
         public string CurrAccCode { get; set; }
 
-        [StringLength(30)]
-        public string VendorCode { get; set; }
+        [Key]
+        [Column(Order = 3)]
+        [StringLength(10)]
+        public string LangCode { get; set; }
+
+        [StringLength(60)]
+        public string CurrAccDescription { get; set; }
 
         // Navigation Property
         [ForeignKey("CurrAccTypeCode,CurrAccCode")]

@@ -3,13 +3,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ErpMobile.Api.Models
 {
-    [Table("cdPriceGroupDesc")]
-    public class cdPriceGroupDesc
+    [Table("cdCustomerDiscountGrDesc")]
+    public class cdCustomerDiscountGrDesc
     {
         [Key]
         [Column(Order = 1)]
         [StringLength(30)]
-        public string PriceGroupCode { get; set; }
+        public string CustomerDiscountGrCode { get; set; }
 
         [Key]
         [Column(Order = 2)]
@@ -17,10 +17,10 @@ namespace ErpMobile.Api.Models
         public string LangCode { get; set; }
 
         [StringLength(60)]
-        public string PriceGroupDescription { get; set; }
+        public string CustomerDiscountGrDescription { get; set; }
 
         // Navigation Property
-        [ForeignKey("PriceGroupCode")]
-        public virtual cdPriceGroup PriceGroup { get; set; }
+        [ForeignKey("CustomerDiscountGrCode")]
+        public virtual cdCustomerDiscountGr CustomerDiscountGr { get; set; }
     }
 } 
