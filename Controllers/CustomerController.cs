@@ -13,6 +13,8 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using ErpMobile.Api.Data;
 using ErpMobile.Api.Interfaces;
+using erp_api.Models.Common;
+using Microsoft.AspNetCore.Http;
 
 namespace ErpMobile.Api.Controllers
 {
@@ -45,6 +47,13 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
+                // Initialize filter if null
+                filter ??= new CustomerFilterRequest();
+                
+                // Set default values if not specified
+                if (filter.PageNumber <= 0) filter.PageNumber = 1;
+                if (filter.PageSize <= 0) filter.PageSize = 20;
+                
                 var customers = await _customerService.GetCustomerListAsync(filter);
                 return Ok(new ApiResponse<PagedResponse<CustomerListResponse>>(customers, true, "Customers retrieved successfully."));
             }

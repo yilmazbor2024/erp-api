@@ -4,13 +4,16 @@ using System.Threading.Tasks;
 using erp_api.Models.Responses;
 using erp_api.Models.Requests;
 using erp_api.Models.Contact;
+using erp_api.Models.Common;
+using ErpMobile.Api.Models.Customer;
 
 namespace ErpMobile.Api.Interfaces
 {
     public interface ICustomerService
     {
-        Task<List<CustomerListResponse>> GetCustomerListAsync(CustomerFilterRequest request);
+        Task<PagedResponse<CustomerListResponse>> GetCustomerListAsync(CustomerFilterRequest filter);
         Task<CustomerDetailResponse> GetCustomerByCodeAsync(string customerCode);
+        Task<CustomerDetailResponse> GetCustomerByIdAsync(string id);
         Task<CustomerResponse> CreateCustomerAsync(CustomerCreateRequest request);
         Task<List<CustomerAddressResponse>> GetCustomerAddressesAsync(string customerCode);
         Task<List<CustomerContactResponse>> GetCustomerContactsAsync(string customerCode);
@@ -38,8 +41,5 @@ namespace ErpMobile.Api.Interfaces
         Task<List<DistrictResponse>> GetDistrictsByCityAsync(string cityCode);
         Task<List<ContactTypeResponse>> GetContactTypesAsync();
         Task<ContactTypeResponse> GetContactTypeByCodeAsync(string code);
-        Task<CustomerDetailResponse> GetCustomerByIdAsync(string id);
-        Task<PagedResponse<CustomerListResponse>> GetCustomerListAsync(CustomerFilterRequest filter);
-        Task<CustomerCreateResponse> CreateCustomerAsync(CustomerCreateRequest request);
     }
 } 

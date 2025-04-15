@@ -12,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Dapper;
 using System.Linq;
 using ErpMobile.Api.Interfaces;
+using erp_api.Models.Common;
 
 namespace ErpMobile.Api.Services
 {
@@ -75,16 +76,17 @@ namespace ErpMobile.Api.Services
                     var whereClause = "";
                     var parameters = new DynamicParameters();
 
+                    // Enhanced search capabilities - if search term is present in CustomerName or CustomerCode
+                    if (!string.IsNullOrEmpty(filter.CustomerName))
+                    {
+                        whereClause += " AND (CustomerName LIKE '%' + @CustomerName + '%' OR CustomerCode LIKE '%' + @CustomerName + '%')";
+                        parameters.Add("@CustomerName", filter.CustomerName);
+                    }
+                    
                     if (!string.IsNullOrEmpty(filter.CustomerCode))
                     {
                         whereClause += " AND CustomerCode LIKE @CustomerCode + '%'";
                         parameters.Add("@CustomerCode", filter.CustomerCode);
-                    }
-
-                    if (!string.IsNullOrEmpty(filter.CustomerName))
-                    {
-                        whereClause += " AND CustomerName LIKE '%' + @CustomerName + '%'";
-                        parameters.Add("@CustomerName", filter.CustomerName);
                     }
 
                     if (filter.CustomerTypeCode.HasValue)
@@ -193,19 +195,21 @@ namespace ErpMobile.Api.Services
                     parameters.Add("@PageNumber", filter.PageNumber);
                     parameters.Add("@PageSize", filter.PageSize);
                     
-                    // Execute count query
-                    var countSql = $"SELECT COUNT(*) FROM CustomerData WHERE 1=1 {whereClause}";
-                    var totalCount = await connection.ExecuteScalarAsync<int>($"{sql}; {countSql}");
+                    // Execute count query - include full CTE declaration
+                    var countSql = $@"{sql} 
+                        SELECT COUNT(*) FROM CustomerData 
+                        WHERE 1=1 {whereClause}";
+                    var totalCount = await connection.ExecuteScalarAsync<int>(countSql, parameters);
                     
-                    // Execute paged data query
-                    var pagedSql = $@"
+                    // Execute paged data query - include full CTE declaration
+                    var pagedSql = $@"{sql}
                         SELECT * FROM CustomerData 
                         WHERE 1=1 {whereClause}
                         ORDER BY {sortColumn} {sortDirection}
                         OFFSET (@PageNumber - 1) * @PageSize ROWS
                         FETCH NEXT @PageSize ROWS ONLY";
                         
-                    var customers = await connection.QueryAsync<CustomerListResponse>($"{sql}; {pagedSql}", parameters);
+                    var customers = await connection.QueryAsync<CustomerListResponse>(pagedSql, parameters);
                     
                     // Return paged response
                     return new PagedResponse<CustomerListResponse>(
@@ -1280,6 +1284,39 @@ namespace ErpMobile.Api.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting contact type by code: {Code}", code);
+                throw;
+            }
+        }
+
+        public async Task<CustomerDetailResponse> GetCustomerByIdAsync(string customerId)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
+                {
+                    await connection.OpenAsync();
+
+                    // First, get the customer code from the customer ID
+                    var getCustomerCodeSql = @"
+                        SELECT CurrAccCode 
+                        FROM cdCurrAcc WITH(NOLOCK)
+                        WHERE CurrAccID = @CustomerID AND CurrAccTypeCode = 3";
+
+                    var customerCode = await connection.QueryFirstOrDefaultAsync<string>(getCustomerCodeSql, new { CustomerID = customerId });
+
+                    if (string.IsNullOrEmpty(customerCode))
+                    {
+                        _logger.LogWarning("Customer not found. CustomerID: {CustomerID}", customerId);
+                        return null;
+                    }
+
+                    // Once we have the customer code, we can use the existing GetCustomerByCodeAsync method
+                    return await GetCustomerByCodeAsync(customerCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting customer details by ID. CustomerID: {CustomerID}", customerId);
                 throw;
             }
         }
