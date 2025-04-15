@@ -8,12 +8,6 @@ namespace erp_api.Models.Requests
     public class ContactCreateRequest
     {
         /// <summary>
-        /// The customer code associated with this contact
-        /// </summary>
-        [Required]
-        public string? CustomerCode { get; set; }
-
-        /// <summary>
         /// The customer type code
         /// </summary>
         public byte CurrAccTypeCode { get; set; } = 1; // Default to 1 for Customer

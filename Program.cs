@@ -27,9 +27,10 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins("http://localhost:3000", "http://192.168.1.113:3000")
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -74,18 +75,55 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+
+    // XML Belgeleme Dosyasını Yükle
+    var xmlFile = "ErpMobile.Api.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+    {
+        c.IncludeXmlComments(xmlPath);
+    }
 });
 
-// Configure Database Context
-builder.Services.AddDbContext<NanoServiceDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("NanoServiceConnection")));
+try
+{
+    var nanoServiceConnectionString = builder.Configuration.GetConnectionString("NanoServiceConnection");
+    var erpConnectionString = builder.Configuration.GetConnectionString("ErpConnection");
 
-// Register ErpDbContext
-builder.Services.AddScoped<ErpDbContext>(provider => 
-    new ErpDbContext(
-        builder.Configuration.GetConnectionString("ErpConnection"), 
-        provider.GetRequiredService<ILogger<ErpDbContext>>()
-    ));
+    if (string.IsNullOrEmpty(nanoServiceConnectionString))
+    {
+        throw new ArgumentException("NanoServiceConnection string is empty or not configured.");
+    }
+
+    // Configure NanoServiceDb context
+    builder.Services.AddDbContext<NanoServiceDbContext>(options =>
+        options.UseSqlServer(nanoServiceConnectionString));
+
+    // Register ErpDbContext
+    builder.Services.AddScoped<ErpDbContext>(provider => 
+        new ErpDbContext(
+            erpConnectionString ?? throw new ArgumentException("ErpConnection string is empty or not configured."), 
+            provider.GetRequiredService<ILogger<ErpDbContext>>()
+        ));
+
+    Console.WriteLine("Database contexts configured with SQL Server.");
+}
+catch (Exception ex)
+{
+    // Log the database connection error
+    Console.WriteLine($"SQL Server connection error: {ex.Message}");
+    Console.WriteLine("Using InMemory database as fallback.");
+    
+    // Register InMemory DbContext for development/testing if connection fails
+    builder.Services.AddDbContext<NanoServiceDbContext>(options => 
+        options.UseInMemoryDatabase("NanoServiceInMemory"));
+        
+    builder.Services.AddScoped<ErpDbContext>(provider => 
+        new ErpDbContext(
+            "InMemory connection (mock)", 
+            provider.GetRequiredService<ILogger<ErpDbContext>>()
+        ));
+}
 
 // Configure Identity
 builder.Services.AddIdentity<User, Role>(options =>
@@ -137,65 +175,138 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 
 var app = builder.Build();
 
-// Create default roles and admin user
-using (var scope = app.Services.CreateScope())
+try
 {
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
-
-    // Create roles if they don't exist
-    string[] roleNames = { "Admin", "User" };
-    foreach (var roleName in roleNames)
+    // Create default roles and admin user
+    using (var scope = app.Services.CreateScope())
     {
-        if (!await roleManager.RoleExistsAsync(roleName))
+        try
         {
-            await roleManager.CreateAsync(new Role 
-            { 
-                Name = roleName, 
-                Description = roleName + " role", 
-                IsActive = true, 
-                CreatedAt = DateTime.UtcNow, 
-                CreatedBy = "System" 
-            });
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+
+            // Create roles if they don't exist
+            string[] roleNames = { "Admin", "User" };
+            foreach (var roleName in roleNames)
+            {
+                if (!roleManager.RoleExistsAsync(roleName).Result)
+                {
+                    roleManager.CreateAsync(new Role 
+                    { 
+                        Name = roleName, 
+                        Description = roleName + " role", 
+                        IsActive = true, 
+                        CreatedAt = DateTime.UtcNow, 
+                        CreatedBy = "System" 
+                    }).Wait();
+                }
+            }
+
+            // Create admin user if it doesn't exist
+            var adminEmail = "admin@erp.com";
+            var adminUser = userManager.FindByEmailAsync(adminEmail).Result;
+
+            if (adminUser == null)
+            {
+                var admin = new User
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    UserCode = "ADMIN001",
+                    FirstName = "System",
+                    LastName = "Administrator",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = "System"
+                };
+
+                var result = userManager.CreateAsync(admin, "Admin123!").Result;
+                if (result.Succeeded)
+                {
+                    userManager.AddToRoleAsync(admin, "Admin").Wait();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "Roles ve Admin kullanıcı oluşturulurken hata meydana geldi.");
         }
     }
-
-    // Create admin user if it doesn't exist
-    var adminEmail = "admin@erp.com";
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-
-    if (adminUser == null)
-    {
-        var admin = new User
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            UserCode = "ADMIN001",
-            FirstName = "System",
-            LastName = "Administrator",
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = "System"
-        };
-
-        var result = await userManager.CreateAsync(admin, "Admin123!");
-        if (result.Succeeded)
-        {
-            await userManager.AddToRoleAsync(admin, "Admin");
-        }
-    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Roller ve admin kullanıcı oluşturulurken hata: {ex.Message}");
 }
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Mobile API v1");
-        c.RoutePrefix = "swagger";
+app.UseSwagger(c => {
+    c.RouteTemplate = "swagger/{documentName}/swagger.json";
+    // Swagger JSON'ın boş olması durumunu engelle
+    c.PreSerializeFilters.Add((swaggerDoc, httpReq) => {
+        if (!swaggerDoc.Paths.Any())
+        {
+            // OpenApiPaths oluştur (Dictionary değil)
+            var paths = new Microsoft.OpenApi.Models.OpenApiPaths();
+            
+            // Customer path ekle
+            paths.Add("/api/v1/Customer/customers", new Microsoft.OpenApi.Models.OpenApiPathItem
+            {
+                Operations = new Dictionary<Microsoft.OpenApi.Models.OperationType, Microsoft.OpenApi.Models.OpenApiOperation>
+                {
+                    {
+                        Microsoft.OpenApi.Models.OperationType.Get,
+                        new Microsoft.OpenApi.Models.OpenApiOperation
+                        {
+                            Tags = new List<Microsoft.OpenApi.Models.OpenApiTag> { new Microsoft.OpenApi.Models.OpenApiTag { Name = "Customer" } },
+                            Summary = "Get customers",
+                            Description = "Returns a list of customers",
+                            Responses = new Microsoft.OpenApi.Models.OpenApiResponses()
+                        }
+                    }
+                }
+            });
+            
+            // Path'i swaggerDoc'a ata
+            swaggerDoc.Paths = paths;
+        }
     });
-}
+});
+
+// Statik dosyaları etkinleştir
+app.UseStaticFiles();
+
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Mobile API v1");
+    c.RoutePrefix = "swagger";
+    c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
+    c.DefaultModelsExpandDepth(-1); // Modelleri gizle
+    c.DisplayRequestDuration(); // İstek süresini göster
+    
+    // Swagger UI'ın hata durumunda da çalışmasını sağla
+    c.ConfigObject.AdditionalItems["syntaxHighlight"] = false;
+    c.ConfigObject.AdditionalItems["tryItOutEnabled"] = true;
+    c.ConfigObject.AdditionalItems["persistAuthorization"] = true;
+    c.ConfigObject.AdditionalItems["filter"] = "";
+    c.InjectStylesheet("/swagger-ui/custom.css");
+    
+    // Özel indeks sayfası kullan
+    var customIndexHtmlPath = Path.Combine(builder.Environment.WebRootPath, "swagger-ui", "index.html");
+    if (File.Exists(customIndexHtmlPath))
+    {
+        c.IndexStream = () => File.OpenRead(customIndexHtmlPath);
+    }
+    else 
+    {
+        c.IndexStream = () => {
+            var type = typeof(Program).Assembly.GetType("Swashbuckle.AspNetCore.SwaggerUI.SwaggerUIMiddleware");
+            var assembly = type!.Assembly;
+            var resourceStream = assembly.GetManifestResourceStream("Swashbuckle.AspNetCore.SwaggerUI.index.html");
+            return resourceStream!;
+        };
+    }
+});
 
 app.UseHttpsRedirection();
 app.UseCors();

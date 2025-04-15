@@ -11,8 +11,18 @@ namespace erp_api.Models.Responses
         public string CityCode { get; set; }
 
         /// <summary>
+        /// Gets or sets the state code this city belongs to.
+        /// </summary>
+        public string StateCode { get; set; }
+
+        /// <summary>
         /// Gets or sets the description of the city.
         /// </summary>
         public string CityDescription { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether the city is blocked.
+        /// </summary>
+        public bool IsBlocked { get; set; }
     }
 } 

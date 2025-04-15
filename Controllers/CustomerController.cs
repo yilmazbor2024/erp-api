@@ -15,6 +15,7 @@ using ErpMobile.Api.Data;
 using ErpMobile.Api.Interfaces;
 using erp_api.Models.Common;
 using Microsoft.AspNetCore.Http;
+using ErpAPI.Models.Requests;
 
 namespace ErpMobile.Api.Controllers
 {
@@ -231,6 +232,60 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
+        /// İlleri getirir (States)
+        /// </summary>
+        [HttpGet("states")]
+        public async Task<ActionResult<List<StateResponse>>> GetStates([FromQuery] string countryCode = null)
+        {
+            try
+            {
+                var states = await _customerService.GetStatesAsync(countryCode);
+                return Ok(states);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İller alınırken hata oluştu");
+                return StatusCode(500, "İller alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Şehirleri getirir (Cities)
+        /// </summary>
+        [HttpGet("cities")]
+        public async Task<ActionResult<List<CityResponse>>> GetCities()
+        {
+            try
+            {
+                var cities = await _customerService.GetCitiesAsync();
+                return Ok(cities);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Şehirler alınırken hata oluştu");
+                return StatusCode(500, "Şehirler alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// İle göre şehirleri getirir
+        /// </summary>
+        [HttpGet("states/{stateCode}/cities")]
+        public async Task<ActionResult<List<CityResponse>>> GetCitiesByState(string stateCode)
+        {
+            try
+            {
+                var cities = await _customerService.GetCitiesByStateAsync(stateCode);
+                return Ok(cities);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İle göre şehirler alınırken hata oluştu. İl Kodu: {StateCode}", stateCode);
+                return StatusCode(500, "İle göre şehirler alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
         /// Bölgeye göre şehirleri getirir
         /// </summary>
         [HttpGet("regions/{regionCode}/cities")]
@@ -266,6 +321,24 @@ namespace ErpMobile.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// İlçeleri getirir (Districts)
+        /// </summary>
+        [HttpGet("districts")]
+        public async Task<ActionResult<List<DistrictResponse>>> GetDistricts()
+        {
+            try
+            {
+                var districts = await _customerService.GetAllDistrictsAsync();
+                return Ok(districts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İlçeler alınırken hata oluştu");
+                return StatusCode(500, "İlçeler alınırken bir hata oluştu");
+            }
+        }
+
         [HttpGet("address-types")]
         public async Task<ActionResult<List<AddressTypeResponse>>> GetAddressTypes()
         {
@@ -273,6 +346,11 @@ namespace ErpMobile.Api.Controllers
             {
                 var response = await _customerService.GetAddressTypesAsync();
                 return Ok(response);
+            }
+            catch (SqlException ex)
+            {
+                _logger.LogError(ex, "Database connection error while getting address types");
+                return StatusCode(500, "Veritabanı bağlantı hatası: Adres tipleri alınamadı. Lütfen sistem yöneticisiyle iletişime geçin.");
             }
             catch (Exception ex)
             {
@@ -293,6 +371,11 @@ namespace ErpMobile.Api.Controllers
                 }
                 return Ok(response);
             }
+            catch (SqlException ex)
+            {
+                _logger.LogError(ex, "Database connection error while getting address type by code: {Code}", code);
+                return StatusCode(500, "Veritabanı bağlantı hatası: Adres tipi alınamadı. Lütfen sistem yöneticisiyle iletişime geçin.");
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting address type by code");
@@ -305,8 +388,13 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var response = await _customerService.CreateAddressTypeAsync(request);
-                return CreatedAtAction(nameof(GetAddressTypeByCode), new { code = response.AddressTypeCode }, response);
+                // ERP sisteminde AddressType bir tablo değil, fonksiyon olduğu için ekleme yapılamaz
+                return StatusCode(StatusCodes.Status405MethodNotAllowed, "ERP sisteminde AddressType bir fonksiyon/saklı prosedür olduğundan API üzerinden ekleme yapılamaz. Lütfen sistem yöneticinize başvurun.");
+            }
+            catch (NotSupportedException ex)
+            {
+                _logger.LogWarning(ex, "Operation not supported: Creating address type is not supported in ERP system");
+                return StatusCode(StatusCodes.Status405MethodNotAllowed, ex.Message);
             }
             catch (Exception ex)
             {
@@ -349,23 +437,30 @@ namespace ErpMobile.Api.Controllers
             }
         }
 
-        [HttpPost("customers/{customerCode}/addresses")]
-        public async Task<ActionResult<AddressResponse>> CreateAddress(string customerCode, [FromBody] AddressCreateRequest request)
+        [HttpPost("{customerCode}/addresses")]
+        [ProducesResponseType(typeof(ApiResponse<AddressResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateAddress(string customerCode, [FromBody] AddressCreateRequest request)
         {
             try
             {
-                if (customerCode != request.CustomerCode)
+                // Validate request
+                if (request == null)
                 {
-                    return BadRequest("Customer code mismatch");
+                    _logger.LogWarning("Address create request was null");
+                    return BadRequest(new ApiResponse<string>("Address create request cannot be null", false, "Adres oluşturma isteği boş olamaz"));
                 }
 
-                var response = await _customerService.CreateAddressAsync(request);
-                return CreatedAtAction(nameof(GetAddressById), new { customerCode = customerCode, addressId = response.AddressTypeCode }, response);
+                var address = await _customerService.CreateAddressAsync(customerCode, request);
+                return Created($"/api/v1/Customer/{customerCode}/addresses/{address.Id}", 
+                    new ApiResponse<AddressResponse>(address, true, "Adres başarıyla oluşturuldu"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating address");
-                return StatusCode(500, "Internal server error");
+                _logger.LogError(ex, "Error occurred while creating address for customer {CustomerCode}", customerCode);
+                return StatusCode(StatusCodes.Status500InternalServerError, 
+                    new ApiResponse<string>("An error occurred while creating the address.", false, "Adres oluştururken bir hata oluştu", ex.Message));
             }
         }
 
@@ -408,12 +503,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                if (customerCode != request.CustomerCode)
-                {
-                    return BadRequest("Customer code mismatch");
-                }
-
-                var response = await _customerService.CreateContactAsync(request);
+                var response = await _customerService.CreateContactAsync(customerCode, request);
                 return CreatedAtAction(nameof(GetContactById), new { customerCode = customerCode, contactId = response.ContactTypeCode }, response);
             }
             catch (Exception ex)

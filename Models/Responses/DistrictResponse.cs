@@ -1,14 +1,28 @@
 namespace erp_api.Models.Responses
 {
+    /// <summary>
+    /// Response model for district information.
+    /// </summary>
     public class DistrictResponse
     {
+        /// <summary>
+        /// Gets or sets the district code.
+        /// </summary>
         public string DistrictCode { get; set; }
-        public string DistrictDescription { get; set; }
+
+        /// <summary>
+        /// Gets or sets the city code this district belongs to.
+        /// </summary>
         public string CityCode { get; set; }
-        public string CityDescription { get; set; }
-        public string StateCode { get; set; }
-        public string StateDescription { get; set; }
-        public string CountryCode { get; set; }
-        public string CountryDescription { get; set; }
+
+        /// <summary>
+        /// Gets or sets the description of the district.
+        /// </summary>
+        public string DistrictDescription { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether the district is blocked.
+        /// </summary>
+        public bool IsBlocked { get; set; }
     }
 } 

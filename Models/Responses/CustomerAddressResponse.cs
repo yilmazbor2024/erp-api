@@ -4,29 +4,29 @@ namespace erp_api.Models.Responses
 {
     public class CustomerAddressResponse
     {
-        public string PostalAddressID { get; set; }
+        public string PostalAddressID { get; set; } = string.Empty;
         public string AddressTypeCode { get; set; } = string.Empty;
-        public string AddressTypeDescription { get; set; }
+        public string AddressTypeDescription { get; set; } = string.Empty;
         public string CountryCode { get; set; } = string.Empty;
-        public string CountryDescription { get; set; }
+        public string CountryDescription { get; set; } = string.Empty;
         public string StateCode { get; set; } = string.Empty;
-        public string StateDescription { get; set; }
+        public string StateDescription { get; set; } = string.Empty;
         public string CityCode { get; set; } = string.Empty;
-        public string CityDescription { get; set; }
+        public string CityDescription { get; set; } = string.Empty;
         public string DistrictCode { get; set; } = string.Empty;
-        public string DistrictDescription { get; set; }
-        public string QuarterCode { get; set; }
-        public string QuarterName { get; set; }
-        public string StreetCode { get; set; }
-        public string Street { get; set; }
-        public string SiteName { get; set; }
-        public string BuildingName { get; set; }
-        public string BuildingNum { get; set; }
-        public string FloorNum { get; set; }
-        public string DoorNum { get; set; }
-        public string ZipCode { get; set; }
-        public string TaxOfficeCode { get; set; }
-        public string TaxNumber { get; set; }
+        public string DistrictDescription { get; set; } = string.Empty;
+        public string QuarterCode { get; set; } = string.Empty;
+        public string QuarterName { get; set; } = string.Empty;
+        public string StreetCode { get; set; } = string.Empty;
+        public string Street { get; set; } = string.Empty;
+        public string SiteName { get; set; } = string.Empty;
+        public string BuildingName { get; set; } = string.Empty;
+        public string BuildingNum { get; set; } = string.Empty;
+        public string FloorNum { get; set; } = string.Empty;
+        public string DoorNum { get; set; } = string.Empty;
+        public string ZipCode { get; set; } = string.Empty;
+        public string TaxOfficeCode { get; set; } = string.Empty;
+        public string TaxNumber { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
         public bool IsDefault { get; set; }
         public bool IsBlocked { get; set; }

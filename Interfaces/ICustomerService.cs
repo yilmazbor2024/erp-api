@@ -6,6 +6,7 @@ using erp_api.Models.Requests;
 using erp_api.Models.Contact;
 using erp_api.Models.Common;
 using ErpMobile.Api.Models.Customer;
+using ErpAPI.Models.Requests;
 
 namespace ErpMobile.Api.Interfaces
 {
@@ -25,20 +26,24 @@ namespace ErpMobile.Api.Interfaces
         Task<bool> DeleteAddressTypeAsync(string code);
         Task<List<AddressResponse>> GetAddressesAsync(string customerCode);
         Task<AddressResponse> GetAddressByIdAsync(string customerCode, string addressId);
-        Task<AddressResponse> CreateAddressAsync(AddressCreateRequest request);
+        Task<AddressResponse> CreateAddressAsync(string customerCode, AddressCreateRequest request);
         Task<AddressResponse> UpdateAddressAsync(string customerCode, string addressTypeCode, AddressUpdateRequest request);
         Task<bool> DeleteAddressAsync(string customerCode, string addressTypeCode);
         Task<List<erp_api.Models.Responses.ContactResponse>> GetContactsAsync(string customerCode);
         Task<erp_api.Models.Responses.ContactResponse> GetContactByIdAsync(string customerCode, string contactId);
-        Task<erp_api.Models.Responses.ContactResponse> CreateContactAsync(ContactCreateRequest request);
+        Task<erp_api.Models.Responses.ContactResponse> CreateContactAsync(string customerCode, ContactCreateRequest request);
         Task<erp_api.Models.Responses.ContactResponse> UpdateContactAsync(string customerCode, string contactTypeCode, ContactUpdateRequest request);
         Task<bool> DeleteContactAsync(string customerCode, string contactTypeCode);
         Task<List<CustomerTypeResponse>> GetCustomerTypesAsync();
         Task<List<CustomerDiscountGroupResponse>> GetCustomerDiscountGroupsAsync();
         Task<List<CustomerPaymentPlanGroupResponse>> GetCustomerPaymentPlanGroupsAsync();
         Task<List<RegionResponse>> GetRegionsAsync();
+        Task<List<StateResponse>> GetStatesAsync(string countryCode = null);
+        Task<List<CityResponse>> GetCitiesAsync();
+        Task<List<CityResponse>> GetCitiesByStateAsync(string stateCode);
         Task<List<CityResponse>> GetCitiesByRegionAsync(string regionCode);
         Task<List<DistrictResponse>> GetDistrictsByCityAsync(string cityCode);
+        Task<List<DistrictResponse>> GetAllDistrictsAsync();
         Task<List<ContactTypeResponse>> GetContactTypesAsync();
         Task<ContactTypeResponse> GetContactTypeByCodeAsync(string code);
     }
