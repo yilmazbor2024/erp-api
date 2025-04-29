@@ -1,400 +1,388 @@
 using System;
 using System.Collections.Generic;
-using erp_api.Models.Contact;
 using System.ComponentModel.DataAnnotations;
 
 namespace erp_api.Models.Requests
 {
     /// <summary>
-    /// Request model for creating a new customer.
+    /// Yeni müşteri oluşturma isteği modeli
     /// </summary>
-    public class CustomerCreateRequest
+    public class CustomerCreateRequestNew
     {
         /// <summary>
-        /// Gets or sets the customer code.
+        /// Müşteri kodu
         /// </summary>
-        [Required]
-        [StringLength(50)]
+        [Required(ErrorMessage = "Müşteri kodu zorunludur")]
+        [StringLength(30, ErrorMessage = "Müşteri kodu en fazla 30 karakter olabilir")]
         public string CustomerCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the customer name.
+        /// Müşteri adı
         /// </summary>
-        [Required]
-        [StringLength(250)]
+        [Required(ErrorMessage = "Müşteri adı zorunludur")]
+        [StringLength(250, ErrorMessage = "Müşteri adı en fazla 250 karakter olabilir")]
         public string CustomerName { get; set; }
 
         /// <summary>
-        /// Gets or sets the customer surname.
+        /// Müşteri soyadı (Bireysel müşteriler için)
         /// </summary>
-        [StringLength(100)]
+        [StringLength(100, ErrorMessage = "Müşteri soyadı en fazla 100 karakter olabilir")]
         public string CustomerSurname { get; set; }
 
         /// <summary>
-        /// Gets or sets the customer title code.
+        /// Müşteri tipi kodu
         /// </summary>
-        [StringLength(10)]
-        public string TitleCode { get; set; }
-
-        /// <summary>
-        /// Gets or sets the patronym (middle name).
-        /// </summary>
-        [StringLength(60)]
-        public string Patronym { get; set; }
-
-        /// <summary>
-        /// Gets or sets the tax number.
-        /// </summary>
-        [StringLength(20)]
-        public string TaxNumber { get; set; }
-
-        /// <summary>
-        /// Gets or sets the customer identity number.
-        /// </summary>
-        [StringLength(20)]
-        public string CustomerIdentityNumber { get; set; }
-
-        /// <summary>
-        /// Gets or sets the mersis number.
-        /// </summary>
-        [StringLength(20)]
-        public string MersisNum { get; set; }
-
-        /// <summary>
-        /// Gets or sets the customer type code.
-        /// </summary>
+        [Required(ErrorMessage = "Müşteri tipi zorunludur")]
         public int CustomerTypeCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the customer is an individual account.
+        /// Bireysel müşteri mi?
         /// </summary>
         public bool IsIndividualAcc { get; set; }
 
         /// <summary>
-        /// Gets or sets the discount group code.
+        /// Unvan kodu
         /// </summary>
-        [StringLength(10)]
+        public string TitleCode { get; set; }
+
+        /// <summary>
+        /// Baba adı
+        /// </summary>
+        public string Patronym { get; set; }
+
+        /// <summary>
+        /// Kimlik numarası
+        /// </summary>
+        public string CustomerIdentityNumber { get; set; }
+
+        /// <summary>
+        /// Vergi numarası
+        /// </summary>
+        [StringLength(20, ErrorMessage = "Vergi numarası en fazla 20 karakter olabilir")]
+        public string TaxNumber { get; set; }
+
+        /// <summary>
+        /// Müşteri oluşturan kullanıcı adı
+        /// </summary>
+        [StringLength(50, ErrorMessage = "Kullanıcı adı en fazla 50 karakter olabilir")]
+        public string CreatedUserName { get; set; } = "SYSTEM";
+
+        /// <summary>
+        /// Müşteriyi son güncelleyen kullanıcı adı
+        /// </summary>
+        [StringLength(50, ErrorMessage = "Kullanıcı adı en fazla 50 karakter olabilir")]
+        public string LastUpdatedUserName { get; set; } = "SYSTEM";
+
+        /// <summary>
+        /// Mersis numarası
+        /// </summary>
+        public string MersisNum { get; set; }
+
+        /// <summary>
+        /// İndirim grubu kodu
+        /// </summary>
         public string DiscountGroupCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the customer markup group code.
+        /// Müşteri markup grubu kodu
         /// </summary>
-        [StringLength(10)]
         public string CustomerMarkupGrCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the customer payment plan group code.
+        /// Müşteri ödeme planı grubu kodu
         /// </summary>
-        [StringLength(10)]
         public string CustomerPaymentPlanGrCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the vendor payment plan group code.
+        /// Tedarikçi ödeme planı grubu kodu
         /// </summary>
-        [StringLength(10)]
         public string VendorPaymentPlanGrCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the currency code.
+        /// Şirket kodu
         /// </summary>
-        [StringLength(10)]
-        public string CurrencyCode { get; set; }
+        public string CompanyCode { get; set; } = "1";
 
         /// <summary>
-        /// Gets or sets the office code.
+        /// Para birimi kodu
         /// </summary>
-        [StringLength(10)]
-        public string OfficeCode { get; set; }
+        [Required(ErrorMessage = "Para birimi zorunludur")]
+        public string CurrencyCode { get; set; } = "TRY";
 
         /// <summary>
-        /// Gets or sets the salesman code.
+        /// Ofis kodu
         /// </summary>
-        [StringLength(20)]
+        [Required(ErrorMessage = "Ofis kodu zorunludur")]
+        public string OfficeCode { get; set; } = "M";
+
+        /// <summary>
+        /// Satış temsilcisi kodu
+        /// </summary>
         public string SalesmanCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the credit limit.
+        /// Kredi limiti
         /// </summary>
         public decimal CreditLimit { get; set; }
 
         /// <summary>
-        /// Gets or sets the risk limit.
+        /// Risk limiti
         /// </summary>
         public decimal RiskLimit { get; set; }
 
         /// <summary>
-        /// Gets or sets the minimum balance.
+        /// Minimum bakiye
         /// </summary>
         public decimal MinBalance { get; set; }
 
         /// <summary>
-        /// Gets or sets the list of customer contacts.
+        /// Vergi dairesi kodu
         /// </summary>
-        public List<ContactCreateRequest> Contacts { get; set; }
-
-        /// <summary>
-        /// Gets or sets the list of customer addresses.
-        /// </summary>
-        public List<CustomerAddressCreateRequest> Addresses { get; set; }
-
-        /// <summary>
-        /// Gets or sets the tax office code.
-        /// </summary>
-        [StringLength(10)]
         public string TaxOfficeCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the region code.
+        /// Bölge kodu
         /// </summary>
-        [StringLength(10)]
         public string RegionCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the city code.
+        /// Şehir kodu
         /// </summary>
-        [StringLength(10)]
         public string CityCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the district code.
+        /// İlçe kodu
         /// </summary>
-        [StringLength(10)]
         public string DistrictCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the customer is blocked.
+        /// Müşteri bloke mi?
         /// </summary>
         public bool IsBlocked { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the customer is locked.
+        /// Müşteri kilitli mi?
         /// </summary>
         public bool IsLocked { get; set; }
 
         /// <summary>
-        /// Gets or sets the locked date.
+        /// Kilit tarihi
         /// </summary>
         public DateTime? LockedDate { get; set; }
 
         /// <summary>
-        /// Gets or sets the list of customer communications.
-        /// </summary>
-        public List<CustomerCommunicationCreateRequest> Communications { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether the customer is VIP.
+        /// VIP müşteri mi?
         /// </summary>
         public bool IsVIP { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to send advertisement SMS.
+        /// SMS reklamı gönderilsin mi?
         /// </summary>
         public bool IsSendAdvertSMS { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to send advertisement mail.
+        /// E-posta reklamı gönderilsin mi?
         /// </summary>
         public bool IsSendAdvertMail { get; set; }
 
         /// <summary>
-        /// Gets or sets the exchange type code.
+        /// Döviz tipi kodu
         /// </summary>
         public int ExchangeTypeCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the due date formula code.
+        /// Vade formülü kodu
         /// </summary>
-        [StringLength(10)]
         public string DueDateFormulaCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the bank code.
+        /// Banka kodu
         /// </summary>
-        [StringLength(10)]
         public string BankCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the bank branch code.
+        /// Banka şube kodu
         /// </summary>
-        [StringLength(20)]
         public string BankBranchCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the bank account type code.
+        /// Banka hesap tipi kodu
         /// </summary>
         public int BankAccTypeCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the IBAN.
+        /// IBAN
         /// </summary>
-        [StringLength(30)]
         public string IBAN { get; set; }
 
         /// <summary>
-        /// Gets or sets the SWIFT code.
+        /// SWIFT kodu
         /// </summary>
-        [StringLength(20)]
         public string SWIFTCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the bank account number.
+        /// Banka hesap numarası
         /// </summary>
-        [StringLength(20)]
         public string BankAccNo { get; set; }
 
         /// <summary>
-        /// Gets or sets the vendor type code.
+        /// Tedarikçi tipi kodu
         /// </summary>
         public int VendorTypeCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the retail sale price group code.
+        /// Perakende satış fiyatı grubu kodu
         /// </summary>
-        [StringLength(10)]
         public string RetailSalePriceGroupCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the wholesale price group code.
+        /// Toptan satış fiyatı grubu kodu
         /// </summary>
-        [StringLength(10)]
         public string WholesalePriceGroupCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the account opening date.
+        /// Hesap açılış tarihi
         /// </summary>
         public DateTime? AccountOpeningDate { get; set; }
 
         /// <summary>
-        /// Gets or sets the account closing date.
+        /// Hesap kapanış tarihi
         /// </summary>
         public DateTime? AccountClosingDate { get; set; }
 
         /// <summary>
-        /// Gets or sets the promotion group code.
+        /// Promosyon grubu kodu
         /// </summary>
-        [StringLength(10)]
         public string PromotionGroupCode { get; set; }
 
         /// <summary>
-        /// Gets or sets the sales channel code.
+        /// Satış kanalı kodu
         /// </summary>
-        [StringLength(5)]
         public string SalesChannelCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to use manufacturing.
+        /// Üretim kullanılsın mı?
         /// </summary>
         public bool UseManufacturing { get; set; }
 
         /// <summary>
-        /// Gets or sets the barcode type code.
+        /// Barkod tipi kodu
         /// </summary>
-        [StringLength(20)]
-        public string BarcodeTypeCode { get; set; }
+        public string BarcodeTypeCode { get; set; } = "Def";
 
         /// <summary>
-        /// Gets or sets the cost center code.
+        /// Maliyet merkezi kodu
         /// </summary>
-        [StringLength(20)]
         public string CostCenterCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to use bank account on store.
+        /// Mağazada banka hesabı kullanılsın mı?
         /// </summary>
         public bool UseBankAccOnStore { get; set; }
 
         /// <summary>
-        /// Gets or sets the GL type code.
+        /// Genel muhasebe tipi kodu
         /// </summary>
-        [StringLength(20)]
         public string GLTypeCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the customer is subject to e-invoice.
+        /// E-faturaya tabi mi?
         /// </summary>
         public bool IsSubjectToEInvoice { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to arrange commercial invoice.
+        /// Ticari fatura düzenlensin mi?
         /// </summary>
         public bool IsArrangeCommercialInvoice { get; set; }
 
         /// <summary>
-        /// Gets or sets the CurrAccLotGrCode.
+        /// Cari hesap lot grubu kodu
         /// </summary>
-        [StringLength(10)]
         public string CurrAccLotGrCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to allow only selected currency.
+        /// Sadece seçili para birimi izin verilsin mi?
         /// </summary>
         public bool AllowOnlySelectedCurrency { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to permit credit balance.
+        /// Kredi bakiyesine izin verilsin mi?
         /// </summary>
         public bool PermitCreditBalance { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the customer is subject to e-shipment.
+        /// E-irsaliyeye tabi mi?
         /// </summary>
         public bool IsSubjectToEShipment { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether customer ASN number is required for shipments.
+        /// Müşteri ASN numarası sevkiyatlar için gerekli mi?
         /// </summary>
         public bool CustomerASNNumberIsRequiredForShipments { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether purchase requisition is required.
+        /// Satın alma talebi gerekli mi?
         /// </summary>
         public bool PurchaseRequisitionRequired { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to use DBS integration.
+        /// DBS entegrasyonu kullanılsın mı?
         /// </summary>
         public bool UseDBSIntegration { get; set; }
 
         /// <summary>
-        /// Gets or sets the DBS account code.
+        /// DBS hesap kodu
         /// </summary>
-        [StringLength(30)]
         public string DBSAccountCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to use serial number tracking.
+        /// Seri numarası takibi kullanılsın mı?
         /// </summary>
         public bool UseSerialNumberTracking { get; set; }
 
         /// <summary>
-        /// Gets or sets the e-invoice start date.
+        /// E-fatura başlangıç tarihi
         /// </summary>
         public DateTime? EInvoiceStartDate { get; set; }
 
         /// <summary>
-        /// Gets or sets the e-shipment start date.
+        /// E-irsaliye başlangıç tarihi
         /// </summary>
         public DateTime? EShipmentStartDate { get; set; }
 
         /// <summary>
-        /// Gets or sets the data language code.
+        /// Veri dili kodu
         /// </summary>
-        [StringLength(5)]
         public string DataLanguageCode { get; set; } = "TR";
 
         /// <summary>
-        /// Gets or sets the store hierarchy ID.
+        /// Mağaza hiyerarşi ID
         /// </summary>
-        public int StoreHierarchyID { get; set; }
+        public int? StoreHierarchyID { get; set; }
 
         /// <summary>
-        /// Gets or sets the agreement date.
+        /// Anlaşma tarihi
         /// </summary>
         public DateTime? AgreementDate { get; set; }
 
         /// <summary>
-        /// Gets or sets the payment term.
+        /// Ödeme vadesi
         /// </summary>
-        public short PaymentTerm { get; set; }
+        public int? PaymentTerm { get; set; }
+
+        /// <summary>
+        /// Müşteri adresleri
+        /// </summary>
+        public List<CustomerAddressCreateRequestNew> Addresses { get; set; }
+
+        /// <summary>
+        /// Müşteri iletişim bilgileri
+        /// </summary>
+        public List<CustomerCommunicationCreateRequestNew> Communications { get; set; }
+
+        /// <summary>
+        /// Müşteri iletişim kişileri
+        /// </summary>
+        public List<CustomerContactCreateRequestNew> Contacts { get; set; }
     }
 }

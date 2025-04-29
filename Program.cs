@@ -172,6 +172,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+builder.Services.AddScoped<ErpMobile.Api.Interfaces.ICustomerServiceNew, ErpMobile.Api.Services.CustomerServiceNew>();
 
 var app = builder.Build();
 

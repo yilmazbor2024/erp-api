@@ -27,12 +27,14 @@ namespace ErpMobile.Api.Controllers
         private readonly ICustomerService _customerService;
         private readonly ILogger<CustomerController> _logger;
         private readonly ErpDbContext _context;
+        private readonly ICustomerServiceNew _customerServiceNew;
 
-        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context)
+        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context, ICustomerServiceNew customerServiceNew)
         {
             _customerService = customerService;
             _logger = logger;
             _context = context;
+            _customerServiceNew = customerServiceNew;
         }
 
         /// <summary>
@@ -88,20 +90,44 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
-        /// Yeni müşteri oluşturur
+        /// Create a new customer
         /// </summary>
-        [HttpPost]
-        public async Task<ActionResult<CustomerResponse>> CreateCustomer([FromBody] CustomerCreateRequest request)
+        /// <param name="request">Customer create request</param>
+        /// <returns>Created customer</returns>
+        [HttpPost("Create")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateCustomer([FromBody] CustomerCreateRequest request)
         {
             try
             {
+                _logger.LogInformation("Creating new customer: {@Request}", request);
+                
                 var customer = await _customerService.CreateCustomerAsync(request);
-                return CreatedAtAction(nameof(GetCustomerByCode), new { customerCode = customer.CustomerCode }, customer);
+                
+                var response = new ApiResponse<CustomerResponse>
+                {
+                    Success = true,
+                    Data = customer,
+                    Message = "Customer created successfully"
+                };
+                
+                return CreatedAtAction(nameof(GetCustomerByCode), new { customerCode = customer.CustomerCode }, response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while creating customer. Request: {@Request}", request);
-                return StatusCode(500, "An error occurred while processing your request.");
+                _logger.LogError(ex, "Error creating customer");
+                
+                var response = new ApiResponse<string>
+                {
+                    Success = false,
+                    Data = null,
+                    Message = "An error occurred while creating the customer",
+                    Error = ex.Message
+                };
+                
+                return StatusCode(500, response);
             }
         }
 
@@ -550,6 +576,124 @@ namespace ErpMobile.Api.Controllers
             {
                 _logger.LogError(ex, "Error getting contact type by code");
                 return StatusCode(500, "Internal server error");
+            }
+        }
+
+        /// <summary>
+        /// Yeni müşteri oluşturma API'si - Geliştirilmiş versiyon
+        /// </summary>
+        /// <param name="request">Müşteri oluşturma isteği</param>
+        /// <returns>Oluşturulan müşteri bilgileri</returns>
+        [HttpPost("create-new")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerCreateResponseNew>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateCustomerNew([FromBody] CustomerCreateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("Yeni müşteri oluşturma isteği alındı: {CustomerCode}", request.CustomerCode);
+                
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz müşteri bilgileri",
+                        Data = "Lütfen tüm zorunlu alanları doldurun."
+                    });
+                }
+                
+                var result = await _customerServiceNew.CreateCustomerAsync(request);
+                
+                if (result.Success)
+                {
+                    return Ok(new ApiResponse<CustomerCreateResponseNew>
+                    {
+                        Success = true,
+                        Message = "Müşteri başarıyla oluşturuldu",
+                        Data = result
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<CustomerCreateResponseNew>
+                    {
+                        Success = false,
+                        Message = "Müşteri oluşturma işlemi başarısız",
+                        Data = result
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri oluşturma sırasında hata: {ErrorMessage}", ex.Message);
+                
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri oluşturma sırasında bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri güncelleme
+        /// </summary>
+        /// <param name="request">Müşteri güncelleme isteği</param>
+        /// <returns>Müşteri güncelleme yanıtı</returns>
+        [HttpPost("update")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerUpdateResponseNew>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<CustomerUpdateResponseNew>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateCustomer([FromBody] CustomerUpdateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri güncelleme isteği alındı: {CustomerCode}", request.CustomerCode);
+                
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz müşteri bilgileri",
+                        Data = "Lütfen tüm zorunlu alanları doldurun."
+                    });
+                }
+                
+                var result = await _customerServiceNew.UpdateCustomerAsync(request);
+                
+                if (result.Success)
+                {
+                    return Ok(new ApiResponse<CustomerUpdateResponseNew>
+                    {
+                        Success = true,
+                        Message = "Müşteri başarıyla güncellendi",
+                        Data = result
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<CustomerUpdateResponseNew>
+                    {
+                        Success = false,
+                        Message = "Müşteri güncelleme işlemi başarısız",
+                        Data = result
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri güncelleme sırasında hata: {ErrorMessage}", ex.Message);
+                
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri güncelleme sırasında bir hata oluştu",
+                    Data = ex.Message
+                });
             }
         }
     }

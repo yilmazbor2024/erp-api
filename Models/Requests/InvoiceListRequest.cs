@@ -1,0 +1,58 @@
+using System;
+using System.ComponentModel.DataAnnotations;
+
+namespace erp_api.Models.Requests
+{
+    /// <summary>
+    /// Fatura listesi istek modeli
+    /// </summary>
+    public class InvoiceListRequest
+    {
+        /// <summary>
+        /// Sayfa numarası
+        /// </summary>
+        [Range(1, int.MaxValue)]
+        public int PageNumber { get; set; } = 1;
+
+        /// <summary>
+        /// Sayfa başına kayıt sayısı
+        /// </summary>
+        [Range(1, 100)]
+        public int PageSize { get; set; } = 10;
+
+        /// <summary>
+        /// Sıralama alanı
+        /// </summary>
+        public string SortBy { get; set; } = "invoiceDate";
+
+        /// <summary>
+        /// Sıralama yönü
+        /// </summary>
+        public string SortDirection { get; set; } = "desc";
+
+        /// <summary>
+        /// Müşteri kodu
+        /// </summary>
+        public string CustomerCode { get; set; }
+
+        /// <summary>
+        /// Fatura numarası
+        /// </summary>
+        public string InvoiceNumber { get; set; }
+
+        /// <summary>
+        /// Başlangıç tarihi
+        /// </summary>
+        public DateTime? StartDate { get; set; }
+
+        /// <summary>
+        /// Bitiş tarihi
+        /// </summary>
+        public DateTime? EndDate { get; set; }
+
+        /// <summary>
+        /// Fatura durumu (completed, cancelled)
+        /// </summary>
+        public string Status { get; set; }
+    }
+} 

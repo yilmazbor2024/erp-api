@@ -9,12 +9,12 @@ namespace erp_api.Models.Responses
         public string CustomerCode { get; set; } = string.Empty;
         public string CustomerName { get; set; } = string.Empty;
         public string TaxNumber { get; set; } = string.Empty;
-        public string TaxOffice { get; set; } = string.Empty;
+        public string TaxOfficeCode { get; set; } = string.Empty;
         public int CustomerTypeCode { get; set; }
         public string CustomerTypeDescription { get; set; } = string.Empty;
         public string DiscountGroupCode { get; set; } = string.Empty;
         public string DiscountGroupDescription { get; set; } = string.Empty;
-        public string PaymentPlanGroupCode { get; set; } = string.Empty;
+        public string CustomerPaymentPlanGrCode { get; set; } = string.Empty;
         public string PaymentPlanGroupDescription { get; set; } = string.Empty;
         public string RegionCode { get; set; } = string.Empty;
         public string RegionDescription { get; set; } = string.Empty;

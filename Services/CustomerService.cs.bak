@@ -43,8 +43,8 @@ namespace ErpMobile.Api.Services
                     var sql = @"
                         WITH CustomerData AS (
                         SELECT CustomerCode = cdCurrAcc.CurrAccCode
-                            , CustomerName = CASE WHEN (cdCurrAcc.CurrAccTypeCode = 8) OR (cdCurrAcc.CurrAccTypeCode = 4 AND cdCurrAcc.IsIndividualAcc = 1)
-                                                THEN ISNULL(cdCurrAcc.FirstLastName, SPACE(0))
+                            , CustomerName = CASE WHEN (cdCurrAcc.CurrAccTypeCode = 8) OR (cdCurrAcc.CurrAccTypeCode = 4 AND cdCurrAcc.IsIndividualAcc = 1) 
+                                                THEN ISNULL(cdCurrAcc.FirstLastName, SPACE(0)) 
                                                 ELSE ISNULL(cdCurrAccDesc.CurrAccDescription, SPACE(0))
                                                 END
                             , cdCurrAcc.CustomerTypeCode
@@ -57,7 +57,7 @@ namespace ErpMobile.Api.Services
                             , cdCurrAcc.CompanyCode
                             , cdCurrAcc.OfficeCode
                             , OfficeDescription = ISNULL((SELECT OfficeDescription FROM cdOfficeDesc WITH(NOLOCK) WHERE cdOfficeDesc.OfficeCode = cdCurrAcc.OfficeCode AND cdOfficeDesc.LangCode = N'TR'),SPACE(0))
-                            , OfficeCountryCode = ISNULL((SELECT CountryCode FROM dfOfficeDefault WITH(NOLOCK) WHERE cdCurrAcc.OfficeCode = dfOfficeDefault.OfficeCode), SPACE(0))
+                            , OfficeCountryCode = ISNULL((SELECT CountryCode FROM dfOfficeDefault WITH(NOLOCK) WHERE cdCurrAcc.OfficeCode = dfOfficeDefault.OfficeCode), SPACE(0))		
                             , CityDescription = ISNULL((SELECT CityDescription FROM cdCityDesc WITH(NOLOCK) WHERE cdCityDesc.CityCode = prCurrAccPostalAddress.CityCode AND cdCityDesc.LangCode = N'TR') , SPACE(0))
                             , DistrictDescription = ISNULL((SELECT DistrictDescription FROM cdDistrictDesc WITH(NOLOCK) WHERE cdDistrictDesc.DistrictCode = prCurrAccPostalAddress.DistrictCode AND cdDistrictDesc.LangCode = N'TR') , SPACE(0))
                             , IdentityNum = cdCurrAcc.IdentityNum
@@ -86,7 +86,7 @@ namespace ErpMobile.Api.Services
                         whereClause += " AND (CustomerName LIKE '%' + @CustomerName + '%' OR CustomerCode LIKE '%' + @CustomerName + '%')";
                         parameters.Add("@CustomerName", filter.CustomerName);
                     }
-
+                    
                     if (!string.IsNullOrEmpty(filter.CustomerCode))
                     {
                         whereClause += " AND CustomerCode LIKE @CustomerCode + '%'";
@@ -191,35 +191,35 @@ namespace ErpMobile.Api.Services
 
                     // Prepare sorting
                     var sortColumn = string.IsNullOrEmpty(filter.SortColumn) ? "CustomerCode" : filter.SortColumn;
-                    var sortDirection = string.IsNullOrEmpty(filter.SortDirection) ||
-                                       (filter.SortDirection.ToLower() != "asc" && filter.SortDirection.ToLower() != "desc")
+                    var sortDirection = string.IsNullOrEmpty(filter.SortDirection) || 
+                                       (filter.SortDirection.ToLower() != "asc" && filter.SortDirection.ToLower() != "desc") 
                                        ? "asc" : filter.SortDirection;
-
+                    
                     // Set paging parameters
                     parameters.Add("@PageNumber", filter.PageNumber);
                     parameters.Add("@PageSize", filter.PageSize);
-
+                    
                     // Execute count query - include full CTE declaration
-                    var countSql = $@"{sql}
-                        SELECT COUNT(*) FROM CustomerData
+                    var countSql = $@"{sql} 
+                        SELECT COUNT(*) FROM CustomerData 
                         WHERE 1=1 {whereClause}";
                     var totalCount = await connection.ExecuteScalarAsync<int>(countSql, parameters);
-
+                    
                     // Execute paged data query - include full CTE declaration
                     var pagedSql = $@"{sql}
-                        SELECT * FROM CustomerData
+                        SELECT * FROM CustomerData 
                         WHERE 1=1 {whereClause}
                         ORDER BY {sortColumn} {sortDirection}
                         OFFSET (@PageNumber - 1) * @PageSize ROWS
                         FETCH NEXT @PageSize ROWS ONLY";
-
+                        
                     var customers = await connection.QueryAsync<CustomerListResponse>(pagedSql, parameters);
-
+                    
                     // Return paged response
                     return new PagedResponse<CustomerListResponse>(
-                        customers.ToList(),
-                        totalCount,
-                        filter.PageNumber,
+                        customers.ToList(), 
+                        totalCount, 
+                        filter.PageNumber, 
                         filter.PageSize
                     );
                 }
@@ -237,7 +237,7 @@ namespace ErpMobile.Api.Services
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
-                    try
+                    try 
                     {
                         await connection.OpenAsync();
 
@@ -245,11 +245,11 @@ namespace ErpMobile.Api.Services
 
                         // Daha basit bir sorgu ile başlayalım ve birleştirmeleri azaltalım
                         var sql = @"
-                            SELECT
+                            SELECT 
                                 cdCurrAcc.CurrAccCode AS CustomerCode,
-                                CASE
-                                    WHEN (cdCurrAcc.CurrAccTypeCode = 8) OR (cdCurrAcc.CurrAccTypeCode = 4 AND cdCurrAcc.IsIndividualAcc = 1)
-                                        THEN ISNULL(cdCurrAcc.FirstLastName, SPACE(0))
+                                CASE 
+                                    WHEN (cdCurrAcc.CurrAccTypeCode = 8) OR (cdCurrAcc.CurrAccTypeCode = 4 AND cdCurrAcc.IsIndividualAcc = 1) 
+                                        THEN ISNULL(cdCurrAcc.FirstLastName, SPACE(0)) 
                                     ELSE ISNULL(cdCurrAccDesc.CurrAccDescription, SPACE(0))
                                 END AS CustomerName,
                                 cdCurrAcc.TaxNumber,
@@ -258,18 +258,18 @@ namespace ErpMobile.Api.Services
                                 cdCurrAcc.CompanyCode AS RegionCode,
                                 cdCurrAcc.IsBlocked
                             FROM cdCurrAcc WITH(NOLOCK)
-                            LEFT OUTER JOIN cdCurrAccDesc WITH(NOLOCK) ON cdCurrAccDesc.CurrAccTypeCode = cdCurrAcc.CurrAccTypeCode
-                                AND cdCurrAccDesc.CurrAccCode = cdCurrAcc.CurrAccCode
+                            LEFT OUTER JOIN cdCurrAccDesc WITH(NOLOCK) ON cdCurrAccDesc.CurrAccTypeCode = cdCurrAcc.CurrAccTypeCode 
+                                AND cdCurrAccDesc.CurrAccCode = cdCurrAcc.CurrAccCode 
                                 AND cdCurrAccDesc.LangCode = N'TR'
                             WHERE cdCurrAcc.CurrAccTypeCode = 3
                             AND cdCurrAcc.CurrAccCode = @CustomerCode";
 
                         var customer = await connection.QueryFirstOrDefaultAsync<CustomerDetailResponse>(sql, new { CustomerCode = customerCode });
 
-                        if (customer == null)
-                        {
+                if (customer == null)
+                {
                             _logger.LogWarning("Customer not found. CustomerCode: {CustomerCode}", customerCode);
-
+                            
                             // Return a minimal customer object with the requested code instead of null
                             return new CustomerDetailResponse
                             {
@@ -289,13 +289,13 @@ namespace ErpMobile.Api.Services
                         customer.Contacts = new List<CustomerContactResponse>();
                         customer.Communications = new List<CustomerCommunicationResponse>();
 
-                        return customer;
+                return customer;
                     }
                     catch (SqlException sqlEx)
                     {
-                        _logger.LogError(sqlEx, "SQL Error occurred while getting customer details. Error Number: {ErrorNumber}, Message: {Message}, CustomerCode: {CustomerCode}",
+                        _logger.LogError(sqlEx, "SQL Error occurred while getting customer details. Error Number: {ErrorNumber}, Message: {Message}, CustomerCode: {CustomerCode}", 
                             sqlEx.Number, sqlEx.Message, customerCode);
-
+                        
                         // Return a minimal customer object with the requested code instead of throwing
                         return new CustomerDetailResponse
                         {
@@ -310,9 +310,9 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting customer details. CustomerCode: {CustomerCode}, Exception Type: {ExceptionType}, Message: {Message}",
+                _logger.LogError(ex, "Error occurred while getting customer details. CustomerCode: {CustomerCode}, Exception Type: {ExceptionType}, Message: {Message}", 
                     customerCode, ex.GetType().Name, ex.Message);
-
+                
                 // Return a minimal customer object with the requested code instead of throwing
                 return new CustomerDetailResponse
                 {
@@ -330,7 +330,7 @@ namespace ErpMobile.Api.Services
             try
             {
                 _logger.LogInformation("Fetching customer details for code: {CustomerCode}", request.CustomerCode);
-
+                
                 // Check if customer already exists
                 var existingCustomer = await GetCustomerByCodeAsync(request.CustomerCode);
                 if (existingCustomer != null && existingCustomer.CustomerCode != "Unknown Customer")
@@ -384,40 +384,143 @@ namespace ErpMobile.Api.Services
                             var insertSql = @"
                                 INSERT INTO cdCurrAcc WITH(ROWLOCK)
                                 (
-                                    CurrAccCode, CurrAccTypeCode, FirstName, LastName, FirstLastName, TitleCode, Patronym, IdentityNum,
-                                    TaxNumber, MersisNum, IsIndividualAcc, DataLanguageCode, CreditLimit, CurrencyCode, CompanyCode,
-                                    OfficeCode, IsVIP, IsSendAdvertSMS, IsSendAdvertMail, ExchangeTypeCode, DueDateFormulaCode,
-                                    BankCode, BankBranchCode, BankAccTypeCode, IBAN, SWIFTCode, BankAccNo, MinBalance, IsBlocked,
-                                    CustomerDiscountGrCode, VendorTypeCode, RetailSalePriceGroupCode, WholesalePriceGroupCode,
-                                    AccountOpeningDate, AccountClosingDate, PromotionGroupCode, SalesChannelCode, UseManufacturing,
-                                    IsLocked, LockedDate, BarcodeTypeCode, CostCenterCode, UseBankAccOnStore, CustomerPaymentPlanGrCode,
-                                    GLTypeCode, IsSubjectToEInvoice, IsArrangeCommercialInvoice, CustomerMarkupGrCode, CurrAccLotGrCode,
-                                    AllowOnlySelectedCurrency, PermitCreditBalance, IsSubjectToEShipment,
-                                    CustomerASNNumberIsRequiredForShipments, PurchaseRequisitionRequired, UseDBSIntegration,
-                                    DBSAccountCode, UseSerialNumberTracking, EInvoiceStartDate, EShipmentStartDate,
-                                    VendorPaymentPlanGrCode, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate, RowGuid
+                                    CurrAccCode,
+                                    CurrAccTypeCode,
+                                    FirstName,
+                                    LastName,
+                                    FirstLastName,
+                                    TitleCode,
+                                    Patronym,
+                                    IdentityNum,
+                                    TaxNumber,
+                                    MersisNum,
+                                    IsIndividualAcc,
+                                    DataLanguageCode,
+                                    CreditLimit,
+                                    CurrencyCode,
+                                    CompanyCode,
+                                    OfficeCode,
+                                    IsVIP,
+                                    IsSendAdvertSMS,
+                                    IsSendAdvertMail,
+                                    ExchangeTypeCode,
+                                    DueDateFormulaCode,
+                                    BankCode,
+                                    BankBranchCode,
+                                    BankAccTypeCode,
+                                    IBAN,
+                                    SWIFTCode,
+                                    BankAccNo,
+                                    MinBalance,
+                                    IsBlocked,
+                                    CustomerDiscountGrCode,
+                                    VendorTypeCode,
+                                    RetailSalePriceGroupCode,
+                                    WholesalePriceGroupCode,
+                                    AccountOpeningDate,
+                                    AccountClosingDate,
+                                    PromotionGroupCode,
+                                    SalesChannelCode,
+                                    UseManufacturing,
+                                    IsLocked,
+                                    LockedDate,
+                                    BarcodeTypeCode,
+                                    CostCenterCode,
+                                    UseBankAccOnStore,
+                                    CustomerPaymentPlanGrCode,
+                                    GLTypeCode,
+                                    Patronym,
+                                    IsSubjectToEInvoice,
+                                    MersisNum,
+                                    IsArrangeCommercialInvoice,
+                                    CustomerMarkupGrCode,
+                                    CurrAccLotGrCode,
+                                    AllowOnlySelectedCurrency,
+                                    PermitCreditBalance,
+                                    IsSubjectToEShipment,
+                                    CustomerASNNumberIsRequiredForShipments,
+                                    PurchaseRequisitionRequired,
+                                    UseDBSIntegration,
+                                    DBSAccountCode,
+                                    UseSerialNumberTracking,
+                                    EInvoiceStartDate,
+                                    EShipmentStartDate,
+                                    VendorPaymentPlanGrCode,
+                                    CreatedUserName,
+                                    CreatedDate,
+                                    LastUpdatedUserName,
+                                    LastUpdatedDate,
+                                    RowGuid
                                 )
                                 VALUES
                                 (
-                                    @CustomerCode, 3, ISNULL(@FirstName, N''), ISNULL(@LastName, N''), ISNULL(@CustomerName, N''),
-                                    ISNULL(@TitleCode, N''), ISNULL(@Patronym, N''), ISNULL(@CustomerIdentityNumber, N''), ISNULL(@TaxNumber, N''),
-                                    ISNULL(@MersisNum, N''), ISNULL(@IsIndividualAcc, 0), ISNULL(@DataLanguageCode, N'TR'), ISNULL(@CreditLimit, 0),
-                                    ISNULL(@CurrencyCode, N'TRY'), ISNULL(@CompanyCode, 1), ISNULL(@OfficeCode, N'M'), ISNULL(@IsVIP, 0),
-                                    ISNULL(@IsSendAdvertSMS, 0), ISNULL(@IsSendAdvertMail, 0), ISNULL(@ExchangeTypeCode, 0),
-                                    ISNULL(@DueDateFormulaCode, N''), ISNULL(@BankCode, N''), ISNULL(@BankBranchCode, N''), ISNULL(@BankAccTypeCode, 0),
-                                    ISNULL(@IBAN, N''), ISNULL(@SWIFTCode, N''), ISNULL(@BankAccNo, N''), ISNULL(@MinBalance, 0),
-                                    ISNULL(@IsBlocked, 0), ISNULL(@DiscountGroupCode, N''), ISNULL(@VendorTypeCode, 0),
-                                    ISNULL(@RetailSalePriceGroupCode, N''), ISNULL(@WholesalePriceGroupCode, N''), ISNULL(@AccountOpeningDate, CONVERT(DATE, GETDATE())),
-                                    ISNULL(@AccountClosingDate, CONVERT(DATE, '19000101')), ISNULL(@PromotionGroupCode, N''), ISNULL(@SalesChannelCode, N''),
-                                    ISNULL(@UseManufacturing, 0), ISNULL(@IsLocked, 0), ISNULL(@LockedDate, CONVERT(DATE, '19000101')),
-                                    ISNULL(@BarcodeTypeCode, N'Def'), ISNULL(@CostCenterCode, N''), ISNULL(@UseBankAccOnStore, 0),
-                                    ISNULL(@CustomerPaymentPlanGrCode, N''), ISNULL(@GLTypeCode, N''), ISNULL(@IsSubjectToEInvoice, 0),
-                                    ISNULL(@IsArrangeCommercialInvoice, 0), ISNULL(@CustomerMarkupGrCode, N''), ISNULL(@CurrAccLotGrCode, N''),
-                                    ISNULL(@AllowOnlySelectedCurrency, 0), ISNULL(@PermitCreditBalance, 0), ISNULL(@IsSubjectToEShipment, 0),
-                                    ISNULL(@CustomerASNNumberIsRequiredForShipments, 0), ISNULL(@PurchaseRequisitionRequired, 0),
-                                    ISNULL(@UseDBSIntegration, 0), ISNULL(@DBSAccountCode, N''), ISNULL(@UseSerialNumberTracking, 0),
-                                    ISNULL(@EInvoiceStartDate, CONVERT(DATE, '19000101')), ISNULL(@EShipmentStartDate, CONVERT(DATE, '19000101')),
-                                    ISNULL(@VendorPaymentPlanGrCode, N''), 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE(), NEWID()
+                                    @CustomerCode,
+                                    3, -- CurrAccTypeCode 3: Müşteri
+                                    ISNULL(@FirstName, N''),
+                                    ISNULL(@LastName, N''),
+                                    ISNULL(@CustomerName, N''),
+                                    ISNULL(@TitleCode, N''),
+                                    ISNULL(@Patronym, N''),
+                                    ISNULL(@CustomerIdentityNumber, N''),
+                                    ISNULL(@TaxNumber, N''),
+                                    ISNULL(@MersisNum, N''),
+                                    ISNULL(@IsIndividualAcc, 0),
+                                    ISNULL(@DataLanguageCode, N'TR'),
+                                    ISNULL(@CreditLimit, 0),
+                                    ISNULL(@CurrencyCode, N'TRY'),
+                                    ISNULL(@CompanyCode, 1),
+                                    ISNULL(@OfficeCode, N'M'),
+                                    ISNULL(@IsVIP, 0),
+                                    ISNULL(@IsSendAdvertSMS, 0),
+                                    ISNULL(@IsSendAdvertMail, 0),
+                                    ISNULL(@ExchangeTypeCode, 0),
+                                    ISNULL(@DueDateFormulaCode, N''),
+                                    ISNULL(@BankCode, N''),
+                                    ISNULL(@BankBranchCode, N''),
+                                    ISNULL(@BankAccTypeCode, 0),
+                                    ISNULL(@IBAN, N''),
+                                    ISNULL(@SWIFTCode, N''),
+                                    ISNULL(@BankAccNo, N''),
+                                    ISNULL(@MinBalance, 0),
+                                    ISNULL(@IsBlocked, 0),
+                                    ISNULL(@DiscountGroupCode, N''),
+                                    ISNULL(@VendorTypeCode, 0),
+                                    ISNULL(@RetailSalePriceGroupCode, N''),
+                                    ISNULL(@WholesalePriceGroupCode, N''),
+                                    ISNULL(@AccountOpeningDate, CONVERT(DATE, GETDATE())),
+                                    ISNULL(@AccountClosingDate, CONVERT(DATE, '19000101')),
+                                    ISNULL(@PromotionGroupCode, N''),
+                                    ISNULL(@SalesChannelCode, N''),
+                                    ISNULL(@UseManufacturing, 0),
+                                    ISNULL(@IsLocked, 0),
+                                    ISNULL(@LockedDate, CONVERT(DATE, '19000101')),
+                                    ISNULL(@BarcodeTypeCode, N'Def'),
+                                    ISNULL(@CostCenterCode, N''),
+                                    ISNULL(@UseBankAccOnStore, 0),
+                                    ISNULL(@CustomerPaymentPlanGrCode, N''),
+                                    ISNULL(@GLTypeCode, N''),
+                                    ISNULL(@Patronym, N''),
+                                    ISNULL(@IsSubjectToEInvoice, 0),
+                                    ISNULL(@MersisNum, N''),
+                                    ISNULL(@IsArrangeCommercialInvoice, 0),
+                                    ISNULL(@CustomerMarkupGrCode, N''),
+                                    ISNULL(@CurrAccLotGrCode, N''),
+                                    ISNULL(@AllowOnlySelectedCurrency, 0),
+                                    ISNULL(@PermitCreditBalance, 0),
+                                    ISNULL(@IsSubjectToEShipment, 0),
+                                    ISNULL(@CustomerASNNumberIsRequiredForShipments, 0),
+                                    ISNULL(@PurchaseRequisitionRequired, 0),
+                                    ISNULL(@UseDBSIntegration, 0),
+                                    ISNULL(@DBSAccountCode, N''),
+                                    ISNULL(@UseSerialNumberTracking, 0),
+                                    ISNULL(@EInvoiceStartDate, CONVERT(DATE, '19000101')),
+                                    ISNULL(@EShipmentStartDate, CONVERT(DATE, '19000101')),
+                                    ISNULL(@VendorPaymentPlanGrCode, N''),
+                                    'SYSTEM',
+                                    GETDATE(),
+                                    'SYSTEM',
+                                    GETDATE(),
+                                    NEWID()
                                 )";
 
                             var parameters = new DynamicParameters();
@@ -493,11 +596,17 @@ namespace ErpMobile.Api.Services
                             var descriptionSql = @"
                                 INSERT INTO cdCurrAccDesc WITH(ROWLOCK)
                                 (
-                                    CurrAccTypeCode, CurrAccCode, LangCode, CurrAccDescription
+                                    CurrAccTypeCode,
+                                    CurrAccCode,
+                                    LangCode,
+                                    CurrAccDescription
                                 )
                                 VALUES
                                 (
-                                    3, @CustomerCode, N'TR', @CustomerName
+                                    3, -- CurrAccTypeCode 3: Müşteri
+                                    @CustomerCode,
+                                    N'TR',
+                                    @CustomerName
                                 )";
 
                             await connection.ExecuteAsync(descriptionSql, new
@@ -506,10 +615,10 @@ namespace ErpMobile.Api.Services
                                 request.CustomerName
                             }, transaction);
 
-                            // Create a postal address ID
+                            // Create a postal address ID 
                             var postalAddressId = Guid.NewGuid();
 
-                            // Create default address entry
+                            // Create default address entry 
                             if (request.Addresses != null && request.Addresses.Any())
                             {
                                 var defaultAddress = request.Addresses.FirstOrDefault(a => a.IsDefault) ?? request.Addresses.First();
@@ -518,233 +627,372 @@ namespace ErpMobile.Api.Services
                                 var addressSql = @"
                                     INSERT INTO prCurrAccPostalAddress WITH(ROWLOCK)
                                     (
-                                        PostalAddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode, AddressID, Address, CountryCode, StateCode,
-                                        CityCode, DistrictCode, ZipCode, SiteName, BuildingName, BuildingNum, FloorNum, DoorNum, QuarterCode,
-                                        QuarterName, Boulevard, StreetCode, Street, Road, DrivingDirections, TaxOfficeCode, TaxNumber, IsBlocked,
-                                        CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                                        PostalAddressID,
+                                        CurrAccTypeCode,
+                                        CurrAccCode,
+                                        AddressTypeCode,
+                                        AddressID,
+                                        Address,
+                                        CountryCode,
+                                        StateCode,
+                                        CityCode,
+                                        DistrictCode,
+                                        ZipCode,
+                                        SiteName,
+                                        BuildingName,
+                                        BuildingNum,
+                                        FloorNum,
+                                        DoorNum,
+                                        QuarterCode,
+                                        QuarterName,
+                                        Boulevard,
+                                        StreetCode,
+                                        Street,
+                                        Road,
+                                        DrivingDirections,
+                                        TaxOfficeCode,
+                                        TaxNumber,
+                                        IsBlocked,
+                                        CreatedUserName,
+                                        CreatedDate,
+                                        LastUpdatedUserName,
+                                        LastUpdatedDate
                                     )
                                     VALUES
                                     (
-                                        @PostalAddressID, 3, @CustomerCode, @AddressTypeCode, 0, @Address, @CountryCode, @StateCode, @CityCode,
-                                        @DistrictCode, @PostalCode, '', '', '', 0, 0, 0, '', '', 0, '', '', '', '', '', @IsBlocked, 'SYSTEM',
-                                        GETDATE(), 'SYSTEM', GETDATE()
+                                        @PostalAddressID,
+                                        3, -- CurrAccTypeCode 3: Müşteri
+                                        @CustomerCode,
+                                        @AddressTypeCode,
+                                        0, -- AddressID
+                                        @Address,
+                                        @CountryCode,
+                                        @StateCode,
+                                        @CityCode,
+                                        @DistrictCode,
+                                        @PostalCode,
+                                        '', -- SiteName
+                                        '', -- BuildingName
+                                        '', -- BuildingNum
+                                        0, -- FloorNum
+                                        0, -- DoorNum
+                                        0, -- QuarterCode
+                                        '', -- QuarterName
+                                        '', -- Boulevard
+                                        0, -- StreetCode
+                                        '', -- Street
+                                        '', -- Road
+                                        '', -- DrivingDirections
+                                        '', -- TaxOfficeCode
+                                        '', -- TaxNumber
+                                        @IsBlocked,
+                                        'SYSTEM',
+                                        GETDATE(),
+                                        'SYSTEM',
+                                        GETDATE()
                                     )";
 
-                                await connection.ExecuteAsync(addressSql, new
-                                {
-                                    PostalAddressID = postalAddressId,
-                                    request.CustomerCode,
-                                    defaultAddress.AddressTypeCode,
-                                    defaultAddress.Address,
-                                    defaultAddress.CountryCode,
-                                    defaultAddress.StateCode,
-                                    defaultAddress.CityCode,
-                                    defaultAddress.DistrictCode,
-                                    PostalCode = defaultAddress.PostalCode,
-                                    defaultAddress.IsBlocked
-                                }, transaction);
-
-                                // Use MERGE statement for default address to handle both insert and update
-                                var mergeDefaultAddressSql = @"
-                                    MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
-                                    USING (SELECT
-                                        3 AS CurrAccTypeCode,
-                                        @CustomerCode AS CurrAccCode,
-                                        @PostalAddressID AS PostalAddressID
-                                    ) AS source
-                                    ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
-                                    WHEN MATCHED THEN
-                                        UPDATE SET
-                                            PostalAddressID = source.PostalAddressID,
-                                            LastUpdatedUserName = 'SYSTEM',
-                                            LastUpdatedDate = GETDATE()
-                                    WHEN NOT MATCHED THEN
-                                        INSERT (CurrAccTypeCode, CurrAccCode, PostalAddressID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate)
-                                        VALUES (source.CurrAccTypeCode, source.CurrAccCode, source.PostalAddressID, 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE());";
-
-                                await connection.ExecuteAsync(mergeDefaultAddressSql, new
-                                {
-                                    request.CustomerCode,
-                                    PostalAddressID = postalAddressId
-                                }, transaction);
-
-                                // Insert additional addresses if any
-                                foreach (var address in request.Addresses.Where(a => a != defaultAddress))
-                                {
-                                    var additionalPostalAddressId = Guid.NewGuid();
-
-                                    var additionalAddressSql = @"
-                                        INSERT INTO prCurrAccPostalAddress WITH(ROWLOCK)
-                                        (
-                                            PostalAddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode, AddressID, Address, CountryCode, StateCode,
-                                            CityCode, DistrictCode, ZipCode, SiteName, BuildingName, BuildingNum, FloorNum, DoorNum, QuarterCode,
-                                            QuarterName, Boulevard, StreetCode, Street, Road, DrivingDirections, TaxOfficeCode, TaxNumber, IsBlocked,
-                                            CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                                        )
-                                        VALUES
-                                        (
-                                            @PostalAddressID, 3, @CustomerCode, @AddressTypeCode, 0, @Address, @CountryCode, @StateCode, @CityCode,
-                                            @DistrictCode, @PostalCode, '', '', '', 0, 0, 0, '', '', 0, '', '', '', '', '', @IsBlocked, 'SYSTEM',
-                                            GETDATE(), 'SYSTEM', GETDATE()
-                                        )";
-
-                                    await connection.ExecuteAsync(additionalAddressSql, new
-                                    {
-                                        PostalAddressID = additionalPostalAddressId,
-                                        request.CustomerCode,
-                                        address.AddressTypeCode,
-                                        address.Address,
-                                        address.CountryCode,
-                                        address.StateCode,
-                                        address.CityCode,
-                                        address.DistrictCode,
-                                        PostalCode = address.PostalCode,
-                                        address.IsBlocked
-                                    }, transaction);
-                                }
-                            } // End of address processing
-
-                            // Insert contacts if any
-                            if (request.Contacts != null && request.Contacts.Any())
+                            await connection.ExecuteAsync(addressSql, new
                             {
-                                foreach (var contact in request.Contacts)
+                                PostalAddressID = postalAddressId,
+                                request.CustomerCode,
+                                defaultAddress.AddressTypeCode,
+                                defaultAddress.Address,
+                                defaultAddress.CountryCode,
+                                defaultAddress.StateCode,
+                                defaultAddress.CityCode,
+                                defaultAddress.DistrictCode,
+                                PostalCode = defaultAddress.PostalCode,
+                                defaultAddress.IsBlocked
+                            }, transaction);
+
+                            // Use MERGE statement for default address to handle both insert and update
+                            var mergeDefaultAddressSql = @"
+                                MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
+                                USING (SELECT 
+                                    3 AS CurrAccTypeCode, 
+                                    @CustomerCode AS CurrAccCode,
+                                    @PostalAddressID AS PostalAddressID
+                                ) AS source
+                                ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
+                                WHEN MATCHED THEN
+                                    UPDATE SET 
+                                        PostalAddressID = source.PostalAddressID,
+                                        LastUpdatedUserName = 'SYSTEM',
+                                        LastUpdatedDate = GETDATE()
+                                WHEN NOT MATCHED THEN
+                                    INSERT (CurrAccTypeCode, CurrAccCode, PostalAddressID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate)
+                                    VALUES (source.CurrAccTypeCode, source.CurrAccCode, source.PostalAddressID, 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE());";
+                                
+                            await connection.ExecuteAsync(mergeDefaultAddressSql, new
+                            {
+                                request.CustomerCode,
+                                PostalAddressID = postalAddressId
+                            }, transaction);
+
+                            // Insert additional addresses if any
+                            foreach (var address in request.Addresses.Where(a => a != defaultAddress))
+                            {
+                                var additionalPostalAddressId = Guid.NewGuid();
+                                
+                                var additionalAddressSql = @"
+                                    INSERT INTO prCurrAccPostalAddress WITH(ROWLOCK)
+                                    (
+                                        PostalAddressID,
+                                        CurrAccTypeCode,
+                                        CurrAccCode,
+                                        AddressTypeCode,
+                                        AddressID,
+                                        Address,
+                                        CountryCode,
+                                        StateCode,
+                                        CityCode,
+                                        DistrictCode,
+                                        ZipCode,
+                                        SiteName,
+                                        BuildingName,
+                                        BuildingNum,
+                                        FloorNum,
+                                        DoorNum,
+                                        QuarterCode,
+                                        QuarterName,
+                                        Boulevard,
+                                        StreetCode,
+                                        Street,
+                                        Road,
+                                        DrivingDirections,
+                                        TaxOfficeCode,
+                                        TaxNumber,
+                                        IsBlocked,
+                                        CreatedUserName,
+                                        CreatedDate,
+                                        LastUpdatedUserName,
+                                        LastUpdatedDate
+                                    )
+                                    VALUES
+                                    (
+                                        @PostalAddressID,
+                                        3, -- CurrAccTypeCode 3: Müşteri
+                                        @CustomerCode,
+                                        @AddressTypeCode,
+                                        0, -- AddressID
+                                        @Address,
+                                        @CountryCode,
+                                        @StateCode,
+                                        @CityCode,
+                                        @DistrictCode,
+                                        @PostalCode,
+                                        '', -- SiteName
+                                        '', -- BuildingName
+                                        '', -- BuildingNum
+                                        0, -- FloorNum
+                                        0, -- DoorNum
+                                        0, -- QuarterCode
+                                        '', -- QuarterName
+                                        '', -- Boulevard
+                                        0, -- StreetCode
+                                        '', -- Street
+                                        '', -- Road
+                                        '', -- DrivingDirections
+                                        '', -- TaxOfficeCode
+                                        '', -- TaxNumber
+                                        @IsBlocked,
+                                        'SYSTEM',
+                                        GETDATE(),
+                                        'SYSTEM',
+                                        GETDATE()
+                                    )";
+
+                            await connection.ExecuteAsync(additionalAddressSql, new
+                            {
+                                PostalAddressID = additionalPostalAddressId,
+                                request.CustomerCode,
+                                address.AddressTypeCode,
+                                address.Address,
+                                address.CountryCode,
+                                address.StateCode,
+                                address.CityCode,
+                                address.DistrictCode,
+                                PostalCode = address.PostalCode,
+                                address.IsBlocked
+                            }, transaction);
+                            }
+                        }
+
+                        // Insert contacts if any
+                        if (request.Contacts != null && request.Contacts.Any())
+                        {
+                            foreach (var contact in request.Contacts)
+                            {
+                                var contactId = Guid.NewGuid();
+                                
+                                // Split contact name into first and last name
+                                var nameParts = contact.Contact.Split(' ', 2);
+                                var firstName = nameParts.Length > 0 ? nameParts[0] : "";
+                                var lastName = nameParts.Length > 1 ? nameParts[1] : "";
+                                
+                                var contactSql = @"
+                                    INSERT INTO prCurrAccContact WITH(ROWLOCK)
+                                    (
+                                        ContactID,
+                                        CurrAccTypeCode,
+                                        CurrAccCode,
+                                        ContactTypeCode,
+                                        TitleCode,
+                                        JobTitleCode,
+                                        FirstName,
+                                        LastName,
+                                        IsAuthorized,
+                                        IdentityNum,
+                                        IsBlocked,
+                                        CreatedUserName,
+                                        CreatedDate,
+                                        LastUpdatedUserName,
+                                        LastUpdatedDate
+                                    )
+                                    VALUES
+                                    (
+                                        @ContactID,
+                                        3, -- CurrAccTypeCode 3: Müşteri
+                                        @CustomerCode,
+                                        @ContactTypeCode,
+                                        '', -- TitleCode
+                                        '', -- JobTitleCode
+                                        @FirstName,
+                                        @LastName,
+                                        0, -- IsAuthorized
+                                        '', -- IdentityNum
+                                        0, -- IsBlocked
+                                        'SYSTEM',
+                                        GETDATE(),
+                                        'SYSTEM',
+                                        GETDATE()
+                                    )";
+
+                                await connection.ExecuteAsync(contactSql, new
                                 {
-                                    var contactId = Guid.NewGuid();
-
-                                    // Split contact name into first and last name
-                                    var nameParts = contact.Contact.Split(' ', 2);
-                                    var firstName = nameParts.Length > 0 ? nameParts[0] : "";
-                                    var lastName = nameParts.Length > 1 ? nameParts[1] : "";
-
-                                    var contactSql = @"
-                                        INSERT INTO prCurrAccContact WITH(ROWLOCK)
-                                        (
-                                            ContactID, CurrAccTypeCode, CurrAccCode, ContactTypeCode, TitleCode, JobTitleCode, FirstName, LastName,
-                                            IsAuthorized, IdentityNum, IsBlocked, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                                        )
-                                        VALUES
-                                        (
-                                            @ContactID, 3, @CustomerCode, @ContactTypeCode, '', '', @FirstName, @LastName, 0, '', 0, 'SYSTEM',
-                                            GETDATE(), 'SYSTEM', GETDATE()
-                                        )";
-
-                                    await connection.ExecuteAsync(contactSql, new
-                                    {
                                         ContactID = contactId,
                                         request.CustomerCode,
                                         contact.ContactTypeCode,
                                         FirstName = firstName,
-                                        LastName = lastName
-                                    }, transaction);
+                                    LastName = lastName
+                                }, transaction);
 
-                                    // If this is the default contact, add it to the default table
-                                    if (contact.IsDefault)
-                                    {
-                                        // Use MERGE for default contact
-                                        var mergeDefaultContactSql = @"
-                                            MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
-                                            USING (SELECT
-                                                3 AS CurrAccTypeCode,
-                                                @CustomerCode AS CurrAccCode,
-                                                @ContactID AS ContactID
-                                            ) AS source
-                                            ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
-                                            WHEN MATCHED THEN
-                                                UPDATE SET
-                                                    ContactID = source.ContactID,
-                                                    LastUpdatedUserName = 'SYSTEM',
-                                                    LastUpdatedDate = GETDATE()
-                                            WHEN NOT MATCHED THEN
-                                                INSERT (CurrAccTypeCode, CurrAccCode, ContactID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate)
-                                                VALUES (source.CurrAccTypeCode, source.CurrAccCode, source.ContactID, 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE());";
-
-                                        await connection.ExecuteAsync(mergeDefaultContactSql, new
-                                        {
-                                            request.CustomerCode,
-                                            ContactID = contactId
-                                        }, transaction);
-                                    }
-                                }
-                            } // End of contact processing
-
-                            // Insert communications if any
-                            if (request.Communications != null && request.Communications.Any())
+                            // If this is the default contact, add it to the default table
+                            if (contact.IsDefault)
                             {
-                                foreach (var comm in request.Communications)
-                                {
-                                    var communicationId = Guid.NewGuid();
-
-                                    var communicationSql = @"
-                                        INSERT INTO prCurrAccCommunication WITH(ROWLOCK)
-                                        (
-                                            CommunicationID, CurrAccTypeCode, CurrAccCode, CommunicationTypeCode, Communication,
-                                            CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                                        )
-                                        VALUES
-                                        (
-                                            @CommunicationID, 3, @CustomerCode, @CommunicationTypeCode, @Communication, 'SYSTEM',
-                                            GETDATE(), 'SYSTEM', GETDATE()
-                                        )";
-
-                                    await connection.ExecuteAsync(communicationSql, new
-                                    {
-                                        CommunicationID = communicationId,
-                                        request.CustomerCode,
-                                        comm.CommunicationTypeCode,
-                                        comm.Communication
-                                    }, transaction);
-
-                                    // If this is the default communication, add it to the default table
-                                    if (comm.IsDefault)
-                                    {
-                                        // Use MERGE for default communication
-                                        var mergeDefaultCommSql = @"
-                                            MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
-                                            USING (SELECT
-                                                3 AS CurrAccTypeCode,
-                                                @CustomerCode AS CurrAccCode,
-                                                @CommunicationID AS CommunicationID
-                                            ) AS source
-                                            ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
-                                            WHEN MATCHED THEN
-                                                UPDATE SET
-                                                    CommunicationID = source.CommunicationID,
-                                                    LastUpdatedUserName = 'SYSTEM',
-                                                    LastUpdatedDate = GETDATE()
-                                            WHEN NOT MATCHED THEN
-                                                INSERT (CurrAccTypeCode, CurrAccCode, CommunicationID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate)
-                                                VALUES (source.CurrAccTypeCode, source.CurrAccCode, source.CommunicationID, 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE());";
-
-                                        await connection.ExecuteAsync(mergeDefaultCommSql, new
-                                        {
-                                            request.CustomerCode,
-                                            CommunicationID = communicationId
-                                        }, transaction);
-                                    }
-                                }
-                            } // End of communication processing
-
-                            await transaction.CommitAsync();
-
-                            // Explicit cast to CustomerResponse
-                            return (CustomerResponse)await GetCustomerByCodeAsync(request.CustomerCode);
+                                // Use MERGE for default communication
+                                var mergeDefaultCommSql = @"
+                                    MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
+                                    USING (SELECT 
+                                        3 AS CurrAccTypeCode, 
+                                        @CustomerCode AS CurrAccCode,
+                                        @CommunicationID AS CommunicationID
+                                    ) AS source
+                                    ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
+                                    WHEN MATCHED THEN
+                                        UPDATE SET 
+                                            CommunicationID = source.CommunicationID,
+                                            LastUpdatedUserName = 'SYSTEM',
+                                            LastUpdatedDate = GETDATE()
+                                    WHEN NOT MATCHED THEN
+                                        INSERT (CurrAccTypeCode, CurrAccCode, CommunicationID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate)
+                                        VALUES (source.CurrAccTypeCode, source.CurrAccCode, source.CommunicationID, 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE());";
+                                                                        
+                                            await connection.ExecuteAsync(mergeDefaultCommSql, new
+                                            {
+                                                request.CustomerCode,
+                                                CommunicationID = Guid.NewGuid()
+                                            }, transaction);
+                            }
                         }
-                        catch (Exception ex)
+
+                        // Insert communications if any
+                        if (request.Communications != null && request.Communications.Any())
                         {
-                            await transaction.RollbackAsync();
-                            _logger.LogError(ex, "Error occurred during customer creation. Request: {@Request}", request);
-                            throw; // Re-throw the exception after logging and rollback
+                            foreach (var comm in request.Communications)
+                            {
+                                var communicationSql = @"
+                                    INSERT INTO prCurrAccCommunication WITH(ROWLOCK)
+                                    (
+                                        CommunicationID,
+                                        CurrAccTypeCode,
+                                        CurrAccCode,
+                                        CommunicationTypeCode,
+                                        Communication,
+                                        CreatedUserName,
+                                        CreatedDate,
+                                        LastUpdatedUserName,
+                                        LastUpdatedDate
+                                    )
+                                    VALUES
+                                    (
+                                        @CommunicationID,
+                                        3, -- CurrAccTypeCode 3: Müşteri
+                                        @CustomerCode,
+                                        @CommunicationTypeCode,
+                                        @Communication,
+                                        'SYSTEM',
+                                        GETDATE(),
+                                        'SYSTEM',
+                                        GETDATE()
+                                    )";
+
+                                await connection.ExecuteAsync(communicationSql, new
+                                {
+                                    CommunicationID = Guid.NewGuid(),
+                                    request.CustomerCode,
+                                    comm.CommunicationTypeCode,
+                                    comm.Communication
+                                }, transaction);
+
+                            // If this is the default communication, add it to the default table
+                            if (comm.IsDefault)
+                            {
+                                // Use MERGE for default communication
+                                var mergeDefaultCommSql = @"
+                                    MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
+                                    USING (SELECT 
+                                        3 AS CurrAccTypeCode, 
+                                        @CustomerCode AS CurrAccCode,
+                                        @CommunicationID AS CommunicationID
+                                    ) AS source
+                                    ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
+                                    WHEN MATCHED THEN
+                                        UPDATE SET 
+                                            CommunicationID = source.CommunicationID,
+                                            LastUpdatedUserName = 'SYSTEM',
+                                            LastUpdatedDate = GETDATE()
+                                    WHEN NOT MATCHED THEN
+                                        INSERT (CurrAccTypeCode, CurrAccCode, CommunicationID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate)
+                                        VALUES (source.CurrAccTypeCode, source.CurrAccCode, source.CommunicationID, 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE());";
+                                        
+                                await connection.ExecuteAsync(mergeDefaultCommSql, new
+                                {
+                                    request.CustomerCode,
+                                    CommunicationID = Guid.NewGuid()
+                                }, transaction);
+                            }
                         }
-                    } // End of transaction using block
-                } // End of connection using block
-            }
+
+                        await transaction.CommitAsync();
+
+                        return await GetCustomerByCodeAsync(request.CustomerCode) as CustomerResponse;
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        _logger.LogError(ex, "Error occurred during customer creation. Request: {@Request}", request);
+                        throw;
+                    }
+               }
+        }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while creating customer. Request: {@Request}", request);
-                throw; // Re-throw the exception
+                throw;
             }
         }
-
 
         public async Task<List<CustomerContactResponse>> GetCustomerContactsAsync(string customerCode)
         {
@@ -755,7 +1003,7 @@ namespace ErpMobile.Api.Services
                     await connection.OpenAsync();
 
                     var sql = @"
-                        SELECT
+                        SELECT 
                             ContactID,
                             ContactTypeCode,
                             FirstName + ' ' + LastName as Contact,
@@ -771,7 +1019,7 @@ namespace ErpMobile.Api.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer contacts. CustomerCode: {CustomerCode}", customerCode);
-                return new List<CustomerContactResponse>(); // Return empty list on error
+                return new List<CustomerContactResponse>();
             }
         }
 
@@ -784,7 +1032,7 @@ namespace ErpMobile.Api.Services
                     await connection.OpenAsync();
 
                     var sql = @"
-                        SELECT
+                        SELECT 
                             ContactID,
                             ContactTypeCode,
                             FirstName + ' ' + LastName as Contact,
@@ -800,7 +1048,7 @@ namespace ErpMobile.Api.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer contacts. CustomerCode: {CustomerCode}", customerCode);
-                return new List<ContactResponse>(); // Return empty list on error
+                return new List<ContactResponse>();
             }
         }
 
@@ -813,7 +1061,7 @@ namespace ErpMobile.Api.Services
                     await connection.OpenAsync();
 
                     var sql = @"
-                        SELECT
+                        SELECT 
                             ContactID,
                             ContactTypeCode,
                             FirstName + ' ' + LastName as Contact,
@@ -821,16 +1069,16 @@ namespace ErpMobile.Api.Services
                         FROM prCurrAccContact WITH(NOLOCK)
                         WHERE CurrAccTypeCode = 3
                         AND CurrAccCode = @CustomerCode
-                        AND ContactTypeCode = @ContactId"; // Assuming ContactId corresponds to ContactTypeCode
+                        AND ContactTypeCode = @ContactId";
 
                     var contact = await connection.QueryFirstOrDefaultAsync<ContactResponse>(sql, new { CustomerCode = customerCode, ContactId = contactId });
-                    return contact ?? new ContactResponse { Contact = "Unknown Contact" }; // Return default if not found
+                    return contact ?? new ContactResponse { Contact = "Unknown Contact" };
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer contact. CustomerCode: {CustomerCode}, ContactId: {ContactId}", customerCode, contactId);
-                return new ContactResponse { Contact = "Unknown Contact" }; // Return default on error
+                return new ContactResponse { Contact = "Unknown Contact" };
             }
         }
 
@@ -842,26 +1090,25 @@ namespace ErpMobile.Api.Services
                 {
                     await connection.OpenAsync();
 
-                    // Assuming prAddressType exists and has AddressTypeDesc column
                     var sql = @"
-                        SELECT
+                        SELECT 
                             AddressTypeCode,
                             AddressTypeDesc
                         FROM prAddressType WITH(NOLOCK)
                         WHERE AddressTypeCode = @AddressTypeCode";
 
                     var addressType = await connection.QueryFirstOrDefaultAsync<AddressTypeResponse>(sql, new { AddressTypeCode = addressTypeCode });
-                    return addressType; // Can be null if not found
+                    return addressType;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting address type. AddressTypeCode: {AddressTypeCode}", addressTypeCode);
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
-        public Task<AddressTypeResponse> CreateAddressTypeAsync(AddressTypeCreateRequest request)
+        public async Task<AddressTypeResponse> CreateAddressTypeAsync(AddressTypeCreateRequest request)
         {
             // ERP sisteminde AddressType fonksiyon olduğundan doğrudan ekleme yapılamaz
             _logger.LogWarning("CreateAddressTypeAsync called but ERP system uses AddressType function, not a direct table. Request: {@Request}", request);
@@ -875,9 +1122,8 @@ namespace ErpMobile.Api.Services
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
-                    // Assuming existence of referenced tables/functions like fsCityDistrict, fsCity, fsState, fsCountry, fsAddressType
                     var sql = @"
-                        SELECT
+                        SELECT 
                             p.PostalAddressID as AddressId,
                             p.CurrAccCode as CustomerCode,
                             p.AddressTypeCode,
@@ -888,20 +1134,20 @@ namespace ErpMobile.Api.Services
                             p.StateCode,
                             s.StateName,
                             p.CityCode,
-                            ci.CityName,
+                            ci.CityName, 
                             p.DistrictCode,
                             d.DistrictName,
                             p.ZipCode as PostalCode,
                             CASE WHEN def.PostalAddressID IS NOT NULL THEN 1 ELSE 0 END as IsDefault,
                             p.IsBlocked
                         FROM prCurrAccPostalAddress p WITH(NOLOCK)
-                        LEFT JOIN fsCityDistrict d WITH(NOLOCK) ON d.DistrictCode = p.DistrictCode AND d.CityCode = p.CityCode -- Added CityCode join condition
+                        LEFT JOIN fsCityDistrict d WITH(NOLOCK) ON d.DistrictCode = p.DistrictCode
                         LEFT JOIN fsCity ci WITH(NOLOCK) ON ci.CityCode = p.CityCode
                         LEFT JOIN fsState s WITH(NOLOCK) ON s.StateCode = p.StateCode
                         LEFT JOIN fsCountry c WITH(NOLOCK) ON c.CountryCode = p.CountryCode
                         LEFT JOIN fsAddressType at WITH(NOLOCK) ON at.AddressTypeCode = p.AddressTypeCode
-                        LEFT JOIN prCurrAccDefault def WITH(NOLOCK) ON def.CurrAccTypeCode = p.CurrAccTypeCode
-                                                                AND def.CurrAccCode = p.CurrAccCode
+                        LEFT JOIN prCurrAccDefault def WITH(NOLOCK) ON def.CurrAccTypeCode = p.CurrAccTypeCode 
+                                                                AND def.CurrAccCode = p.CurrAccCode 
                                                                 AND def.PostalAddressID = p.PostalAddressID
                         WHERE p.CurrAccTypeCode = 3 AND p.CurrAccCode = @CustomerCode
                         ORDER BY IsDefault DESC";
@@ -913,12 +1159,12 @@ namespace ErpMobile.Api.Services
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "SQL Error occurred while retrieving addresses for customer {CustomerCode}", customerCode);
-                throw; // Re-throw SQL exceptions
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while retrieving addresses for customer {CustomerCode}", customerCode);
-                throw; // Re-throw other exceptions
+                throw;
             }
         }
 
@@ -926,19 +1172,11 @@ namespace ErpMobile.Api.Services
         {
             try
             {
-                // Ensure addressId is treated as GUID if it's the PostalAddressID
-                if (!Guid.TryParse(addressId, out Guid postalAddressGuid))
-                {
-                    _logger.LogWarning("Invalid AddressId format provided: {AddressId}", addressId);
-                    return null; // Or throw an appropriate exception
-                }
-
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
-                    // Assuming existence of referenced tables/functions
                     var sql = @"
-                        SELECT
+                        SELECT 
                             p.PostalAddressID as AddressId,
                             p.CurrAccCode as CustomerCode,
                             p.AddressTypeCode,
@@ -949,38 +1187,38 @@ namespace ErpMobile.Api.Services
                             p.StateCode,
                             s.StateName,
                             p.CityCode,
-                            ci.CityName,
+                            ci.CityName, 
                             p.DistrictCode,
                             d.DistrictName,
                             p.ZipCode as PostalCode,
                             CASE WHEN def.PostalAddressID IS NOT NULL THEN 1 ELSE 0 END as IsDefault,
                             p.IsBlocked
                         FROM prCurrAccPostalAddress p WITH(NOLOCK)
-                        LEFT JOIN fsCityDistrict d WITH(NOLOCK) ON d.DistrictCode = p.DistrictCode AND d.CityCode = p.CityCode -- Added CityCode join condition
+                        LEFT JOIN fsCityDistrict d WITH(NOLOCK) ON d.DistrictCode = p.DistrictCode
                         LEFT JOIN fsCity ci WITH(NOLOCK) ON ci.CityCode = p.CityCode
                         LEFT JOIN fsState s WITH(NOLOCK) ON s.StateCode = p.StateCode
                         LEFT JOIN fsCountry c WITH(NOLOCK) ON c.CountryCode = p.CountryCode
                         LEFT JOIN fsAddressType at WITH(NOLOCK) ON at.AddressTypeCode = p.AddressTypeCode
-                        LEFT JOIN prCurrAccDefault def WITH(NOLOCK) ON def.CurrAccTypeCode = p.CurrAccTypeCode
-                                                                AND def.CurrAccCode = p.CurrAccCode
+                        LEFT JOIN prCurrAccDefault def WITH(NOLOCK) ON def.CurrAccTypeCode = p.CurrAccTypeCode 
+                                                                AND def.CurrAccCode = p.CurrAccCode 
                                                                 AND def.PostalAddressID = p.PostalAddressID
-                        WHERE p.CurrAccTypeCode = 3
-                          AND p.CurrAccCode = @CustomerCode
+                        WHERE p.CurrAccTypeCode = 3 
+                          AND p.CurrAccCode = @CustomerCode 
                           AND p.PostalAddressID = @AddressId";
 
-                    var address = await connection.QueryFirstOrDefaultAsync<AddressResponse>(sql, new { CustomerCode = customerCode, AddressId = postalAddressGuid });
-                    return address; // Can be null if not found
+                    var address = await connection.QueryFirstOrDefaultAsync<AddressResponse>(sql, new { CustomerCode = customerCode, AddressId = addressId });
+                    return address;
                 }
             }
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "SQL Error occurred while retrieving address {AddressId} for customer {CustomerCode}", addressId, customerCode);
-                throw; // Re-throw SQL exceptions
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while retrieving address {AddressId} for customer {CustomerCode}", addressId, customerCode);
-                throw; // Re-throw other exceptions
+                throw;
             }
         }
 
@@ -995,84 +1233,157 @@ namespace ErpMobile.Api.Services
 
                     try
                     {
-                        var postalAddressId = Guid.NewGuid(); // Generate GUID for the new address
+                        var postalAddressId = Guid.NewGuid().ToString();
 
                         // Insert the new address
                         var addressSql = @"
                             INSERT INTO prCurrAccPostalAddress WITH(ROWLOCK)
                             (
-                                PostalAddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode, AddressID, Address, CountryCode, StateCode, CityCode,
-                                DistrictCode, ZipCode, SiteName, BuildingName, BuildingNum, FloorNum, DoorNum, QuarterCode, QuarterName, Boulevard,
-                                StreetCode, Street, Road, DrivingDirections, TaxOfficeCode, TaxNumber, IsBlocked, CreatedUserName, CreatedDate,
-                                LastUpdatedUserName, LastUpdatedDate
+                                PostalAddressID,
+                                CurrAccTypeCode,
+                                CurrAccCode,
+                                AddressTypeCode,
+                                AddressID,
+                                Address,
+                                CountryCode,
+                                StateCode,
+                                CityCode,
+                                DistrictCode,
+                                ZipCode,
+                                SiteName,
+                                BuildingName,
+                                BuildingNum,
+                                FloorNum,
+                                DoorNum,
+                                QuarterCode,
+                                QuarterName,
+                                Boulevard,
+                                StreetCode,
+                                Street,
+                                Road,
+                                DrivingDirections,
+                                TaxOfficeCode,
+                                TaxNumber,
+                                IsBlocked,
+                                CreatedUserName,
+                                CreatedDate,
+                                LastUpdatedUserName,
+                                LastUpdatedDate
                             )
                             VALUES
                             (
-                                @PostalAddressID, 3, @CustomerCode, @AddressTypeCode, 0, @Address, @CountryCode, @StateCode, @CityCode,
-                                @DistrictCode, @PostalCode, '', '', '', 0, 0, 0, '', '', 0, '', '', '', '', '', @IsBlocked, 'SYSTEM',
-                                GETDATE(), 'SYSTEM', GETDATE()
+                                @PostalAddressID,
+                                3, -- CurrAccTypeCode 3: Müşteri
+                                @CustomerCode,
+                                @AddressTypeCode,
+                                0, -- AddressID
+                                @Address,
+                                @CountryCode,
+                                @StateCode,
+                                @CityCode,
+                                @DistrictCode,
+                                @PostalCode,
+                                '', -- SiteName
+                                '', -- BuildingName
+                                '', -- BuildingNum
+                                0, -- FloorNum
+                                0, -- DoorNum
+                                0, -- QuarterCode
+                                '', -- QuarterName
+                                '', -- Boulevard
+                                0, -- StreetCode
+                                '', -- Street
+                                '', -- Road
+                                '', -- DrivingDirections
+                                '', -- TaxOfficeCode
+                                '', -- TaxNumber
+                                @IsBlocked,
+                                'SYSTEM',
+                                GETDATE(),
+                                'SYSTEM',
+                                GETDATE()
                             )";
 
-                        await connection.ExecuteAsync(addressSql, new
-                        {
-                            PostalAddressID = postalAddressId,
-                            CustomerCode = customerCode,
-                            request.AddressTypeCode,
-                            request.Address,
-                            request.CountryCode,
-                            request.StateCode,
-                            request.CityCode,
-                            request.DistrictCode,
-                            PostalCode = request.PostalCode,
-                            request.IsBlocked
-                        }, transaction);
+                            await connection.ExecuteAsync(addressSql, new
+                            {
+                                PostalAddressID = postalAddressId,
+                                CustomerCode = customerCode,
+                                request.AddressTypeCode,
+                                request.Address,
+                                request.CountryCode,
+                                request.StateCode,
+                                request.CityCode,
+                                request.DistrictCode,
+                                PostalCode = request.PostalCode,
+                                request.IsBlocked
+                            }, transaction);
 
-                        // If this is the default address, update the default address using MERGE
+                        // If this is the default address, update the default address
                         if (request.IsDefault)
                         {
-                            var mergeDefaultSql = @"
-                                MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
-                                USING (SELECT
-                                    3 AS CurrAccTypeCode,
-                                    @CustomerCode AS CurrAccCode,
-                                    @PostalAddressID AS PostalAddressID
-                                ) AS source
-                                ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
-                                WHEN MATCHED THEN
-                                    UPDATE SET
-                                        PostalAddressID = source.PostalAddressID,
-                                        LastUpdatedUserName = 'SYSTEM',
-                                        LastUpdatedDate = GETDATE()
-                                WHEN NOT MATCHED THEN
-                                    INSERT (CurrAccTypeCode, CurrAccCode, PostalAddressID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate)
-                                    VALUES (source.CurrAccTypeCode, source.CurrAccCode, source.PostalAddressID, 'SYSTEM', GETDATE(), 'SYSTEM', GETDATE());";
+                            // First check if a default exists
+                            var checkDefaultSql = @"
+                                SELECT COUNT(1) FROM prCurrAccDefault WITH(NOLOCK)
+                                WHERE CurrAccTypeCode = 3 AND CurrAccCode = @CustomerCode";
+                            
+                            var defaultExists = await connection.ExecuteScalarAsync<int>(checkDefaultSql, new { CustomerCode = customerCode }, transaction) > 0;
 
-                            await connection.ExecuteAsync(mergeDefaultSql, new
+                            if (defaultExists)
+                            {
+                                // Update existing default
+                                var updateDefaultSql = @"
+                                    UPDATE prCurrAccDefault WITH(ROWLOCK)
+                                    SET PostalAddressID = @PostalAddressID
+                                    WHERE CurrAccTypeCode = 3 AND CurrAccCode = @CustomerCode";
+                                
+                            await connection.ExecuteAsync(updateDefaultSql, new
+                            {
+                                PostalAddressID = postalAddressId,
+                                CustomerCode = customerCode
+                            }, transaction);
+                            }
+                            else
+                            {
+                                // Insert new default record
+                                var insertDefaultSql = @"
+                                    INSERT INTO prCurrAccDefault WITH(ROWLOCK)
+                                    (
+                                        CurrAccTypeCode,
+                                        CurrAccCode,
+                                        PostalAddressID
+                                    )
+                                    VALUES
+                                    (
+                                        3,
+                                        @CustomerCode,
+                                        @PostalAddressID
+                                    )";
+                                
+                            await connection.ExecuteAsync(insertDefaultSql, new
                             {
                                 CustomerCode = customerCode,
                                 PostalAddressID = postalAddressId
                             }, transaction);
+                            }
                         }
 
                         await transaction.CommitAsync();
 
-                        // Return the created address by fetching it again
-                        // Pass the GUID as string to GetAddressByIdAsync
-                        return await GetAddressByIdAsync(customerCode, postalAddressId.ToString());
+                        // Return the created address
+                        return await GetAddressByIdAsync(customerCode, postalAddressId);
                     }
                     catch (Exception ex)
                     {
                         await transaction.RollbackAsync();
                         _logger.LogError(ex, "Error occurred while creating address for customer {CustomerCode}. Request: {@Request}", customerCode, request);
-                        throw; // Re-throw after rollback
+                        throw;
                     }
                 }
             }
             catch (Exception ex)
             {
-                // Catch potential connection errors
                 _logger.LogError(ex, "Error occurred while creating address for customer {CustomerCode}. Request: {@Request}", customerCode, request);
-                throw; // Re-throw
+                throw;
             }
         }
 
@@ -1081,27 +1392,54 @@ namespace ErpMobile.Api.Services
             using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
             {
                 await connection.OpenAsync();
+
                 using (var transaction = connection.BeginTransaction())
                 {
                     try
                     {
                         var contactId = Guid.NewGuid();
-
+                        
                         // Split contact name into first and last name
-                        var nameParts = (request.Contact ?? "").Split(' ', 2); // Handle potential null
+                        var nameParts = request.Contact.Split(' ', 2);
                         var firstName = nameParts.Length > 0 ? nameParts[0] : "";
                         var lastName = nameParts.Length > 1 ? nameParts[1] : "";
-
+                        
                         var sql = @"
                             INSERT INTO prCurrAccContact WITH(ROWLOCK)
                             (
-                                ContactID, CurrAccTypeCode, CurrAccCode, ContactTypeCode, TitleCode, JobTitleCode, FirstName, LastName,
-                                IsAuthorized, IdentityNum, IsBlocked, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                                ContactID,
+                                CurrAccTypeCode,
+                                CurrAccCode,
+                                ContactTypeCode,
+                                TitleCode,
+                                JobTitleCode,
+                                FirstName,
+                                LastName,
+                                IsAuthorized,
+                                IdentityNum,
+                                IsBlocked,
+                                CreatedUserName,
+                                CreatedDate,
+                                LastUpdatedUserName,
+                                LastUpdatedDate
                             )
                             VALUES
                             (
-                                @ContactID, 3, @CustomerCode, @ContactTypeCode, '', '', @FirstName, @LastName, @IsDefault, '', 0,
-                                @CreatedBy, GETDATE(), @CreatedBy, GETDATE()
+                                @ContactID,
+                                3, -- CurrAccTypeCode 3: Müşteri
+                                @CustomerCode,
+                                @ContactTypeCode,
+                                '', -- TitleCode
+                                '', -- JobTitleCode
+                                @FirstName,
+                                @LastName,
+                                @IsDefault, -- IsAuthorized (using IsDefault value)
+                                '', -- IdentityNum
+                                0, -- IsBlocked
+                                @CreatedBy,
+                                GETDATE(),
+                                @CreatedBy,
+                                GETDATE()
                             )";
 
                         await connection.ExecuteAsync(sql, new
@@ -1111,23 +1449,23 @@ namespace ErpMobile.Api.Services
                             request.ContactTypeCode,
                             FirstName = firstName,
                             LastName = lastName,
-                            request.IsDefault, // Using IsDefault for IsAuthorized column as per original logic
-                            CreatedBy = "SYSTEM" // Assuming SYSTEM user
+                            request.IsDefault,
+                            CreatedBy = "SYSTEM"
                         }, transaction);
-
-                        // If this is the default contact, update/insert into the default table using MERGE
+                        
+                        // If this is the default contact, add it to the default table
                         if (request.IsDefault)
                         {
                             var mergeDefaultContactSql = @"
                                 MERGE prCurrAccDefault WITH (HOLDLOCK) AS target
-                                USING (SELECT
-                                    3 AS CurrAccTypeCode,
+                                USING (SELECT 
+                                    3 AS CurrAccTypeCode, 
                                     @CustomerCode AS CurrAccCode,
                                     @ContactID AS ContactID
                                 ) AS source
                                 ON (target.CurrAccTypeCode = source.CurrAccTypeCode AND target.CurrAccCode = source.CurrAccCode)
                                 WHEN MATCHED THEN
-                                    UPDATE SET
+                                    UPDATE SET 
                                         ContactID = source.ContactID,
                                         LastUpdatedUserName = @CreatedBy,
                                         LastUpdatedDate = GETDATE()
@@ -1139,21 +1477,18 @@ namespace ErpMobile.Api.Services
                             {
                                 CustomerCode = customerCode,
                                 ContactID = contactId,
-                                CreatedBy = "SYSTEM" // Assuming SYSTEM user
+                                CreatedBy = "SYSTEM"
                             }, transaction);
                         }
 
-                        await transaction.CommitAsync(); // Commit transaction
-
-                        // Return the newly created contact by fetching it
-                        // Assuming ContactTypeCode is the identifier needed for GetContactByIdAsync
+                        transaction.Commit();
                         return await GetContactByIdAsync(customerCode, request.ContactTypeCode.ToString());
                     }
                     catch (Exception ex)
                     {
-                        await transaction.RollbackAsync(); // Rollback on error
+                        transaction.Rollback();
                         _logger.LogError(ex, "Error creating contact for customer {CustomerCode}", customerCode);
-                        throw; // Re-throw the exception
+                        throw;
                     }
                 }
             }
@@ -1165,13 +1500,12 @@ namespace ErpMobile.Api.Services
             {
                 using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
                 await connection.OpenAsync();
-
-                // Assuming CustomerType is a table-valued function or view
+                
                 const string sql = @"
-                    SELECT
+                    SELECT 
                         TypeCode = CustomerTypeCode,
                         TypeDescription = CustomerTypeDescription
-                    FROM CustomerType(N'TR') -- Assuming language parameter TR
+                    FROM CustomerType(N'TR')
                     WHERE IsBlocked = 0
                     ORDER BY CustomerTypeDescription";
 
@@ -1180,15 +1514,13 @@ namespace ErpMobile.Api.Services
             }
             catch (SqlException ex)
             {
-                // Log specific SQL errors
                 _logger.LogWarning(ex, "Database error occurred while getting customer types. Will return empty list.");
-                return new List<CustomerTypeResponse>(); // Return empty list on error
+                return new List<CustomerTypeResponse>();
             }
             catch (Exception ex)
             {
-                // Log general errors
                 _logger.LogWarning(ex, "Error occurred while getting customer types. Will return empty list.");
-                return new List<CustomerTypeResponse>(); // Return empty list on error
+                return new List<CustomerTypeResponse>();
             }
         }
 
@@ -1197,14 +1529,11 @@ namespace ErpMobile.Api.Services
             try
             {
                 using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
-                await connection.OpenAsync(); // Open connection asynchronously
-
-                // Assuming CustomerDiscountGr is a table-valued function or view
                 const string sql = @"
-                    SELECT
+                    SELECT 
                         GroupCode = CustomerDiscountGrCode,
                         GroupDescription = CustomerDiscountGrDescription
-                    FROM CustomerDiscountGr(N'TR') -- Assuming language parameter TR
+                    FROM CustomerDiscountGr(N'TR')
                     WHERE IsBlocked = 0
                     ORDER BY CustomerDiscountGrDescription";
 
@@ -1214,7 +1543,7 @@ namespace ErpMobile.Api.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer discount groups");
-                throw; // Re-throw the exception to be handled upstream
+                throw;
             }
         }
 
@@ -1223,14 +1552,11 @@ namespace ErpMobile.Api.Services
             try
             {
                 using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
-                await connection.OpenAsync(); // Open connection asynchronously
-
-                // Assuming CustomerPaymentPlanGr is a table-valued function or view
                 const string sql = @"
-                    SELECT
+                    SELECT 
                         GroupCode = CustomerPaymentPlanGrCode,
                         GroupDescription = CustomerPaymentPlanGrDescription
-                    FROM CustomerPaymentPlanGr(N'TR') -- Assuming language parameter TR
+                    FROM CustomerPaymentPlanGr(N'TR')
                     WHERE IsBlocked = 0
                     ORDER BY CustomerPaymentPlanGrDescription";
 
@@ -1240,7 +1566,7 @@ namespace ErpMobile.Api.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer payment plan groups");
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
@@ -1251,44 +1577,36 @@ namespace ErpMobile.Api.Services
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
-
-                    // Use the State function/view to get states/regions
+                    
+                    // Use the State function to get states/regions
                     try
                     {
                         var sql = @"
-                            SELECT
+                            SELECT 
                                 StateCode AS RegionCode,
-                                StateDescription AS RegionDescription -- Assuming StateDescription exists
-                            FROM State(N'TR') -- Assuming State is a function/view and takes language
+                                StateDescription AS RegionDescription
+                            FROM State(N'TR')
                             WHERE IsBlocked = 0
                             ORDER BY StateDescription";
 
                         var regions = await connection.QueryAsync<RegionResponse>(sql);
-                        if (regions != null && regions.Any())
-                        {
-                            return regions.ToList();
-                        }
-                        else
-                        {
-                            _logger.LogWarning("No regions found from State function/view, returning default regions.");
-                            return GetDefaultRegions(); // Fallback to defaults if query returns empty
-                        }
+                        return regions.ToList();
                     }
-                    catch (SqlException ex) // Catch specific SQL errors (e.g., function/view not found)
+                    catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error querying State function/view, returning default regions");
-                        return GetDefaultRegions(); // Fallback to defaults on SQL error
+                        _logger.LogError(ex, "Error querying State function, returning default regions");
+                        return GetDefaultRegions();
                     }
                 }
             }
-            catch (Exception ex) // Catch connection errors or other issues
+            catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting regions, returning default regions");
-                return GetDefaultRegions(); // Fallback to defaults on general error
+                _logger.LogError(ex, "Error occurred while getting regions");
+                return GetDefaultRegions();
             }
         }
 
-        // Helper method to provide default regions - Remains unchanged
+        // Helper method to provide default regions
         private List<RegionResponse> GetDefaultRegions()
         {
             return new List<RegionResponse>
@@ -1311,85 +1629,64 @@ namespace ErpMobile.Api.Services
                 {
                     await connection.OpenAsync();
 
-                    // Assuming City is a function or view
                     var sql = @"
-                        SELECT
+                        SELECT 
                             CityCode,
-                            StateCode, -- Assuming StateCode exists for relating to region/state
-                            CityDescription, -- Assuming CityDescription is the name
+                            StateCode,
+                            CityDescription,
                             IsBlocked
-                        FROM City(N'TR') -- Assuming language parameter
-                        WHERE IsBlocked = 0 -- Optionally filter out blocked cities
-                        ORDER BY CityDescription"; // Order alphabetically
+                        FROM City(N'TR')";
 
                     var cities = await connection.QueryAsync<CityResponse>(sql);
-                    if (cities != null && cities.Any())
-                    {
-                        return cities.ToList();
-                    }
-                    else
-                    {
-                        _logger.LogWarning("No cities found from City function/view, returning default cities.");
-                        return GetDefaultCities(); // Fallback to defaults
-                    }
+                    return cities.ToList();
                 }
             }
             catch (SqlException ex)
             {
-                _logger.LogError(ex, "SQL Error occurred while retrieving cities, returning default cities.");
-                return GetDefaultCities(); // Fallback to defaults on SQL error
+                _logger.LogError(ex, "SQL Error occurred while retrieving cities");
+                return GetDefaultCities();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while retrieving cities, returning default cities.");
-                return GetDefaultCities(); // Fallback to defaults on general error
+                _logger.LogError(ex, "Error occurred while retrieving cities");
+                return GetDefaultCities();
             }
         }
 
         public async Task<List<CityResponse>> GetCitiesByStateAsync(string stateCode)
         {
-            // Validate stateCode if necessary (e.g., format, length)
-            if (string.IsNullOrWhiteSpace(stateCode))
-            {
-                _logger.LogWarning("GetCitiesByStateAsync called with null or empty stateCode.");
-                return new List<CityResponse>(); // Return empty list for invalid input
-            }
-
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
 
-                    // Assuming City function/view takes language and filters by StateCode
                     var sql = @"
-                        SELECT
+                        SELECT 
                             CityCode,
                             StateCode,
                             CityDescription,
                             IsBlocked
                         FROM City(N'TR')
-                        WHERE StateCode = @StateCode
-                        AND IsBlocked = 0 -- Optionally filter blocked cities
-                        ORDER BY CityDescription";
+                        WHERE StateCode = @StateCode";
 
                     var cities = await connection.QueryAsync<CityResponse>(sql, new { StateCode = stateCode });
-                    return cities.ToList(); // Return the list (can be empty if no cities match)
+                    return cities.ToList();
                 }
             }
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "SQL Error occurred while retrieving cities for state {StateCode}", stateCode);
-                return new List<CityResponse>(); // Return empty list on SQL error
+                return new List<CityResponse>();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while retrieving cities for state {StateCode}", stateCode);
-                return new List<CityResponse>(); // Return empty list on general error
+                return new List<CityResponse>();
             }
         }
 
-        // Helper method to provide default cities - Remains unchanged
+        // Helper method to provide default cities
         private List<CityResponse> GetDefaultCities()
         {
             return new List<CityResponse>
@@ -1399,57 +1696,39 @@ namespace ErpMobile.Api.Services
                 new CityResponse { CityCode = "35", CityDescription = "İzmir", StateCode = "02" },
                 new CityResponse { CityCode = "01", CityDescription = "Adana", StateCode = "03" },
                 new CityResponse { CityCode = "16", CityDescription = "Bursa", StateCode = "01" }
-                // Add more defaults if needed
             };
         }
 
         public async Task<List<DistrictResponse>> GetDistrictsAsync(string cityCode)
         {
-            if (string.IsNullOrWhiteSpace(cityCode))
-            {
-                _logger.LogWarning("GetDistrictsAsync called with null or empty cityCode.");
-                return new List<DistrictResponse>();
-            }
-
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
 
-                    // Assuming District is a function or view
                     var sql = @"
-                        SELECT
+                        SELECT 
                             DistrictCode,
                             CityCode,
                             DistrictDescription,
                             IsBlocked
-                        FROM District(N'TR') -- Assuming language parameter
-                        WHERE CityCode = @CityCode
-                        AND IsBlocked = 0 -- Optionally filter blocked districts
-                        ORDER BY DistrictDescription";
+                        FROM District(N'TR')
+                        WHERE CityCode = @CityCode";
 
                     var districts = await connection.QueryAsync<DistrictResponse>(sql, new { CityCode = cityCode });
-                    if (districts != null && districts.Any())
-                    {
-                         return districts.ToList();
-                    }
-                    else
-                    {
-                        _logger.LogWarning("No districts found from District function/view for city {CityCode}, returning default districts.", cityCode);
-                        return GetDefaultDistricts(cityCode); // Fallback to defaults specific to cityCode
-                    }
+                    return districts.ToList();
                 }
             }
             catch (SqlException ex)
             {
-                _logger.LogError(ex, "SQL Error occurred while retrieving districts for city {CityCode}, returning default districts.", cityCode);
-                return GetDefaultDistricts(cityCode); // Fallback to defaults on SQL error
+                _logger.LogError(ex, "SQL Error occurred while retrieving districts for city {CityCode}", cityCode);
+                return GetDefaultDistricts(cityCode);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while retrieving districts for city {CityCode}, returning default districts.", cityCode);
-                return GetDefaultDistricts(cityCode); // Fallback to defaults on general error
+                _logger.LogError(ex, "Error occurred while retrieving districts for city {CityCode}", cityCode);
+                return GetDefaultDistricts(cityCode);
             }
         }
 
@@ -1461,16 +1740,13 @@ namespace ErpMobile.Api.Services
                 {
                     await connection.OpenAsync();
 
-                    // Assuming District function/view exists
                     var sql = @"
-                        SELECT
+                        SELECT 
                             DistrictCode,
                             CityCode,
                             DistrictDescription,
                             IsBlocked
-                        FROM District(N'TR') -- Assuming language parameter
-                        WHERE IsBlocked = 0 -- Optionally filter
-                        ORDER BY CityCode, DistrictDescription"; // Order for better readability
+                        FROM District(N'TR')";
 
                     var districts = await connection.QueryAsync<DistrictResponse>(sql);
                     return districts.ToList();
@@ -1479,118 +1755,90 @@ namespace ErpMobile.Api.Services
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "SQL Error occurred while retrieving all districts");
-                return new List<DistrictResponse>(); // Return empty list on SQL error
+                return new List<DistrictResponse>();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while retrieving all districts");
-                return new List<DistrictResponse>(); // Return empty list on general error
+                return new List<DistrictResponse>();
             }
         }
 
         public async Task<AddressTypeResponse> GetAddressTypeByCodeAsync(string code)
         {
-             if (string.IsNullOrWhiteSpace(code))
-            {
-                _logger.LogWarning("GetAddressTypeByCodeAsync called with null or empty code.");
-                return null; // Or throw ArgumentNullException
-            }
-
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
 
-                    // Assuming AddressType is a function or view
                     var sql = @"
-                        SELECT
+                        SELECT 
                             AddressTypeCode,
-                            AddressTypeDescription, -- Renamed from AddressTypeDesc
-                            IsRequired, -- Assuming IsRequired column exists
+                            AddressTypeDescription,
+                            IsRequired,
                             IsBlocked
-                        FROM AddressType(N'TR') -- Assuming language parameter
+                        FROM AddressType(N'TR')
                         WHERE AddressTypeCode = @AddressTypeCode
-                        AND IsBlocked = 0"; // Filter only active types
+                        AND IsBlocked = 0";
 
-                    // Use QueryFirstOrDefaultAsync as only one result is expected
                     var addressType = await connection.QueryFirstOrDefaultAsync<AddressTypeResponse>(sql, new { AddressTypeCode = code });
-                    return addressType; // Returns null if not found
+                    return addressType;
                 }
             }
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "SQL error occurred while getting address type by code. Code: {Code}", code);
-                throw; // Re-throw SQL exceptions
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting address type by code. Code: {Code}", code);
-                throw; // Re-throw other exceptions
+                throw;
             }
         }
-
-        // --- Methods indicating no updates/deletes as per project rules ---
 
         public async Task<AddressTypeResponse> UpdateAddressTypeAsync(string code, AddressTypeUpdateRequest request)
         {
             // According to project rules, we should not update records
-            _logger.LogWarning("UpdateAddressTypeAsync called but project rules restrict updates. Code: {Code}, Request: {@Request}", code, request);
-            // Return the current state instead of throwing or returning null
+            _logger.LogWarning("UpdateAddressTypeAsync called but project rules restrict updates. Code: {Code}", code);
             return await GetAddressTypeByCodeAsync(code);
         }
 
-        public Task<bool> DeleteAddressTypeAsync(string code)
+        public async Task<bool> DeleteAddressTypeAsync(string code)
         {
             // According to project rules, we should not delete records
             _logger.LogWarning("DeleteAddressTypeAsync called but project rules restrict deletions. Code: {Code}", code);
-            // Indicate deletion was not performed
-            return Task.FromResult(false);
+            return false;
         }
 
         public async Task<AddressResponse> UpdateAddressAsync(string customerCode, string addressTypeCode, AddressUpdateRequest request)
         {
             // According to project rules, we should not update records
-            _logger.LogWarning("UpdateAddressAsync called but project rules restrict updates. CustomerCode: {CustomerCode}, AddressTypeCode: {AddressTypeCode}, Request: {@Request}", customerCode, addressTypeCode, request);
-            // Return the current state instead of throwing or returning null
-            // Note: GetAddressByIdAsync uses PostalAddressID (GUID), not AddressTypeCode. This needs clarification.
-            // Assuming addressTypeCode somehow maps to the address ID needed by GetAddressByIdAsync.
-            // If AddressTypeCode IS the identifier, GetAddressByIdAsync needs modification.
-            // For now, assuming addressTypeCode can be used, but this is likely incorrect based on GetAddressByIdAsync implementation.
-            // A better approach might be to find the AddressId based on customerCode and addressTypeCode first.
-             _logger.LogWarning("UpdateAddressAsync assumes AddressTypeCode '{AddressTypeCode}' can identify the address for retrieval, which might be incorrect based on GetAddressByIdAsync implementation.", addressTypeCode);
-             // Placeholder: Return null as we cannot reliably fetch with AddressTypeCode
-             // return await GetAddressByIdAsync(customerCode, addressTypeCode); // This line is likely problematic
-             return null; // Return null or throw NotSupportedException
+            _logger.LogWarning("UpdateAddressAsync called but project rules restrict updates. CustomerCode: {CustomerCode}, AddressTypeCode: {AddressTypeCode}", customerCode, addressTypeCode);
+            return await GetAddressByIdAsync(customerCode, addressTypeCode);
         }
 
-        public Task<bool> DeleteAddressAsync(string customerCode, string addressTypeCode)
+        public async Task<bool> DeleteAddressAsync(string customerCode, string addressTypeCode)
         {
             // According to project rules, we should not delete records
             _logger.LogWarning("DeleteAddressAsync called but project rules restrict deletions. CustomerCode: {CustomerCode}, AddressTypeCode: {AddressTypeCode}", customerCode, addressTypeCode);
-            // Indicate deletion was not performed
-            return Task.FromResult(false);
+            return false;
         }
 
         public async Task<ContactResponse> UpdateContactAsync(string customerCode, string contactTypeCode, ContactUpdateRequest request)
         {
             // According to project rules, we should not update records
-            _logger.LogWarning("UpdateContactAsync called but project rules restrict updates. CustomerCode: {CustomerCode}, ContactTypeCode: {ContactTypeCode}, Request: {@Request}", customerCode, contactTypeCode, request);
-            // Return the current state instead of throwing or returning null
-            // GetContactByIdAsync uses ContactTypeCode (string) as the ID.
+            _logger.LogWarning("UpdateContactAsync called but project rules restrict updates. CustomerCode: {CustomerCode}, ContactTypeCode: {ContactTypeCode}", customerCode, contactTypeCode);
             return await GetContactByIdAsync(customerCode, contactTypeCode);
         }
 
-        public Task<bool> DeleteContactAsync(string customerCode, string contactTypeCode)
+        public async Task<bool> DeleteContactAsync(string customerCode, string contactTypeCode)
         {
             // Project rules restrict deletions
             _logger.LogWarning("DeleteContactAsync called but project rules restrict deletions. CustomerCode: {CustomerCode}, ContactTypeCode: {ContactTypeCode}", customerCode, contactTypeCode);
-            // Indicate deletion was not performed (or simulate success if required by interface)
-            // Returning true implies the state is as if deleted, even if no action was taken.
-            return Task.FromResult(true); // Or false if strict adherence is needed
+            return true;
         }
-
-        // --- End of restricted methods ---
 
         public async Task<List<ContactTypeResponse>> GetContactTypesAsync()
         {
@@ -1600,13 +1848,12 @@ namespace ErpMobile.Api.Services
                 {
                     await connection.OpenAsync();
 
-                    // Assuming ContactType is a function or view
                     var sql = @"
-                        SELECT
+                        SELECT 
                             ContactTypeCode,
                             ContactTypeDescription
-                        FROM ContactType(N'TR') -- Assuming language parameter
-                        WHERE IsBlocked = 0 -- Filter active types
+                        FROM ContactType(N'TR')
+                        WHERE IsBlocked = 0
                         ORDER BY ContactTypeDescription";
 
                     var contactTypes = await connection.QueryAsync<ContactTypeResponse>(sql);
@@ -1616,54 +1863,38 @@ namespace ErpMobile.Api.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting contact types");
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
         public async Task<ContactTypeResponse> GetContactTypeByCodeAsync(string code)
         {
-            if (string.IsNullOrWhiteSpace(code))
-            {
-                _logger.LogWarning("GetContactTypeByCodeAsync called with null or empty code.");
-                return null;
-            }
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
 
-                    // Assuming ContactType function/view
                     var sql = @"
-                        SELECT
+                        SELECT 
                             ContactTypeCode,
                             ContactTypeDescription
-                        FROM ContactType(N'TR') -- Assuming language parameter
-                        WHERE ContactTypeCode = @Code
-                        AND IsBlocked = 0"; // Optionally ensure not blocked
+                        FROM ContactType(N'TR')
+                        WHERE ContactTypeCode = @Code";
 
                     var contactType = await connection.QueryFirstOrDefaultAsync<ContactTypeResponse>(sql, new { Code = code });
-                    return contactType; // Returns null if not found
+                    return contactType;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting contact type by code: {Code}", code);
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
         public async Task<CustomerDetailResponse> GetCustomerByIdAsync(string customerId)
         {
-             // Assuming customerId is the primary key (e.g., an integer or GUID)
-             // Need clarification on the type and column name for customerId (e.g., CurrAccID)
-
-             // Example assuming customerId is CurrAccID (integer)
-             if (!int.TryParse(customerId, out int currAccId)) {
-                 _logger.LogWarning("Invalid CustomerID format provided: {CustomerID}", customerId);
-                 return null; // Or handle appropriately
-             }
-
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
@@ -1671,18 +1902,17 @@ namespace ErpMobile.Api.Services
                     await connection.OpenAsync();
 
                     // First, get the customer code from the customer ID
-                    // Adjust column name (e.g., CurrAccID) and type if needed
                     var getCustomerCodeSql = @"
-                        SELECT CurrAccCode
+                        SELECT CurrAccCode 
                         FROM cdCurrAcc WITH(NOLOCK)
-                        WHERE CurrAccID = @CustomerID AND CurrAccTypeCode = 3"; // Assuming CurrAccID is the primary key
+                        WHERE CurrAccID = @CustomerID AND CurrAccTypeCode = 3";
 
-                    var customerCode = await connection.QueryFirstOrDefaultAsync<string>(getCustomerCodeSql, new { CustomerID = currAccId });
+                    var customerCode = await connection.QueryFirstOrDefaultAsync<string>(getCustomerCodeSql, new { CustomerID = customerId });
 
                     if (string.IsNullOrEmpty(customerCode))
                     {
-                        _logger.LogWarning("Customer not found for CustomerID: {CustomerID}", customerId);
-                        return null; // Customer not found
+                        _logger.LogWarning("Customer not found. CustomerID: {CustomerID}", customerId);
+                        return null;
                     }
 
                     // Once we have the customer code, we can use the existing GetCustomerByCodeAsync method
@@ -1692,7 +1922,7 @@ namespace ErpMobile.Api.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer details by ID. CustomerID: {CustomerID}", customerId);
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
@@ -1704,28 +1934,28 @@ namespace ErpMobile.Api.Services
                 {
                     await connection.OpenAsync();
 
-                    // Assuming State function/view exists
+                    // Try with database table
                     string sql;
                     object parameters;
 
                     if (!string.IsNullOrEmpty(countryCode))
                     {
                         sql = @"
-                            SELECT
+                            SELECT 
                                 StateCode,
                                 CountryCode,
-                                StateDescription, -- Assuming StateDescription exists
+                                StateDescription,
                                 IsBlocked
-                            FROM State(N'TR') -- Assuming language parameter
+                            FROM State(N'TR')
                             WHERE CountryCode = @CountryCode
                             AND IsBlocked = 0
                             ORDER BY StateDescription";
                         parameters = new { CountryCode = countryCode };
                     }
-                    else // Get all states if no country code provided
+                    else
                     {
                         sql = @"
-                            SELECT
+                            SELECT 
                                 StateCode,
                                 CountryCode,
                                 StateDescription,
@@ -1733,7 +1963,7 @@ namespace ErpMobile.Api.Services
                             FROM State(N'TR')
                             WHERE IsBlocked = 0
                             ORDER BY StateDescription";
-                        parameters = new { }; // No parameters needed
+                        parameters = new { };
                     }
 
                     var states = await connection.QueryAsync<StateResponse>(sql, parameters);
@@ -1742,51 +1972,43 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting states for country {CountryCode}", countryCode ?? "ALL");
-                return new List<StateResponse>(); // Return empty list on error
+                _logger.LogError(ex, "Error occurred while getting states for country {CountryCode}", countryCode);
+                return new List<StateResponse>();
             }
         }
 
         public async Task<List<CityResponse>> GetCitiesByRegionAsync(string regionCode)
         {
-             if (string.IsNullOrWhiteSpace(regionCode))
-            {
-                _logger.LogWarning("GetCitiesByRegionAsync called with null or empty regionCode.");
-                return new List<CityResponse>();
-            }
-
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
 
-                    // Use the City function/view to get cities by state (region) code
-                    // Assuming StateCode in City function corresponds to regionCode
+                    // Use the City function to get cities by state (region) code
                     try
                     {
                         var sql = @"
-                            SELECT
+                            SELECT 
                                 CityCode,
-                                StateCode AS RegionCode, -- Alias StateCode to match response model
-                                CityDescription AS CityName, -- Alias CityDescription
+                                StateCode AS RegionCode,
+                                CityDescription AS CityName,
                                 IsBlocked
-                            FROM City(N'TR') -- Assuming language parameter
+                            FROM City(N'TR')
                             WHERE StateCode = @RegionCode
-                            AND IsBlocked = 0 -- Filter active cities
                             ORDER BY CityDescription";
 
                         var cities = await connection.QueryAsync<CityResponse>(sql, new { RegionCode = regionCode });
                         return cities.ToList();
                     }
-                    catch (SqlException ex) // Catch specific SQL errors
+                    catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error querying City function/view for region {RegionCode}, returning empty list", regionCode);
+                        _logger.LogError(ex, "Error querying City function, returning empty list");
                         return new List<CityResponse>();
                     }
                 }
             }
-            catch (Exception ex) // Catch connection or other errors
+            catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting cities by region {RegionCode}", regionCode);
                 return new List<CityResponse>();
@@ -1795,76 +2017,69 @@ namespace ErpMobile.Api.Services
 
         public async Task<List<DistrictResponse>> GetDistrictsByCityAsync(string cityCode)
         {
-             if (string.IsNullOrWhiteSpace(cityCode))
-            {
-                _logger.LogWarning("GetDistrictsByCityAsync called with null or empty cityCode.");
-                return new List<DistrictResponse>();
-            }
-
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
 
-                    // Use District function/view directly
+                    // Use District function directly instead of trying xlMahalleler first
                     try
                     {
                         var sql = @"
-                            SELECT
+                            SELECT 
                                 DistrictCode,
                                 CityCode,
                                 DistrictDescription,
                                 IsBlocked
-                            FROM District(N'TR') -- Assuming language parameter
+                            FROM District(N'TR')
                             WHERE CityCode = @CityCode
                             AND IsBlocked = 0
                             ORDER BY DistrictDescription";
 
                         var districts = await connection.QueryAsync<DistrictResponse>(sql, new { CityCode = cityCode });
-                         if (districts != null && districts.Any())
-                         {
-                            return districts.ToList();
-                         }
-                         else
-                         {
-                            _logger.LogWarning("No districts found from District function/view for city {CityCode}, returning default districts.", cityCode);
-                            return GetDefaultDistricts(cityCode); // Fallback to defaults if needed
-                         }
+                        return districts.ToList();
                     }
-                    catch (SqlException ex) // Catch specific SQL errors
+                    catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error querying District function for city {CityCode}, returning default districts", cityCode);
-                        return GetDefaultDistricts(cityCode); // Fallback to defaults
+                        _logger.LogError(ex, "Error querying District function, returning default districts");
+                        return GetDefaultDistricts(cityCode);
                     }
                 }
             }
-            catch (Exception ex) // Catch connection or other errors
+            catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting districts by city {CityCode}", cityCode);
-                return GetDefaultDistricts(cityCode); // Fallback to defaults
+                return GetDefaultDistricts(cityCode);
             }
         }
 
-        // Helper method to provide default districts - Remains unchanged
-        private List<DistrictResponse> GetDefaultDistricts(string cityCode) // Added cityCode parameter
+        private List<DistrictResponse> GetDefaultDistricts()
         {
-            // Return city-specific defaults or generic ones if cityCode mapping isn't available
             return new List<DistrictResponse>
             {
-                new DistrictResponse { DistrictCode = cityCode + "-01", CityCode = cityCode, DistrictDescription = "Merkez İlçe", IsBlocked = false },
-                new DistrictResponse { DistrictCode = cityCode + "-02", CityCode = cityCode, DistrictDescription = "Diğer İlçe 1", IsBlocked = false },
-                // Add more defaults as needed, possibly based on cityCode
+                new DistrictResponse { DistrictCode = "01", CityCode = "01", DistrictDescription = "Merkez", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "02", CityCode = "01", DistrictDescription = "Batı", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "03", CityCode = "01", DistrictDescription = "Doğu", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "04", CityCode = "01", DistrictDescription = "Kuzey", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "05", CityCode = "01", DistrictDescription = "Güney", IsBlocked = false }
+            };
+        }
+        
+        private List<DistrictResponse> GetDefaultDistricts(string cityCode)
+        {
+            return new List<DistrictResponse>
+            {
+                new DistrictResponse { DistrictCode = "01", CityCode = cityCode, DistrictDescription = "Merkez", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "02", CityCode = cityCode, DistrictDescription = "Batı", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "03", CityCode = cityCode, DistrictDescription = "Doğu", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "04", CityCode = cityCode, DistrictDescription = "Kuzey", IsBlocked = false },
+                new DistrictResponse { DistrictCode = "05", CityCode = cityCode, DistrictDescription = "Güney", IsBlocked = false }
             };
         }
 
         public async Task<List<CustomerAddressResponse>> GetCustomerAddressesAsync(string customerCode)
         {
-             if (string.IsNullOrWhiteSpace(customerCode))
-            {
-                _logger.LogWarning("GetCustomerAddressesAsync called with null or empty customerCode.");
-                return new List<CustomerAddressResponse>();
-            }
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
@@ -1872,42 +2087,53 @@ namespace ErpMobile.Api.Services
                     await connection.OpenAsync();
 
                     var sql = @"
-                        SELECT
-                            pa.AddressTypeCode,
-                            pa.Address,
-                            pa.CountryCode,
-                            pa.StateCode,
-                            pa.CityCode,
-                            pa.DistrictCode,
-                            pa.ZipCode as PostalCode, -- Renamed ZipCode to PostalCode
-                            pa.IsBlocked,
-                            CASE WHEN def.PostalAddressID IS NOT NULL THEN 1 ELSE 0 END as IsDefault -- Determine default flag directly
-                        FROM prCurrAccPostalAddress pa WITH(NOLOCK)
-                        LEFT JOIN prCurrAccDefault def WITH(NOLOCK) ON def.CurrAccTypeCode = pa.CurrAccTypeCode
-                                                                AND def.CurrAccCode = pa.CurrAccCode
-                                                                AND def.PostalAddressID = pa.PostalAddressID
-                        WHERE pa.CurrAccTypeCode = 3
-                        AND pa.CurrAccCode = @CustomerCode
-                        ORDER BY IsDefault DESC, pa.AddressTypeCode"; // Order by default status then type code
+                        SELECT 
+                            AddressTypeCode,
+                            Address,
+                            CountryCode,
+                            StateCode,
+                            CityCode,
+                            DistrictCode,
+                            PostalCode,
+                            IsBlocked
+                        FROM prCurrAccPostalAddress WITH(NOLOCK)
+                        WHERE CurrAccTypeCode = 3
+                        AND CurrAccCode = @CustomerCode";
 
                     var addresses = await connection.QueryAsync<CustomerAddressResponse>(sql, new { CustomerCode = customerCode });
-                    return addresses.ToList();
+                    
+                    // Get default address from prCurrAccDefault
+                    var defaultSql = @"
+                        SELECT 
+                            pa.AddressTypeCode
+                        FROM prCurrAccDefault d WITH(NOLOCK)
+                        JOIN prCurrAccPostalAddress pa WITH(NOLOCK) ON d.PostalAddressID = pa.PostalAddressID
+                        WHERE d.CurrAccTypeCode = 3
+                        AND d.CurrAccCode = @CustomerCode";
+                        
+                    var defaultAddress = await connection.QueryFirstOrDefaultAsync<string>(defaultSql, new { CustomerCode = customerCode });
+                    
+                    var result = addresses.ToList();
+                    if (defaultAddress != null)
+                    {
+                        foreach (var address in result)
+                        {
+                            address.IsDefault = address.AddressTypeCode == defaultAddress;
+                        }
+                    }
+                    
+                    return result;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer addresses. CustomerCode: {CustomerCode}", customerCode);
-                return new List<CustomerAddressResponse>(); // Return empty list on error
+                return new List<CustomerAddressResponse>();
             }
         }
 
         public async Task<List<CustomerCommunicationResponse>> GetCustomerCommunicationsAsync(string customerCode)
         {
-            if (string.IsNullOrWhiteSpace(customerCode))
-            {
-                _logger.LogWarning("GetCustomerCommunicationsAsync called with null or empty customerCode.");
-                return new List<CustomerCommunicationResponse>();
-            }
             try
             {
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
@@ -1915,27 +2141,43 @@ namespace ErpMobile.Api.Services
                     await connection.OpenAsync();
 
                     var sql = @"
-                        SELECT
-                            comm.CommunicationID,
-                            comm.CommunicationTypeCode,
-                            comm.Communication,
-                            CASE WHEN def.CommunicationID IS NOT NULL THEN 1 ELSE 0 END as IsDefault -- Determine default flag directly
-                        FROM prCurrAccCommunication comm WITH(NOLOCK)
-                        LEFT JOIN prCurrAccDefault def WITH(NOLOCK) ON def.CurrAccTypeCode = comm.CurrAccTypeCode
-                                                                AND def.CurrAccCode = comm.CurrAccCode
-                                                                AND def.CommunicationID = comm.CommunicationID
-                        WHERE comm.CurrAccTypeCode = 3
-                        AND comm.CurrAccCode = @CustomerCode
-                        ORDER BY IsDefault DESC, comm.CommunicationTypeCode"; // Order by default status then type code
+                        SELECT 
+                            CommunicationID,
+                            CommunicationTypeCode,
+                            Communication
+                        FROM prCurrAccCommunication WITH(NOLOCK)
+                        WHERE CurrAccTypeCode = 3
+                        AND CurrAccCode = @CustomerCode";
 
                     var communications = await connection.QueryAsync<CustomerCommunicationResponse>(sql, new { CustomerCode = customerCode });
-                    return communications.ToList();
+                    
+                    // Get default communication from prCurrAccDefault
+                    var defaultSql = @"
+                        SELECT 
+                            CommunicationID
+                        FROM prCurrAccDefault WITH(NOLOCK)
+                        WHERE CurrAccTypeCode = 3
+                        AND CurrAccCode = @CustomerCode
+                        AND CommunicationID IS NOT NULL";
+                        
+                    var defaultCommunicationId = await connection.QueryFirstOrDefaultAsync<Guid?>(defaultSql, new { CustomerCode = customerCode });
+                    
+                    var result = communications.ToList();
+                    if (defaultCommunicationId.HasValue)
+                    {
+                        foreach (var comm in result)
+                        {
+                            comm.IsDefault = comm.CommunicationID == defaultCommunicationId.Value;
+                        }
+                    }
+                    
+                    return result;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting customer communications. CustomerCode: {CustomerCode}", customerCode);
-                return new List<CustomerCommunicationResponse>(); // Return empty list on error
+                return new List<CustomerCommunicationResponse>();
             }
         }
 
@@ -1947,14 +2189,13 @@ namespace ErpMobile.Api.Services
                 {
                     await connection.OpenAsync();
 
-                    // Assuming AddressType is a function or view
                     var sql = @"
-                        SELECT
+                        SELECT 
                             AddressTypeCode,
-                            AddressTypeDescription, -- Use consistent naming
-                            IsRequired, -- Assuming IsRequired column exists
+                            AddressTypeDescription,
+                            IsRequired,
                             IsBlocked
-                        FROM AddressType(N'TR') -- Assuming language parameter
+                        FROM AddressType(N'TR')
                         WHERE IsBlocked = 0
                         ORDER BY AddressTypeCode";
 
@@ -1965,13 +2206,13 @@ namespace ErpMobile.Api.Services
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "Database error occurred while getting address types. Will return empty list.");
-                return new List<AddressTypeResponse>(); // Return empty on SQL error
+                return new List<AddressTypeResponse>();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting address types. Will return empty list.");
-                return new List<AddressTypeResponse>(); // Return empty on general error
+                return new List<AddressTypeResponse>();
             }
         }
     }
-}
+} 

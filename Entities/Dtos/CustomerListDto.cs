@@ -22,6 +22,6 @@ namespace Api.Entities.Dtos
         public string Address { get; set; }
         public string PhoneNumber { get; set; }
         public string TaxNumber { get; set; }
-        public string TaxOffice { get; set; }
+        public string TaxOfficeCode { get; set; }
     }
 } 

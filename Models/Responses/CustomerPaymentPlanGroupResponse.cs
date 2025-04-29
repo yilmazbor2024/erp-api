@@ -10,7 +10,7 @@ namespace erp_api.Models.Responses
         /// <summary>
         /// Gets or sets the payment plan group code.
         /// </summary>
-        public string PaymentPlanGroupCode { get; set; }
+        public string CustomerPaymentPlanGrCode { get; set; }
 
         /// <summary>
         /// Gets or sets the description of the payment plan group.

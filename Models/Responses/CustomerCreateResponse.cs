@@ -24,9 +24,9 @@ namespace erp_api.Models.Responses
         public string TaxNumber { get; set; }
         
         /// <summary>
-        /// The customer tax office
+        /// The customer tax office code
         /// </summary>
-        public string TaxOffice { get; set; }
+        public string TaxOfficeCode { get; set; }
         
         /// <summary>
         /// The customer type code
