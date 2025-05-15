@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     /// <summary>
     /// Fatura listesi yanıt modeli
     /// </summary>
-    public class InvoiceListResponse
+    public class InvoiceResponseList
     {
         /// <summary>
         /// Faturalar

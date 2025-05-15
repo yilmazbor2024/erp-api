@@ -1,0 +1,20 @@
+SELECT        dbo.AllShipmentLines.ShipmentHeaderID, dbo.AllShipmentLines.TransTypeCode, dbo.AllShipmentLines.ProcessCode, dbo.AllShipmentLines.ShippingNumber, dbo.AllShipmentLines.IsReturn, 
+                         dbo.AllShipmentLines.ShippingDate, dbo.AllShipmentLines.ShippingTime, dbo.AllShipmentLines.OperationDate, dbo.AllShipmentLines.OperationTime, dbo.AllShipmentLines.Series, dbo.AllShipmentLines.SeriesNumber, 
+                         dbo.AllShipmentLines.Description, dbo.AllShipmentLines.InternalDescription, dbo.AllShipmentLines.CurrAccTypeCode, dbo.AllShipmentLines.CurrAccCode, dbo.AllShipmentLines.SubCurrAccID, dbo.AllShipmentLines.ContactID, 
+                         dbo.AllShipmentLines.ShipmentMethodCode, dbo.AllShipmentLines.ShippingPostalAddressID, dbo.AllShipmentLines.BillingPostalAddressID, dbo.AllShipmentLines.RoundsmanCode, 
+                         dbo.AllShipmentLines.DeliveryCompanyCode, dbo.AllShipmentLines.LogisticsCompanyBOL, dbo.AllShipmentLines.CustomerASNNumber, dbo.AllShipmentLines.CompanyCode, dbo.AllShipmentLines.OfficeCode, 
+                         dbo.AllShipmentLines.StoreTypeCode, dbo.AllShipmentLines.StoreCode, dbo.AllShipmentLines.WarehouseCode, dbo.AllShipmentLines.ToWarehouseCode, dbo.AllShipmentLines.IsOrderBase, 
+                         dbo.AllShipmentLines.IsCompleted, dbo.AllShipmentLines.IsPrinted, dbo.AllShipmentLines.IsLocked, dbo.AllShipmentLines.IsTransferApproved, dbo.AllShipmentLines.TransferApprovedDate, 
+                         dbo.AllShipmentLines.IsPostingJournal, dbo.AllShipmentLines.JournalDate, dbo.AllShipmentLines.ApplicationCode, dbo.AllShipmentLines.ApplicationID, dbo.AllShipmentLines.CreatedUserName, 
+                         dbo.AllShipmentLines.CreatedDate, dbo.AllShipmentLines.LastUpdatedUserName, dbo.AllShipmentLines.LastUpdatedDate, dbo.AllShipmentLines.ShipmentLineID, dbo.AllShipmentLines.SortOrder, 
+                         dbo.AllShipmentLines.ItemTypeCode, dbo.AllShipmentLines.ItemCode, dbo.AllShipmentLines.ColorCode, dbo.AllShipmentLines.ItemDim1Code, dbo.AllShipmentLines.ItemDim2Code, dbo.AllShipmentLines.ItemDim3Code, 
+                         dbo.AllShipmentLines.Qty1, dbo.AllShipmentLines.Qty2, dbo.AllShipmentLines.BatchCode, dbo.AllShipmentLines.SectionCode, dbo.AllShipmentLines.SalespersonCode, dbo.AllShipmentLines.PaymentPlanCode, 
+                         dbo.AllShipmentLines.PurchasePlanCode, dbo.AllShipmentLines.ReturnReasonCode, dbo.AllShipmentLines.LineDescription, dbo.AllShipmentLines.UsedBarcode, dbo.AllShipmentLines.OrderDeliveryDate, 
+                         dbo.AllShipmentLines.DeliveryCompanyBarcode, dbo.AllShipmentLines.LogisticsPackageNumber, dbo.AllShipmentLines.ImportFileNumber, dbo.AllShipmentLines.ExportFileNumber, dbo.AllShipmentLines.ManufactureDate, 
+                         dbo.AllShipmentLines.ExpiryDate, dbo.AllShipmentLines.ReserveLineID, dbo.AllShipmentLines.DispOrderLineID, dbo.AllShipmentLines.PickingLineID, dbo.AllShipmentLines.OrderAsnLineID, dbo.AllShipmentLines.OrderLineID, 
+                         dbo.AllShipmentLines.PriceCurrencyCode, dbo.AllShipmentLines.Price, dbo.AllShipmentLines.PriceListLineID, dbo.AllShipmentLines.IsInvoiced, dbo.AllShipmentLines.SupportRequestHeaderID, 
+                         dbo.AllShipmentLines.ShipmentLineSumID, dbo.AllShipmentLines.ShipmentLineSerialSumID, dbo.AllShipmentLines.ShipmentLineBOMID, dbo.ShipmentITAttributes.ITAtt01, dbo.ShipmentITAttributes.ITAtt02, 
+                         dbo.ShipmentITAttributes.ITAtt03, dbo.ShipmentITAttributes.ITAtt04, dbo.ShipmentITAttributes.ITAtt05, dbo.ShipmentITAttributes.ITAtt06, dbo.ShipmentITAttributes.ITAtt07, dbo.ShipmentITAttributes.ITAtt08, 
+                         dbo.ShipmentITAttributes.ITAtt09, dbo.ShipmentITAttributes.ITAtt10
+FROM            dbo.AllShipmentLines INNER JOIN
+                         dbo.ShipmentITAttributes ON dbo.AllShipmentLines.ShipmentLineID = dbo.ShipmentITAttributes.ShipmentLineID

@@ -1,28 +1,26 @@
-using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using erp_api.Models.Requests;
-using erp_api.Models.Responses;
+using ErpMobile.Api.Models.Requests;
+using ErpMobile.Api.Models.Responses;
 
 namespace ErpMobile.Api.Interfaces
 {
     /// <summary>
-    /// Yeni müşteri servisi için interface
+    /// Geliştirilmiş müşteri işlemleri için servis arayüzü
     /// </summary>
     public interface ICustomerServiceNew
     {
         /// <summary>
-        /// Yeni müşteri oluşturma metodu
+        /// Yeni müşteri oluşturur (Geliştirilmiş versiyon)
         /// </summary>
         /// <param name="request">Müşteri oluşturma isteği</param>
-        /// <returns>Müşteri oluşturma yanıtı</returns>
+        /// <returns>Oluşturulan müşteri bilgileri</returns>
         Task<CustomerCreateResponseNew> CreateCustomerAsync(CustomerCreateRequestNew request);
-
+        
         /// <summary>
-        /// Müşteri güncelleme metodu
+        /// Müşteri bilgilerini günceller (Geliştirilmiş versiyon)
         /// </summary>
         /// <param name="request">Müşteri güncelleme isteği</param>
-        /// <returns>Müşteri güncelleme yanıtı</returns>
+        /// <returns>Güncellenen müşteri bilgileri</returns>
         Task<CustomerUpdateResponseNew> UpdateCustomerAsync(CustomerUpdateRequestNew request);
     }
 }

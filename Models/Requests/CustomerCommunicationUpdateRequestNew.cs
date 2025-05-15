@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Müşteri iletişim bilgisi güncelleme isteği modeli
@@ -48,5 +48,10 @@ namespace erp_api.Models.Requests
         /// İletişim bilgisi doğrulanmış mı?
         /// </summary>
         public bool IsConfirmed { get; set; }
+
+        /// <summary>
+        /// Varsayılan iletişim bilgisi mi?
+        /// </summary>
+        public bool IsDefault { get; set; }
     }
 }

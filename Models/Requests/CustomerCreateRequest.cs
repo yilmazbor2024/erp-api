@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using erp_api.Models.Contact;
+using ErpMobile.Api.Models.Contact;
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Request model for creating a new customer.
@@ -53,6 +53,12 @@ namespace erp_api.Models.Requests
         /// </summary>
         [StringLength(20)]
         public string CustomerIdentityNumber { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the identity number.
+        /// </summary>
+        [StringLength(20)]
+        public string IdentityNum { get; set; }
 
         /// <summary>
         /// Gets or sets the mersis number.
@@ -104,7 +110,13 @@ namespace erp_api.Models.Requests
         /// Gets or sets the office code.
         /// </summary>
         [StringLength(10)]
-        public string OfficeCode { get; set; }
+        public string OfficeCode { get; set; } = "M";
+
+        /// <summary>
+        /// Gets or sets the company code.
+        /// </summary>
+        [StringLength(10)]
+        public string CompanyCode { get; set; } = "1";
 
         /// <summary>
         /// Gets or sets the salesman code.
@@ -130,12 +142,12 @@ namespace erp_api.Models.Requests
         /// <summary>
         /// Gets or sets the list of customer contacts.
         /// </summary>
-        public List<ContactCreateRequest> Contacts { get; set; }
+        public List<ContactCreateRequest> Contacts { get; set; } = new();
 
         /// <summary>
         /// Gets or sets the list of customer addresses.
         /// </summary>
-        public List<CustomerAddressCreateRequest> Addresses { get; set; }
+        public List<CustomerAddressCreateRequest> Addresses { get; set; } = new();
 
         /// <summary>
         /// Gets or sets the tax office code.
@@ -179,12 +191,23 @@ namespace erp_api.Models.Requests
         /// <summary>
         /// Gets or sets the list of customer communications.
         /// </summary>
-        public List<CustomerCommunicationCreateRequest> Communications { get; set; }
+        public List<CustomerCommunicationCreateRequest> Communications { get; set; } = new();
 
         /// <summary>
         /// Gets or sets a value indicating whether the customer is VIP.
         /// </summary>
         public bool IsVIP { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the promotion group code.
+        /// </summary>
+        [StringLength(10)]
+        public string PromotionGroupCode { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the customer is a real person.
+        /// </summary>
+        public bool IsRealPerson { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether to send advertisement SMS.
@@ -195,6 +218,18 @@ namespace erp_api.Models.Requests
         /// Gets or sets a value indicating whether to send advertisement mail.
         /// </summary>
         public bool IsSendAdvertMail { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the created user name.
+        /// </summary>
+        [StringLength(50)]
+        public string CreatedUserName { get; set; } = "SYSTEM";
+        
+        /// <summary>
+        /// Gets or sets the last updated user name.
+        /// </summary>
+        [StringLength(50)]
+        public string LastUpdatedUserName { get; set; } = "SYSTEM";
 
         /// <summary>
         /// Gets or sets the exchange type code.
@@ -268,12 +303,6 @@ namespace erp_api.Models.Requests
         /// Gets or sets the account closing date.
         /// </summary>
         public DateTime? AccountClosingDate { get; set; }
-
-        /// <summary>
-        /// Gets or sets the promotion group code.
-        /// </summary>
-        [StringLength(10)]
-        public string PromotionGroupCode { get; set; }
 
         /// <summary>
         /// Gets or sets the sales channel code.

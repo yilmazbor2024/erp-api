@@ -1,4 +1,4 @@
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     public class AddressTypeListRequest
     {

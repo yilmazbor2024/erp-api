@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     public class AddressTypeCreateRequest
     {
@@ -12,8 +12,13 @@ namespace erp_api.Models.Requests
         
         public string? Description { get; set; }
         public bool IsActive { get; set; }
+        public bool IsBlocked { get; set; }
         
         // Property needed by the service
         public string? AddressTypeDesc { get; set; }
+        public string? AddressTypeDescription { get; set; }
+        
+        public string CreatedUserName { get; set; } = "SYSTEM";
+        public string LastUpdatedUserName { get; set; } = "SYSTEM";
     }
-} 
+}

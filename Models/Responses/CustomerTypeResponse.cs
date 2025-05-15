@@ -1,6 +1,6 @@
 using System;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     /// <summary>
     /// Response model for customer type information.
@@ -10,11 +10,21 @@ namespace erp_api.Models.Responses
         /// <summary>
         /// Gets or sets the customer type code.
         /// </summary>
-        public int CustomerTypeCode { get; set; }
+        public int Code { get; set; }
 
         /// <summary>
         /// Gets or sets the description of the customer type.
         /// </summary>
-        public string CustomerTypeDescription { get; set; }
+        public string Description { get; set; }
+
+        /// <summary>
+        /// Gets or sets the language code.
+        /// </summary>
+        public string LangCode { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether the customer type is blocked.
+        /// </summary>
+        public bool IsBlocked { get; set; }
     }
 } 

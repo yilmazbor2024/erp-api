@@ -15,12 +15,21 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using ErpMobile.Api.Services;
 using ErpMobile.Api.Interfaces;
+using ErpMobile.Api.Repositories.Invoice;
+using ErpMobile.Api.Services.Invoice;
+using ErpMobile.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Core katmanındaki appsettings.json'ı ekle
 builder.Configuration.SetBasePath(Path.GetDirectoryName(typeof(NanoServiceDbContext).Assembly.Location)!)
     .AddJsonFile("appsettings.json", optional: false);
+
+// Configure logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 // Add services to the container.
 builder.Services.AddCors(options =>
@@ -83,13 +92,23 @@ builder.Services.AddSwaggerGen(c =>
     {
         c.IncludeXmlComments(xmlPath);
     }
+    
+    // Şema çakışmalarını önlemek için benzersiz şema ID'leri oluştur
+    c.CustomSchemaIds(type => type.FullName);
+    
+    // Rota çakışmalarını önlemek için
+    c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
 });
+
+// Bağlantı dizelerini try bloğunun dışında tanımla
+var nanoServiceConnectionString = builder.Configuration.GetConnectionString("NanoServiceConnection");
+var erpConnectionString = builder.Configuration.GetConnectionString("ErpConnection");
+
+Console.WriteLine($"NanoServiceConnection: {nanoServiceConnectionString?.Substring(0, Math.Min(20, nanoServiceConnectionString?.Length ?? 0))}...");
+Console.WriteLine($"ErpConnection: {erpConnectionString?.Substring(0, Math.Min(20, erpConnectionString?.Length ?? 0))}...");
 
 try
 {
-    var nanoServiceConnectionString = builder.Configuration.GetConnectionString("NanoServiceConnection");
-    var erpConnectionString = builder.Configuration.GetConnectionString("ErpConnection");
-
     if (string.IsNullOrEmpty(nanoServiceConnectionString))
     {
         throw new ArgumentException("NanoServiceConnection string is empty or not configured.");
@@ -112,15 +131,15 @@ catch (Exception ex)
 {
     // Log the database connection error
     Console.WriteLine($"SQL Server connection error: {ex.Message}");
-    Console.WriteLine("Using InMemory database as fallback.");
+    Console.WriteLine("Using SQL Server connection anyway, application might fail if connection is not available.");
     
-    // Register InMemory DbContext for development/testing if connection fails
+    // Register SQL Server DbContext even if connection test fails
     builder.Services.AddDbContext<NanoServiceDbContext>(options => 
-        options.UseInMemoryDatabase("NanoServiceInMemory"));
+        options.UseSqlServer(nanoServiceConnectionString));
         
     builder.Services.AddScoped<ErpDbContext>(provider => 
         new ErpDbContext(
-            "InMemory connection (mock)", 
+            erpConnectionString ?? throw new ArgumentException("ErpConnection string is empty or not configured."), 
             provider.GetRequiredService<ILogger<ErpDbContext>>()
         ));
 }
@@ -165,15 +184,50 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? throw new ArgumentNullException("Jwt:Key is missing")))
     };
 });
+// Normal JWT doğrulaması kullanılıyor
 
 // Register Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
-builder.Services.AddScoped<ICustomerService, CustomerService>();
+// Müşteri servisleri
+builder.Services.AddScoped<ICustomerService>(provider => new CustomerBasicService(
+    provider.GetRequiredService<ILogger<CustomerBasicService>>(),
+    provider.GetRequiredService<IConfiguration>(),
+    provider.GetRequiredService<ILoggerFactory>()
+));
+builder.Services.AddScoped<ICustomerServiceNew, CustomerServiceNew>();
+builder.Services.AddScoped<CustomerStubService>();
+
+// Depo ve vergi dairesi servisleri
+builder.Services.AddScoped<IWarehouseService, WarehouseService>();
+// Ülke servisi
+builder.Services.AddScoped<ICountryService, CountryService>();
+builder.Services.AddScoped<ICustomerAddressService, CustomerAddressService>();
+builder.Services.AddScoped<CustomerAddressService>();
+builder.Services.AddScoped<ICustomerCommunicationService, CustomerCommunicationService>();
+builder.Services.AddScoped<ICustomerContactService, CustomerContactService>();
+builder.Services.AddScoped<CustomerContactService>();
+builder.Services.AddScoped<ICustomerFinancialDetailService, CustomerFinancialDetailService>();
+builder.Services.AddScoped<ICustomerLocationService, CustomerLocationService>();
+builder.Services.AddScoped<ICustomerFinancialService, CustomerFinancialService>();
+
+// Bölge servisi
+builder.Services.AddScoped<IStateService, StateService>();
+
+// Lokasyon hiyerarşi servisi
+builder.Services.AddScoped<ILocationService, LocationService>();
+
+// Diğer servisler
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
-builder.Services.AddScoped<ErpMobile.Api.Interfaces.ICustomerServiceNew, ErpMobile.Api.Services.CustomerServiceNew>();
+builder.Services.AddScoped<ICashService, CashService>();
+builder.Services.AddScoped<ICustomerDebtService, CustomerDebtService>();
+builder.Services.AddScoped<ICustomerCreditService, CustomerCreditService>();
+
+// Fatura servisleri
+builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 var app = builder.Build();
 
@@ -205,7 +259,7 @@ try
             }
 
             // Create admin user if it doesn't exist
-            var adminEmail = "admin@erp.com";
+            var adminEmail = "f1@nanobil.com.tr";
             var adminUser = userManager.FindByEmailAsync(adminEmail).Result;
 
             if (adminUser == null)
@@ -222,7 +276,7 @@ try
                     CreatedBy = "System"
                 };
 
-                var result = userManager.CreateAsync(admin, "Admin123!").Result;
+                var result = userManager.CreateAsync(admin, "!Zsa2019!").Result;
                 if (result.Succeeded)
                 {
                     userManager.AddToRoleAsync(admin, "Admin").Wait();
@@ -311,7 +365,20 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseHttpsRedirection();
-app.UseCors();
+app.UseCors(builder =>
+    builder.WithOrigins("http://localhost:3000", "http://192.168.1.113:3000")
+           .AllowAnyHeader()
+           .AllowAnyMethod()
+           .AllowCredentials());
+app.UseRouting();
+
+// Eski API endpoint'lerini yeni endpoint'lere yönlendir
+// Middleware devre dışı bırakıldı
+// app.UseMiddleware<ErpMobile.Api.Middleware.LegacyApiRedirectMiddleware>();
+
+// Development ortamında token doğrulamasını atlayan middleware'i ekle
+app.UseDevelopmentAuthentication();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

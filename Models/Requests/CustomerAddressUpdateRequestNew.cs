@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Müşteri adres güncelleme isteği modeli
@@ -80,6 +80,11 @@ namespace erp_api.Models.Requests
         /// Adres bloke mi?
         /// </summary>
         public bool IsBlocked { get; set; }
+        
+        /// <summary>
+        /// Varsayılan adres mi?
+        /// </summary>
+        public bool IsDefault { get; set; }
         
         /// <summary>
         /// Site adı

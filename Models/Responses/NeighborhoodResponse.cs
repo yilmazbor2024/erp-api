@@ -1,4 +1,4 @@
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     public class NeighborhoodResponse
     {

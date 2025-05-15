@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Represents a request to create a new contact for a customer

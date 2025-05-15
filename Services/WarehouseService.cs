@@ -6,9 +6,9 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using Dapper;
-using erp_api.Models.Responses;
+using ErpMobile.Api.Models.Responses;
 
-namespace erp_api.Services
+namespace ErpMobile.Api.Services
 {
     public class WarehouseService : IWarehouseService
     {
@@ -90,7 +90,7 @@ namespace erp_api.Services
             }
         }
 
-        public async Task<List<TaxOfficeResponse>> GetTaxOfficesAsync()
+        public async Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync()
         {
             try
             {
@@ -108,7 +108,7 @@ namespace erp_api.Services
                         WHERE IsBlocked = 0
                         ORDER BY TaxOfficeDescription";
 
-                    var taxOffices = await connection.QueryAsync<TaxOfficeResponse>(sql);
+                    var taxOffices = await connection.QueryAsync<ErpMobile.Api.Models.TaxOfficeResponse>(sql);
                     return taxOffices.ToList();
                 }
             }

@@ -1,6 +1,6 @@
 using System;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     /// <summary>
     /// Extended response model for address type information with additional properties.

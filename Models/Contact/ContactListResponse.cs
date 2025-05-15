@@ -1,4 +1,4 @@
-namespace erp_api.Models.Contact
+namespace ErpMobile.Api.Models.Contact
 {
     public class ContactListResponse
     {

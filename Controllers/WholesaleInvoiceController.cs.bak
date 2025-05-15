@@ -1,0 +1,221 @@
+using System;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using ErpMobile.Api.Models.Common;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Cors;
+using Microsoft.EntityFrameworkCore;
+using System.Linq;
+using ErpMobile.Api.Models.Invoice;
+using ErpMobile.Api.Data;
+
+namespace ErpMobile.Api.Controllers
+{
+    [Authorize]
+    [ApiController]
+    [Route("api/[controller]")]
+    [Route("api/Wholesale")]
+    [Route("api/Invoices/wholesale")]
+    [EnableCors]
+    public class WholesaleInvoiceController : ControllerBase
+    {
+        private readonly ILogger<WholesaleInvoiceController> _logger;
+        private readonly NanoServiceDbContext _context;
+
+        public WholesaleInvoiceController(
+            ILogger<WholesaleInvoiceController> logger,
+            NanoServiceDbContext context)
+        {
+            _logger = logger;
+            _context = context;
+        }
+
+        /// <summary>
+        /// Gets a list of wholesale invoices
+        /// </summary>
+        /// <param name="page">Page number</param>
+        /// <param name="pageSize">Number of items per page</param>
+        /// <param name="sortBy">Field to sort by</param>
+        /// <param name="sortDirection">Sort direction (asc or desc)</param>
+        /// <param name="customerCode">Filter by customer code</param>
+        /// <param name="invoiceNumber">Filter by invoice number</param>
+        /// <param name="startDate">Filter by start date</param>
+        /// <param name="endDate">Filter by end date</param>
+        /// <param name="status">Filter by status</param>
+        /// <returns>List of wholesale invoices</returns>
+        [HttpGet]
+        public async Task<ActionResult<ApiResponse<object>>> GetWholesaleInvoices(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string sortBy = "invoiceDate",
+            [FromQuery] string sortDirection = "desc",
+            [FromQuery] string customerCode = null,
+            [FromQuery] string invoiceNumber = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null,
+            [FromQuery] string status = null)
+        {
+            try
+            {
+                // Parametre koşullarını oluştur
+                var conditions = new List<string>();
+                var parameters = new List<object>();
+                
+                if (!string.IsNullOrEmpty(customerCode))
+                {
+                    conditions.Add("CustomerCode = @p" + parameters.Count);
+                    parameters.Add(customerCode);
+                }
+                
+                if (!string.IsNullOrEmpty(invoiceNumber))
+                {
+                    conditions.Add("InvoiceNumber LIKE @p" + parameters.Count);
+                    parameters.Add("%" + invoiceNumber + "%");
+                }
+                
+                if (startDate.HasValue)
+                {
+                    conditions.Add("InvoiceDate >= @p" + parameters.Count);
+                    parameters.Add(startDate.Value);
+                }
+                
+                if (endDate.HasValue)
+                {
+                    conditions.Add("InvoiceDate <= @p" + parameters.Count);
+                    parameters.Add(endDate.Value);
+                }
+                
+                if (!string.IsNullOrEmpty(status))
+                {
+                    conditions.Add("Status = @p" + parameters.Count);
+                    parameters.Add(status);
+                }
+                
+                // WHERE koşulunu oluştur
+                var whereClause = conditions.Count > 0 
+                    ? "WHERE " + string.Join(" AND ", conditions) 
+                    : string.Empty;
+                
+                // ORDER BY koşulunu oluştur
+                var orderByClause = $"ORDER BY {sortBy} {sortDirection}";
+                
+                // Sayfalama için OFFSET ve FETCH koşullarını oluştur
+                var offset = (page - 1) * pageSize;
+                var fetchClause = $"OFFSET {offset} ROWS FETCH NEXT {pageSize} ROWS ONLY";
+                
+                // Toplam kayıt sayısını al
+                var countQuery = $@"
+                    SELECT COUNT(*) 
+                    FROM WholesaleInvoices 
+                    {whereClause}";
+                
+                // Ana sorguyu oluştur
+                var query = $@"
+                    SELECT * 
+                    FROM WholesaleInvoices 
+                    {whereClause} 
+                    {orderByClause} 
+                    {fetchClause}";
+                
+                // Parametreleri oluştur
+                var sqlParameters = new object[parameters.Count];
+                for (int i = 0; i < parameters.Count; i++)
+                {
+                    sqlParameters[i] = parameters[i];
+                }
+                
+                // Toplam kayıt sayısını al
+                var totalCount = 0;
+                if (parameters.Count > 0)
+                {
+                    totalCount = await _context.Database.ExecuteSqlRawAsync(countQuery, sqlParameters);
+                }
+                else
+                {
+                    totalCount = await _context.Database.ExecuteSqlRawAsync(countQuery);
+                }
+                
+                // Verileri al
+                List<WholesaleInvoiceModel> invoices;
+                if (parameters.Count > 0)
+                {
+                    invoices = await _context.Set<WholesaleInvoiceModel>()
+                        .FromSqlRaw(query, sqlParameters)
+                        .ToListAsync();
+                }
+                else
+                {
+                    invoices = await _context.Set<WholesaleInvoiceModel>()
+                        .FromSqlRaw(query)
+                        .ToListAsync();
+                }
+                
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "Wholesale invoices retrieved successfully",
+                    Data = new
+                    {
+                        items = invoices,
+                        totalCount,
+                        page,
+                        pageSize
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving wholesale invoices");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Error retrieving wholesale invoices: " + ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Gets a wholesale invoice by ID
+        /// </summary>
+        /// <param name="id">Invoice ID</param>
+        /// <returns>Wholesale invoice</returns>
+        [HttpGet("{id}")]
+        public async Task<ActionResult<ApiResponse<WholesaleInvoiceModel>>> GetWholesaleInvoice(int id)
+        {
+            try
+            {
+                var query = $"SELECT * FROM WholesaleInvoices WHERE InvoiceHeaderID = @id";
+                var invoice = await _context.Set<WholesaleInvoiceModel>()
+                    .FromSqlRaw(query, new object[] { id })
+                    .FirstOrDefaultAsync();
+                
+                if (invoice == null)
+                {
+                    return NotFound(new ApiResponse<WholesaleInvoiceModel>
+                    {
+                        Success = false,
+                        Message = $"Wholesale invoice with ID {id} not found"
+                    });
+                }
+                
+                return Ok(new ApiResponse<WholesaleInvoiceModel>
+                {
+                    Success = true,
+                    Message = "Wholesale invoice retrieved successfully",
+                    Data = invoice
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving wholesale invoice with ID {id}");
+                return StatusCode(500, new ApiResponse<WholesaleInvoiceModel>
+                {
+                    Success = false,
+                    Message = $"Error retrieving wholesale invoice with ID {id}: " + ex.Message
+                });
+            }
+        }
+    }
+}

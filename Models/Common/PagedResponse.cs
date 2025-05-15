@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace erp_api.Models.Common
+namespace ErpMobile.Api.Models.Common
 {
     /// <summary>
     /// Generic paged response model for API endpoints that return paginated lists
@@ -29,14 +29,19 @@ namespace erp_api.Models.Common
         public int TotalCount { get; set; }
         
         /// <summary>
+        /// The total number of records (same as TotalCount)
+        /// </summary>
+        public int TotalRecords { get; set; }
+        
+        /// <summary>
         /// Indicates if there is a previous page available
         /// </summary>
-        public bool HasPreviousPage => PageNumber > 1;
+        public bool HasPreviousPage { get; set; }
         
         /// <summary>
         /// Indicates if there is a next page available
         /// </summary>
-        public bool HasNextPage => PageNumber < TotalPages;
+        public bool HasNextPage { get; set; }
         
         /// <summary>
         /// The data for the current page
@@ -44,11 +49,17 @@ namespace erp_api.Models.Common
         public IReadOnlyList<T> Items { get; set; }
         
         /// <summary>
+        /// The data for the current page (alternative property name)
+        /// </summary>
+        public List<T> Data { get; set; }
+        
+        /// <summary>
         /// Creates a new instance of PagedResponse
         /// </summary>
         public PagedResponse()
         {
             Items = new List<T>();
+            Data = new List<T>();
         }
         
         /// <summary>
@@ -59,8 +70,10 @@ namespace erp_api.Models.Common
             PageNumber = pageNumber;
             PageSize = pageSize;
             TotalCount = totalCount;
+            TotalRecords = totalCount;
             TotalPages = (totalCount + pageSize - 1) / pageSize;
             Items = items;
+            Data = items as List<T> ?? new List<T>(items);
         }
     }
-} 
+}

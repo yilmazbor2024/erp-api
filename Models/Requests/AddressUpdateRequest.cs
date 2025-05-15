@@ -1,4 +1,4 @@
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     public class AddressUpdateRequest
     {
@@ -10,7 +10,13 @@ namespace erp_api.Models.Requests
         public string District { get; set; }
         public string Country { get; set; }
         public string PostalCode { get; set; }
+        public string ZipCode { get { return PostalCode; } set { PostalCode = value; } }
         public bool IsDefault { get; set; }
         public bool IsActive { get; set; }
+        public bool IsBlocked { get; set; } = false;
+        public string CountryCode { get; set; }
+        public string StateCode { get; set; }
+        public string CityCode { get; set; }
+        public string DistrictCode { get; set; }
     }
-} 
+}

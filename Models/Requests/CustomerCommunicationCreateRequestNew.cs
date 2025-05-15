@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Yeni müşteri iletişim bilgisi oluşturma isteği modeli
@@ -53,5 +53,15 @@ namespace erp_api.Models.Requests
         /// Varsayılan iletişim bilgisi mi?
         /// </summary>
         public bool IsDefault { get; set; }
+
+        /// <summary>
+        /// Oluşturan kullanıcı adı
+        /// </summary>
+        public string CreatedUserName { get; set; }
+
+        /// <summary>
+        /// Son güncelleyen kullanıcı adı
+        /// </summary>
+        public string LastUpdatedUserName { get; set; }
     }
 }

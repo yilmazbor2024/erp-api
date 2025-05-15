@@ -1,6 +1,6 @@
 using System;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     /// <summary>
     /// Response model for state/province information.
@@ -26,5 +26,10 @@ namespace erp_api.Models.Responses
         /// Gets or sets whether the state is blocked.
         /// </summary>
         public bool IsBlocked { get; set; }
+
+        /// <summary>
+        /// Gets or sets the language code.
+        /// </summary>
+        public string LangCode { get; set; }
     }
 } 

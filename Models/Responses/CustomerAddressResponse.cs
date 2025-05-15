@@ -1,10 +1,11 @@
 using System;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     public class CustomerAddressResponse
     {
-        public string PostalAddressID { get; set; } = string.Empty;
+        public string CustomerCode { get; set; } = string.Empty;
+        public Guid PostalAddressId { get; set; }
         public string AddressTypeCode { get; set; } = string.Empty;
         public string AddressTypeDescription { get; set; } = string.Empty;
         public string CountryCode { get; set; } = string.Empty;
@@ -31,5 +32,7 @@ namespace erp_api.Models.Responses
         public bool IsDefault { get; set; }
         public bool IsBlocked { get; set; }
         public string PostalCode { get; set; } = string.Empty;
+        public DateTime CreatedDate { get; set; }
+        public string CreatedUserName { get; set; } = string.Empty;
     }
 } 

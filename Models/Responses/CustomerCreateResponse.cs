@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     /// <summary>
     /// Response model for creating a new customer
@@ -47,6 +47,16 @@ namespace erp_api.Models.Responses
         /// The customer's contacts
         /// </summary>
         public List<CustomerContactResponse> Contacts { get; set; } = new List<CustomerContactResponse>();
+        
+        /// <summary>
+        /// Operation success status
+        /// </summary>
+        public bool Success { get; set; }
+        
+        /// <summary>
+        /// Operation message
+        /// </summary>
+        public string Message { get; set; }
         
         /// <summary>
         /// The customer's communications

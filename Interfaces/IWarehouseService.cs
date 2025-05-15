@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using erp_api.Models.Responses;
+using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Models;
 
-namespace erp_api.Services
+namespace ErpMobile.Api.Services
 {
     public interface IWarehouseService
     {
@@ -21,11 +22,11 @@ namespace erp_api.Services
         /// <summary>
         /// Gets all tax offices.
         /// </summary>
-        Task<List<TaxOfficeResponse>> GetTaxOfficesAsync();
+        Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync();
 
         /// <summary>
         /// Gets all offices.
         /// </summary>
         Task<List<OfficeResponse>> GetOfficesAsync();
     }
-} 
+}

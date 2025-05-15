@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     /// <summary>
     /// Borç senetleri listesi yanıt modeli

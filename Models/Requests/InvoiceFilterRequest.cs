@@ -1,6 +1,6 @@
 using System;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Fatura filtreleme istek modeli

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Yeni müşteri adresi oluşturma isteği modeli
@@ -100,6 +100,18 @@ namespace erp_api.Models.Requests
         public short? DoorNum { get; set; }
         
         /// <summary>
+        /// Vergi dairesi
+        /// </summary>
+        [StringLength(100, ErrorMessage = "Vergi dairesi en fazla 100 karakter olabilir")]
+        public string TaxOffice { get; set; }
+        
+        /// <summary>
+        /// Vergi numarası
+        /// </summary>
+        [StringLength(20, ErrorMessage = "Vergi numarası en fazla 20 karakter olabilir")]
+        public string TaxNumber { get; set; }
+        
+        /// <summary>
         /// Mahalle kodu
         /// </summary>
         public int? QuarterCode { get; set; }
@@ -134,11 +146,10 @@ namespace erp_api.Models.Requests
         public string TaxOfficeCode { get; set; }
         
         /// <summary>
-        /// Vergi numarası
+        /// Adres varsayılan mı?
         /// </summary>
-        [StringLength(20, ErrorMessage = "Vergi numarası en fazla 20 karakter olabilir")]
-        public string TaxNumber { get; set; }
-        
+        public bool IsDefault { get; set; }
+
         /// <summary>
         /// Fatura adresi mi?
         /// </summary>
@@ -150,10 +161,15 @@ namespace erp_api.Models.Requests
         public bool IsShippingAddress { get; set; }
 
         /// <summary>
-        /// Varsayılan adres mi?
+        /// Oluşturan kullanıcı adı
         /// </summary>
-        public bool IsDefault { get; set; }
-        
+        public string CreatedUserName { get; set; }
+
+        /// <summary>
+        /// Son güncelleyen kullanıcı adı
+        /// </summary>
+        public string LastUpdatedUserName { get; set; }
+
         /// <summary>
         /// Adres bloke mi?
         /// </summary>

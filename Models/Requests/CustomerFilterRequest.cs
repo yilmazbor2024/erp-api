@@ -1,4 +1,4 @@
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Request model for filtering customers
@@ -19,6 +19,11 @@ namespace erp_api.Models.Requests
         /// Filter by customer type code
         /// </summary>
         public int? CustomerTypeCode { get; set; }
+        
+        /// <summary>
+        /// Filter by CurrAccTypeCode (1: Vendor, 3: Customer)
+        /// </summary>
+        public int? CurrAccTypeCode { get; set; }
         
         /// <summary>
         /// Filter by created date (from)

@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using erp_api.Models.Responses;
-using erp_api.Services;
+using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using erp_api.Models.Common;
+using ErpMobile.Api.Models.Common;
 
-namespace erp_api.Controllers
+namespace ErpMobile.Api.Controllers
 {
     [Authorize]
     [ApiController]
@@ -80,14 +80,14 @@ namespace erp_api.Controllers
         /// </summary>
         /// <returns>List of tax offices</returns>
         [HttpGet("tax-offices")]
-        [ProducesResponseType(typeof(ApiResponse<List<TaxOfficeResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetTaxOffices()
         {
             try
             {
                 var taxOffices = await _warehouseService.GetTaxOfficesAsync();
-                return Ok(new ApiResponse<List<TaxOfficeResponse>>(taxOffices, true, "Tax offices retrieved successfully."));
+                return Ok(new ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>(taxOffices, true, "Tax offices retrieved successfully."));
             }
             catch (Exception ex)
             {

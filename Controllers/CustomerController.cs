@@ -4,18 +4,19 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using ErpMobile.Api.Models.Customer;
-using erp_api.Models.Contact;
+using ErpMobile.Api.Models.Contact;
 using ErpMobile.Api.Services;
-using erp_api.Models.Responses;
-using erp_api.Models.Requests;
+using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Models.Requests;
 using Microsoft.AspNetCore.Authorization;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using ErpMobile.Api.Data;
 using ErpMobile.Api.Interfaces;
-using erp_api.Models.Common;
+using ErpMobile.Api.Models.Common;
 using Microsoft.AspNetCore.Http;
-using ErpAPI.Models.Requests;
+using Dapper;
+using Microsoft.Extensions.Configuration;
 
 namespace ErpMobile.Api.Controllers
 {
@@ -28,13 +29,17 @@ namespace ErpMobile.Api.Controllers
         private readonly ILogger<CustomerController> _logger;
         private readonly ErpDbContext _context;
         private readonly ICustomerServiceNew _customerServiceNew;
+        private readonly IConfiguration _configuration;
+        private readonly CustomerStubService _customerStubService;
 
-        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context, ICustomerServiceNew customerServiceNew)
+        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context, ICustomerServiceNew customerServiceNew, IConfiguration configuration, CustomerStubService customerStubService)
         {
             _customerService = customerService;
             _logger = logger;
             _context = context;
             _customerServiceNew = customerServiceNew;
+            _configuration = configuration;
+            _customerStubService = customerStubService;
         }
 
         /// <summary>
@@ -139,7 +144,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var addresses = await _customerService.GetCustomerAddressesAsync(customerCode);
+                var addresses = await _customerStubService.GetCustomerAddressesAsync(customerCode);
                 return Ok(addresses);
             }
             catch (Exception ex)
@@ -157,7 +162,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var communications = await _customerService.GetCustomerCommunicationsAsync(customerCode);
+                var communications = await _customerStubService.GetCustomerCommunicationsAsync(customerCode);
                 return Ok(communications);
             }
             catch (Exception ex)
@@ -175,7 +180,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var contacts = await _customerService.GetCustomerContactsAsync(customerCode);
+                var contacts = await _customerStubService.GetContactsAsync(customerCode);
                 return Ok(contacts);
             }
             catch (Exception ex)
@@ -370,7 +375,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var response = await _customerService.GetAddressTypesAsync();
+                var response = await _customerStubService.GetAddressTypesAsync();
                 return Ok(response);
             }
             catch (SqlException ex)
@@ -390,7 +395,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var response = await _customerService.GetAddressTypeByCodeAsync(code);
+                var response = await _customerStubService.GetAddressTypeByCodeAsync(code);
                 if (response == null)
                 {
                     return NotFound($"Address type not found with code: {code}");
@@ -434,7 +439,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var response = await _customerService.GetAddressesAsync(customerCode);
+                var response = await _customerStubService.GetAddressesAsync(customerCode);
                 return Ok(response);
             }
             catch (Exception ex)
@@ -449,7 +454,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var response = await _customerService.GetAddressByIdAsync(customerCode, addressId);
+                var response = await _customerStubService.GetAddressByIdAsync(customerCode, addressId);
                 if (response == null)
                 {
                     return NotFound($"Address not found for customer {customerCode} with id: {addressId}");
@@ -467,7 +472,7 @@ namespace ErpMobile.Api.Controllers
         [ProducesResponseType(typeof(ApiResponse<AddressResponse>), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> CreateAddress(string customerCode, [FromBody] AddressCreateRequest request)
+        public async Task<IActionResult> CreateAddress(string customerCode, [FromBody] ErpMobile.Api.Models.Customer.AddressCreateRequest request)
         {
             try
             {
@@ -478,7 +483,7 @@ namespace ErpMobile.Api.Controllers
                     return BadRequest(new ApiResponse<string>("Address create request cannot be null", false, "Adres oluşturma isteği boş olamaz"));
                 }
 
-                var address = await _customerService.CreateAddressAsync(customerCode, request);
+                var address = await _customerStubService.CreateAddressAsync(customerCode, (ErpMobile.Api.Models.Customer.AddressCreateRequest)request);
                 return Created($"/api/v1/Customer/{customerCode}/addresses/{address.Id}", 
                     new ApiResponse<AddressResponse>(address, true, "Adres başarıyla oluşturuldu"));
             }
@@ -491,11 +496,11 @@ namespace ErpMobile.Api.Controllers
         }
 
         [HttpGet("customers/{customerCode}/contacts")]
-        public async Task<ActionResult<List<erp_api.Models.Responses.ContactResponse>>> GetContacts(string customerCode)
+        public async Task<ActionResult<List<ErpMobile.Api.Models.Responses.ContactResponse>>> GetContacts(string customerCode)
         {
             try
             {
-                var response = await _customerService.GetContactsAsync(customerCode);
+                var response = await _customerStubService.GetContactsAsync(customerCode);
                 return Ok(response);
             }
             catch (Exception ex)
@@ -506,11 +511,11 @@ namespace ErpMobile.Api.Controllers
         }
 
         [HttpGet("customers/{customerCode}/contacts/{contactId}")]
-        public async Task<ActionResult<erp_api.Models.Responses.ContactResponse>> GetContactById(string customerCode, string contactId)
+        public async Task<ActionResult<ErpMobile.Api.Models.Responses.ContactResponse>> GetContactById(string customerCode, string contactId)
         {
             try
             {
-                var response = await _customerService.GetContactByIdAsync(customerCode, contactId);
+                var response = await _customerStubService.GetContactByIdAsync(customerCode, contactId);
                 if (response == null)
                 {
                     return NotFound($"Contact not found for customer {customerCode} with id: {contactId}");
@@ -525,11 +530,11 @@ namespace ErpMobile.Api.Controllers
         }
 
         [HttpPost("customers/{customerCode}/contacts")]
-        public async Task<ActionResult<erp_api.Models.Responses.ContactResponse>> CreateContact(string customerCode, [FromBody] ContactCreateRequest request)
+        public async Task<ActionResult<ErpMobile.Api.Models.Responses.ContactResponse>> CreateContact(string customerCode, [FromBody] ErpMobile.Api.Models.Contact.ContactCreateRequest request)
         {
             try
             {
-                var response = await _customerService.CreateContactAsync(customerCode, request);
+                var response = await _customerStubService.CreateContactAsync(customerCode, (ErpMobile.Api.Models.Contact.ContactCreateRequest)request);
                 return CreatedAtAction(nameof(GetContactById), new { customerCode = customerCode, contactId = response.ContactTypeCode }, response);
             }
             catch (Exception ex)
@@ -547,7 +552,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var response = await _customerService.GetContactTypesAsync();
+                var response = await _customerStubService.GetContactTypesAsync();
                 return Ok(response);
             }
             catch (Exception ex)
@@ -565,7 +570,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                var response = await _customerService.GetContactTypeByCodeAsync(code);
+                var response = await _customerStubService.GetContactTypeByCodeAsync(code);
                 if (response == null)
                 {
                     return NotFound($"Contact type not found with code: {code}");
@@ -584,7 +589,7 @@ namespace ErpMobile.Api.Controllers
         /// </summary>
         /// <param name="request">Müşteri oluşturma isteği</param>
         /// <returns>Oluşturulan müşteri bilgileri</returns>
-        [HttpPost("create-new")]
+        [HttpPost("create-basic")]
         [ProducesResponseType(typeof(ApiResponse<CustomerCreateResponseNew>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
@@ -592,7 +597,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                _logger.LogInformation("Yeni müşteri oluşturma isteği alındı: {CustomerCode}", request.CustomerCode);
+                _logger.LogInformation("Yeni müşteri oluşturma isteği alındı");
                 
                 if (!ModelState.IsValid)
                 {
@@ -602,6 +607,68 @@ namespace ErpMobile.Api.Controllers
                         Message = "Geçersiz müşteri bilgileri",
                         Data = "Lütfen tüm zorunlu alanları doldurun."
                     });
+                }
+                
+                // Müşteri kodu otomatik oluşturulacak
+                if (string.IsNullOrEmpty(request.CustomerCode))
+                {
+                    try
+                    {
+                        // Müşteri tipi 3 (Customer) veya 1 (Vendor) olabilir
+                        byte currAccTypeCode = 3; // Varsayılan olarak müşteri (Customer)
+                        string prefix = "120."; // Müşteriler için 120.XXX formatı
+                        
+                        // CustomerTypeCode değerini kullan
+                        currAccTypeCode = request.CustomerTypeCode;
+                        // Tedarikçiler için 320.XXX formatı
+                        if (currAccTypeCode == 1)
+                        {
+                            prefix = "320.";
+                        }
+                        
+                        // Veritabanından son müşteri kodunu alıp bir sonraki kodu oluştur
+                        using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
+                        {
+                            await connection.OpenAsync();
+                            
+                            // En son kullanılan kodu bul
+                            string query = $"SELECT TOP 1 CurrAccCode FROM cdCurrAcc WHERE CurrAccCode LIKE '{prefix}%' ORDER BY CurrAccCode DESC";
+                            string lastCode = await connection.QueryFirstOrDefaultAsync<string>(query);
+                            
+                            // Yeni kod oluştur
+                            int lastNumber = 0;
+                            if (!string.IsNullOrEmpty(lastCode) && lastCode.Length > prefix.Length)
+                            {
+                                string lastNumberStr = lastCode.Substring(prefix.Length);
+                                if (int.TryParse(lastNumberStr, out lastNumber))
+                                {
+                                    lastNumber++;
+                                }
+                                else
+                                {
+                                    lastNumber = 1;
+                                }
+                            }
+                            else
+                            {
+                                lastNumber = 1;
+                            }
+                            
+                            // Yeni kodu ayarla
+                            request.CustomerCode = $"{prefix}{lastNumber:000}";
+                            _logger.LogInformation("Otomatik müşteri kodu oluşturuldu: {CustomerCode}", request.CustomerCode);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Müşteri kodu oluşturulurken hata oluştu");
+                        return StatusCode(500, new ApiResponse<string>
+                        {
+                            Success = false,
+                            Message = "Müşteri kodu oluşturulurken hata oluştu",
+                            Data = ex.Message
+                        });
+                    }
                 }
                 
                 var result = await _customerServiceNew.CreateCustomerAsync(request);
@@ -637,6 +704,8 @@ namespace ErpMobile.Api.Controllers
                 });
             }
         }
+
+        // Bu metot zaten yukarıda tanımlanmış, o yüzden kaldırıldı
 
         /// <summary>
         /// Müşteri güncelleme

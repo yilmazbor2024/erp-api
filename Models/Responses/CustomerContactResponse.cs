@@ -1,14 +1,23 @@
 using System;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     public class CustomerContactResponse
     {
-        public int ContactID { get; set; }
+        public string CustomerCode { get; set; } = string.Empty;
+        public Guid ContactId { get; set; }
         public string ContactTypeCode { get; set; } = string.Empty;
         public string ContactTypeDescription { get; set; } = string.Empty;
-        public string Contact { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string ContactName { get; set; } = string.Empty;
+        public string ContactSurname { get; set; } = string.Empty;
+        public string ContactTitle { get; set; } = string.Empty;
+        public string ContactEmail { get; set; } = string.Empty;
+        public string ContactPhone { get; set; } = string.Empty;
         public bool IsDefault { get; set; }
         public bool IsBlocked { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public string CreatedUserName { get; set; } = string.Empty;
     }
 } 

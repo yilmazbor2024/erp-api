@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace erp_api.Models.Responses
+namespace ErpMobile.Api.Models.Responses
 {
     /// <summary>
     /// Ödeme planları listesi yanıt modeli

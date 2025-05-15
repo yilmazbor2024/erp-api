@@ -1,16 +1,16 @@
 using System;
 using System.Threading.Tasks;
-using erp_api.Models.Requests;
-using erp_api.Models.Responses;
+using ErpMobile.Api.Models.Requests;
+using ErpMobile.Api.Models.Responses;
 
-namespace erp_api.Interfaces
+namespace ErpMobile.Api.Interfaces
 {
     public interface ISalesInvoiceService
     {
         /// <summary>
         /// Fatura listesini getirir
         /// </summary>
-        Task<InvoiceListResponse> GetInvoicesAsync(InvoiceListRequest request);
+        Task<InvoiceResponseList> GetInvoicesAsync(InvoiceListRequest request);
 
         /// <summary>
         /// Fatura detayını getirir

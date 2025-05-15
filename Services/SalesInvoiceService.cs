@@ -4,14 +4,14 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
-using erp_api.Interfaces;
-using erp_api.Models;
-using erp_api.Models.Requests;
-using erp_api.Models.Responses;
+using ErpMobile.Api.Interfaces;
+using ErpMobile.Api.Models;
+using ErpMobile.Api.Models.Requests;
+using ErpMobile.Api.Models.Responses;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace erp_api.Services
+namespace ErpMobile.Api.Services
 {
     public class SalesInvoiceService : ISalesInvoiceService
     {
@@ -26,7 +26,7 @@ namespace erp_api.Services
             _configuration = configuration;
         }
 
-        public async Task<InvoiceListResponse> GetInvoicesAsync(InvoiceListRequest request)
+        public async Task<InvoiceResponseList> GetInvoicesAsync(InvoiceListRequest request)
         {
             try
             {
@@ -99,7 +99,7 @@ namespace erp_api.Services
                 int totalCount = await _erpConnection.ExecuteScalarAsync<int>(countQuery, parameters);
                 var invoices = await _erpConnection.QueryAsync<InvoiceResponse>(query, parameters);
 
-                return new InvoiceListResponse
+                return new InvoiceResponseList
                 {
                     Invoices = invoices.ToList(),
                     TotalCount = totalCount,

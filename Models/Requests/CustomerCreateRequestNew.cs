@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Yeni müşteri oluşturma isteği modeli
@@ -10,379 +10,231 @@ namespace erp_api.Models.Requests
     public class CustomerCreateRequestNew
     {
         /// <summary>
-        /// Müşteri kodu
+        /// Müşteri kodu (otomatik oluşturulabilir)
         /// </summary>
-        [Required(ErrorMessage = "Müşteri kodu zorunludur")]
         [StringLength(30, ErrorMessage = "Müşteri kodu en fazla 30 karakter olabilir")]
-        public string CustomerCode { get; set; }
-
-        /// <summary>
-        /// Müşteri adı
-        /// </summary>
-        [Required(ErrorMessage = "Müşteri adı zorunludur")]
-        [StringLength(250, ErrorMessage = "Müşteri adı en fazla 250 karakter olabilir")]
-        public string CustomerName { get; set; }
-
-        /// <summary>
-        /// Müşteri soyadı (Bireysel müşteriler için)
-        /// </summary>
-        [StringLength(100, ErrorMessage = "Müşteri soyadı en fazla 100 karakter olabilir")]
-        public string CustomerSurname { get; set; }
-
-        /// <summary>
-        /// Müşteri tipi kodu
-        /// </summary>
-        [Required(ErrorMessage = "Müşteri tipi zorunludur")]
-        public int CustomerTypeCode { get; set; }
-
-        /// <summary>
-        /// Bireysel müşteri mi?
-        /// </summary>
-        public bool IsIndividualAcc { get; set; }
-
-        /// <summary>
-        /// Unvan kodu
-        /// </summary>
-        public string TitleCode { get; set; }
-
-        /// <summary>
-        /// Baba adı
-        /// </summary>
-        public string Patronym { get; set; }
-
-        /// <summary>
-        /// Kimlik numarası
-        /// </summary>
-        public string CustomerIdentityNumber { get; set; }
-
-        /// <summary>
-        /// Vergi numarası
-        /// </summary>
-        [StringLength(20, ErrorMessage = "Vergi numarası en fazla 20 karakter olabilir")]
-        public string TaxNumber { get; set; }
-
-        /// <summary>
-        /// Müşteri oluşturan kullanıcı adı
-        /// </summary>
-        [StringLength(50, ErrorMessage = "Kullanıcı adı en fazla 50 karakter olabilir")]
-        public string CreatedUserName { get; set; } = "SYSTEM";
-
-        /// <summary>
-        /// Müşteriyi son güncelleyen kullanıcı adı
-        /// </summary>
-        [StringLength(50, ErrorMessage = "Kullanıcı adı en fazla 50 karakter olabilir")]
-        public string LastUpdatedUserName { get; set; } = "SYSTEM";
-
-        /// <summary>
-        /// Mersis numarası
-        /// </summary>
-        public string MersisNum { get; set; }
-
-        /// <summary>
-        /// İndirim grubu kodu
-        /// </summary>
-        public string DiscountGroupCode { get; set; }
-
-        /// <summary>
-        /// Müşteri markup grubu kodu
-        /// </summary>
-        public string CustomerMarkupGrCode { get; set; }
-
-        /// <summary>
-        /// Müşteri ödeme planı grubu kodu
-        /// </summary>
-        public string CustomerPaymentPlanGrCode { get; set; }
-
-        /// <summary>
-        /// Tedarikçi ödeme planı grubu kodu
-        /// </summary>
-        public string VendorPaymentPlanGrCode { get; set; }
+        public string CustomerCode { get; set; } = string.Empty;
 
         /// <summary>
         /// Şirket kodu
         /// </summary>
-        public string CompanyCode { get; set; } = "1";
-
-        /// <summary>
-        /// Para birimi kodu
-        /// </summary>
-        [Required(ErrorMessage = "Para birimi zorunludur")]
-        public string CurrencyCode { get; set; } = "TRY";
+        [Required(ErrorMessage = "Şirket kodu zorunludur")]
+        public short CompanyCode { get; set; } = 1;
 
         /// <summary>
         /// Ofis kodu
         /// </summary>
         [Required(ErrorMessage = "Ofis kodu zorunludur")]
+        [StringLength(5, ErrorMessage = "Ofis kodu en fazla 5 karakter olabilir")]
         public string OfficeCode { get; set; } = "M";
 
         /// <summary>
-        /// Satış temsilcisi kodu
+        /// Müşteri adı
         /// </summary>
-        public string SalesmanCode { get; set; }
+        [Required(ErrorMessage = "Müşteri adı zorunludur")]
+        [StringLength(120, ErrorMessage = "Müşteri adı en fazla 120 karakter olabilir")]
+        public string CustomerName { get; set; } = string.Empty;
 
         /// <summary>
-        /// Kredi limiti
+        /// Müşteri soyadı (Bireysel müşteriler için)
         /// </summary>
-        public decimal CreditLimit { get; set; }
+        [StringLength(100, ErrorMessage = "Müşteri soyadı en fazla 100 karakter olabilir")]
+        public string CustomerSurname { get; set; } = string.Empty;
 
         /// <summary>
-        /// Risk limiti
+        /// Müşteri tipi kodu
         /// </summary>
-        public decimal RiskLimit { get; set; }
+        [Required(ErrorMessage = "Müşteri tipi kodu zorunludur")]
+        public byte CustomerTypeCode { get; set; } = 1;
 
         /// <summary>
-        /// Minimum bakiye
+        /// Bireysel müşteri mi?
         /// </summary>
-        public decimal MinBalance { get; set; }
+        public bool IsIndividualAcc { get; set; } = false;
+
+        /// <summary>
+        /// Vergi numarası
+        /// </summary>
+        [StringLength(20, ErrorMessage = "Vergi numarası en fazla 20 karakter olabilir")]
+        public string? TaxNumber { get; set; } = string.Empty;
 
         /// <summary>
         /// Vergi dairesi kodu
         /// </summary>
-        public string TaxOfficeCode { get; set; }
+        [StringLength(10, ErrorMessage = "Vergi dairesi kodu en fazla 10 karakter olabilir")]
+        public string? TaxOfficeCode { get; set; } = string.Empty;
 
         /// <summary>
-        /// Bölge kodu
+        /// TC Kimlik numarası
         /// </summary>
-        public string RegionCode { get; set; }
+        [StringLength(20, ErrorMessage = "TC Kimlik numarası en fazla 20 karakter olabilir")]
+        public string IdentityNum { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Müşteri kimlik numarası
+        /// </summary>
+        [StringLength(20, ErrorMessage = "Müşteri kimlik numarası en fazla 20 karakter olabilir")]
+        public string CustomerIdentityNumber { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Mersis numarası
+        /// </summary>
+        [StringLength(20, ErrorMessage = "Mersis numarası en fazla 20 karakter olabilir")]
+        public string? MersisNum { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Unvan kodu
+        /// </summary>
+        [StringLength(10, ErrorMessage = "Unvan kodu en fazla 10 karakter olabilir")]
+        public string? TitleCode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Baba adı
+        /// </summary>
+        [StringLength(50, ErrorMessage = "Baba adı en fazla 50 karakter olabilir")]
+        public string? Patronym { get; set; } = string.Empty;
 
         /// <summary>
         /// Şehir kodu
         /// </summary>
-        public string CityCode { get; set; }
+        [StringLength(10, ErrorMessage = "Şehir kodu en fazla 10 karakter olabilir")]
+        public string CityCode { get; set; } = string.Empty;
 
         /// <summary>
         /// İlçe kodu
         /// </summary>
-        public string DistrictCode { get; set; }
+        [StringLength(10, ErrorMessage = "İlçe kodu en fazla 10 karakter olabilir")]
+        public string DistrictCode { get; set; } = string.Empty;
 
         /// <summary>
-        /// Müşteri bloke mi?
+        /// Bölge kodu
         /// </summary>
-        public bool IsBlocked { get; set; }
+        [StringLength(10, ErrorMessage = "Bölge kodu en fazla 10 karakter olabilir")]
+        public string RegionCode { get; set; } = string.Empty;
 
         /// <summary>
-        /// Müşteri kilitli mi?
+        /// Ödeme vadesi (gün)
         /// </summary>
-        public bool IsLocked { get; set; }
+        public int PaymentTerm { get; set; } = 0;
 
         /// <summary>
-        /// Kilit tarihi
+        /// Vade tarihi formülü kodu
         /// </summary>
-        public DateTime? LockedDate { get; set; }
+        [StringLength(10, ErrorMessage = "Vade tarihi formülü kodu en fazla 10 karakter olabilir")]
+        public string? DueDateFormulaCode { get; set; } = string.Empty;
 
         /// <summary>
-        /// VIP müşteri mi?
+        /// Para birimi kodu
         /// </summary>
-        public bool IsVIP { get; set; }
+        [StringLength(5, ErrorMessage = "Para birimi kodu en fazla 5 karakter olabilir")]
+        public string CurrencyCode { get; set; } = "TRY";
 
         /// <summary>
-        /// SMS reklamı gönderilsin mi?
+        /// Kredi limiti
         /// </summary>
-        public bool IsSendAdvertSMS { get; set; }
+        public decimal CreditLimit { get; set; } = 0;
 
         /// <summary>
-        /// E-posta reklamı gönderilsin mi?
+        /// Risk limiti
         /// </summary>
-        public bool IsSendAdvertMail { get; set; }
+        public decimal RiskLimit { get; set; } = 0;
 
         /// <summary>
-        /// Döviz tipi kodu
+        /// Minimum bakiye
         /// </summary>
-        public int ExchangeTypeCode { get; set; }
-
-        /// <summary>
-        /// Vade formülü kodu
-        /// </summary>
-        public string DueDateFormulaCode { get; set; }
-
-        /// <summary>
-        /// Banka kodu
-        /// </summary>
-        public string BankCode { get; set; }
-
-        /// <summary>
-        /// Banka şube kodu
-        /// </summary>
-        public string BankBranchCode { get; set; }
-
-        /// <summary>
-        /// Banka hesap tipi kodu
-        /// </summary>
-        public int BankAccTypeCode { get; set; }
-
-        /// <summary>
-        /// IBAN
-        /// </summary>
-        public string IBAN { get; set; }
-
-        /// <summary>
-        /// SWIFT kodu
-        /// </summary>
-        public string SWIFTCode { get; set; }
-
-        /// <summary>
-        /// Banka hesap numarası
-        /// </summary>
-        public string BankAccNo { get; set; }
-
-        /// <summary>
-        /// Tedarikçi tipi kodu
-        /// </summary>
-        public int VendorTypeCode { get; set; }
-
-        /// <summary>
-        /// Perakende satış fiyatı grubu kodu
-        /// </summary>
-        public string RetailSalePriceGroupCode { get; set; }
-
-        /// <summary>
-        /// Toptan satış fiyatı grubu kodu
-        /// </summary>
-        public string WholesalePriceGroupCode { get; set; }
-
-        /// <summary>
-        /// Hesap açılış tarihi
-        /// </summary>
-        public DateTime? AccountOpeningDate { get; set; }
-
-        /// <summary>
-        /// Hesap kapanış tarihi
-        /// </summary>
-        public DateTime? AccountClosingDate { get; set; }
-
-        /// <summary>
-        /// Promosyon grubu kodu
-        /// </summary>
-        public string PromotionGroupCode { get; set; }
-
-        /// <summary>
-        /// Satış kanalı kodu
-        /// </summary>
-        public string SalesChannelCode { get; set; }
-
-        /// <summary>
-        /// Üretim kullanılsın mı?
-        /// </summary>
-        public bool UseManufacturing { get; set; }
-
-        /// <summary>
-        /// Barkod tipi kodu
-        /// </summary>
-        public string BarcodeTypeCode { get; set; } = "Def";
-
-        /// <summary>
-        /// Maliyet merkezi kodu
-        /// </summary>
-        public string CostCenterCode { get; set; }
-
-        /// <summary>
-        /// Mağazada banka hesabı kullanılsın mı?
-        /// </summary>
-        public bool UseBankAccOnStore { get; set; }
-
-        /// <summary>
-        /// Genel muhasebe tipi kodu
-        /// </summary>
-        public string GLTypeCode { get; set; }
-
-        /// <summary>
-        /// E-faturaya tabi mi?
-        /// </summary>
-        public bool IsSubjectToEInvoice { get; set; }
-
-        /// <summary>
-        /// Ticari fatura düzenlensin mi?
-        /// </summary>
-        public bool IsArrangeCommercialInvoice { get; set; }
-
-        /// <summary>
-        /// Cari hesap lot grubu kodu
-        /// </summary>
-        public string CurrAccLotGrCode { get; set; }
-
-        /// <summary>
-        /// Sadece seçili para birimi izin verilsin mi?
-        /// </summary>
-        public bool AllowOnlySelectedCurrency { get; set; }
-
-        /// <summary>
-        /// Kredi bakiyesine izin verilsin mi?
-        /// </summary>
-        public bool PermitCreditBalance { get; set; }
-
-        /// <summary>
-        /// E-irsaliyeye tabi mi?
-        /// </summary>
-        public bool IsSubjectToEShipment { get; set; }
-
-        /// <summary>
-        /// Müşteri ASN numarası sevkiyatlar için gerekli mi?
-        /// </summary>
-        public bool CustomerASNNumberIsRequiredForShipments { get; set; }
-
-        /// <summary>
-        /// Satın alma talebi gerekli mi?
-        /// </summary>
-        public bool PurchaseRequisitionRequired { get; set; }
-
-        /// <summary>
-        /// DBS entegrasyonu kullanılsın mı?
-        /// </summary>
-        public bool UseDBSIntegration { get; set; }
-
-        /// <summary>
-        /// DBS hesap kodu
-        /// </summary>
-        public string DBSAccountCode { get; set; }
-
-        /// <summary>
-        /// Seri numarası takibi kullanılsın mı?
-        /// </summary>
-        public bool UseSerialNumberTracking { get; set; }
-
-        /// <summary>
-        /// E-fatura başlangıç tarihi
-        /// </summary>
-        public DateTime? EInvoiceStartDate { get; set; }
-
-        /// <summary>
-        /// E-irsaliye başlangıç tarihi
-        /// </summary>
-        public DateTime? EShipmentStartDate { get; set; }
+        public decimal MinBalance { get; set; } = 0;
 
         /// <summary>
         /// Veri dili kodu
         /// </summary>
+        [Required(ErrorMessage = "Veri dili kodu zorunludur")]
+        [StringLength(5, ErrorMessage = "Veri dili kodu en fazla 5 karakter olabilir")]
         public string DataLanguageCode { get; set; } = "TR";
 
         /// <summary>
-        /// Mağaza hiyerarşi ID
+        /// Barkod tipi kodu
         /// </summary>
-        public int? StoreHierarchyID { get; set; }
+        [StringLength(10, ErrorMessage = "Barkod tipi kodu en fazla 10 karakter olabilir")]
+        public string BarcodeTypeCode { get; set; } = "Def";
 
         /// <summary>
-        /// Anlaşma tarihi
+        /// VIP müşteri mi?
         /// </summary>
-        public DateTime? AgreementDate { get; set; }
+        public bool IsVIP { get; set; } = false;
 
         /// <summary>
-        /// Ödeme vadesi
+        /// SMS reklam gönderimi yapılabilir mi?
         /// </summary>
-        public int? PaymentTerm { get; set; }
+        public bool IsSendAdvertSMS { get; set; } = false;
+
+        /// <summary>
+        /// E-posta reklam gönderimi yapılabilir mi?
+        /// </summary>
+        public bool IsSendAdvertMail { get; set; } = false;
+
+        /// <summary>
+        /// Bloke mi?
+        /// </summary>
+        public bool IsBlocked { get; set; } = false;
+
+        /// <summary>
+        /// Kilitli mi?
+        /// </summary>
+        public bool IsLocked { get; set; } = false;
+
+        /// <summary>
+        /// DBS hesap kodu
+        /// </summary>
+        [StringLength(20, ErrorMessage = "DBS hesap kodu en fazla 20 karakter olabilir")]
+        public string DBSAccountCode { get; set; } = "DEFAULT";
+
+        /// <summary>
+        /// Oluşturan kullanıcı adı
+        /// </summary>
+        [Required(ErrorMessage = "Oluşturan kullanıcı adı zorunludur")]
+        [StringLength(50, ErrorMessage = "Oluşturan kullanıcı adı en fazla 50 karakter olabilir")]
+        public string CreatedUserName { get; set; } = "SYSTEM";
+
+        /// <summary>
+        /// Son güncelleyen kullanıcı adı
+        /// </summary>
+        [Required(ErrorMessage = "Son güncelleyen kullanıcı adı zorunludur")]
+        [StringLength(50, ErrorMessage = "Son güncelleyen kullanıcı adı en fazla 50 karakter olabilir")]
+        public string LastUpdatedUserName { get; set; } = "SYSTEM";
 
         /// <summary>
         /// Müşteri adresleri
         /// </summary>
-        public List<CustomerAddressCreateRequestNew> Addresses { get; set; }
+        public List<CustomerAddressCreateRequestNew> Addresses { get; set; } = new List<CustomerAddressCreateRequestNew>();
 
         /// <summary>
         /// Müşteri iletişim bilgileri
         /// </summary>
-        public List<CustomerCommunicationCreateRequestNew> Communications { get; set; }
+        public List<CustomerCommunicationCreateRequestNew> Communications { get; set; } = new List<CustomerCommunicationCreateRequestNew>();
 
         /// <summary>
-        /// Müşteri iletişim kişileri
+        /// Müşteri kişileri
         /// </summary>
-        public List<CustomerContactCreateRequestNew> Contacts { get; set; }
+        public List<CustomerContactCreateRequestNew> Contacts { get; set; } = new List<CustomerContactCreateRequestNew>();
+
+        /// <summary>
+        /// DBS entegrasyonu kullanılsın mı?
+        /// </summary>
+        public bool UseDBSIntegration { get; set; } = false;
+
+        /// <summary>
+        /// Gerçek kişi mi?
+        /// </summary>
+        public bool IsRealPerson { get; set; } = false;
+
+        /// <summary>
+        /// Promosyon grup kodu
+        /// </summary>
+        public string PromotionGroupCode { get; set; } = "";
+
+        /// <summary>
+        /// E-Fatura mükellefi mi?
+        /// </summary>
+        public bool IsSubjectToEInvoice { get; set; } = false;
     }
 }

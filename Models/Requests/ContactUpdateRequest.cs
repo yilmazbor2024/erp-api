@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Request model for updating an existing contact for a customer
@@ -33,5 +33,10 @@ namespace erp_api.Models.Requests
         /// Gets or sets notes for this contact
         /// </summary>
         public string? Notes { get; set; }
+
+        /// <summary>
+        /// Whether this contact is blocked
+        /// </summary>
+        public bool IsBlocked { get; set; }
     }
 } 

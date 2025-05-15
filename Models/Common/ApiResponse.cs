@@ -1,6 +1,6 @@
 using System;
 
-namespace erp_api.Models.Common
+namespace ErpMobile.Api.Models.Common
 {
     /// <summary>
     /// Generic API response wrapper for standardized API responses

@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ErpAPI.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     public class AddressCreateRequest
     {
@@ -25,6 +25,9 @@ namespace ErpAPI.Models.Requests
 
         [StringLength(20, ErrorMessage = "Posta kodu 20 karakterden uzun olamaz.")]
         public string PostalCode { get; set; } = string.Empty;
+
+        [StringLength(20, ErrorMessage = "Posta kodu 20 karakterden uzun olamaz.")]
+        public string ZipCode { get { return PostalCode; } set { PostalCode = value; } }
 
         [StringLength(50, ErrorMessage = "Ülke kodu 50 karakterden uzun olamaz.")]
         public string CountryCode { get; set; } = string.Empty;

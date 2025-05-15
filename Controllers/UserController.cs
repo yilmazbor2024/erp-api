@@ -11,6 +11,7 @@ namespace ErpMobile.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Route("api/v1/[controller]")]
 [Authorize]
 public class UserController : ControllerBase
 {
@@ -44,6 +45,21 @@ public class UserController : ControllerBase
         }
 
         return await GetUserDto(user);
+    }
+
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        try
+        {
+            // JWT token kullanıldığı için backend'de özel bir işlem yapmaya gerek yok
+            // Client tarafında token'ı silmek yeterli
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpGet]

@@ -1,0 +1,1416 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using ErpMobile.Api.Models.Customer;
+using ErpMobile.Api.Models.Contact;
+using ErpMobile.Api.Services;
+using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Models.Requests;
+using Microsoft.AspNetCore.Authorization;
+using System.Data;
+using Microsoft.Data.SqlClient;
+using ErpMobile.Api.Data;
+using ErpMobile.Api.Interfaces;
+using ErpMobile.Api.Models;
+using ErpMobile.Api.Models.Common;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace ErpMobile.Api.Controllers
+{
+    [Authorize]
+    [ApiController]
+    [Route("api/v1/[controller]")]
+    public class CustomerController : ControllerBase
+    {
+        private readonly ILogger<CustomerController> _logger;
+        private readonly ErpDbContext _context;
+        private readonly ICustomerService _customerService;
+        private readonly ICustomerAddressService _customerAddressService;
+        private readonly ICustomerCommunicationService _customerCommunicationService;
+        private readonly ICustomerContactService _customerContactService;
+        private readonly ICustomerLocationService _customerLocationService;
+
+        public CustomerController(
+            ILogger<CustomerController> logger, 
+            ErpDbContext context,
+            ICustomerService customerService,
+            ICustomerAddressService customerAddressService,
+            ICustomerCommunicationService customerCommunicationService,
+            ICustomerContactService customerContactService,
+            ICustomerLocationService customerLocationService)
+        {
+            _logger = logger;
+            _context = context;
+            _customerService = customerService;
+            _customerAddressService = customerAddressService;
+            _customerCommunicationService = customerCommunicationService;
+            _customerContactService = customerContactService;
+            _customerLocationService = customerLocationService;
+        }
+
+        /// <summary>
+        /// Get customers
+        /// </summary>
+        /// <param name="filter">Filter parameters for customers</param>
+        /// <returns>List of customers</returns>
+        [HttpGet]
+        [HttpGet("customers")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<CustomerListResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetCustomers([FromQuery] CustomerFilterRequest filter)
+        {
+            try
+            {
+                // Initialize filter if null
+                filter ??= new CustomerFilterRequest();
+
+                // Set default values if not specified
+                if (filter.PageNumber <= 0) filter.PageNumber = 1;
+                if (filter.PageSize <= 0) filter.PageSize = 20;
+
+                var customers = await _customerService.GetCustomerListAsync(filter);
+                return Ok(new ApiResponse<PagedResponse<CustomerListResponse>>(customers, true, "Customers retrieved successfully."));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting customers. Filter: {@Filter}", filter);
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>(null, false, "An error occurred while getting customers.", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Get customer by code
+        /// </summary>
+        /// <param name="customerCode">Customer code</param>
+        /// <returns>Customer details</returns>
+        [HttpGet("{customerCode}")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerDetailResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetCustomerByCode(string customerCode)
+        {
+            try
+            {
+                _logger.LogInformation("Getting customer details for CustomerCode: {CustomerCode}", customerCode);
+                
+                // Müşteri temel bilgilerini sorgula
+                var query = @"
+                    SELECT 
+                        c.CurrAccCode,
+                        c.CurrAccTypeCode,
+                        cd.CurrAccDescription,
+                        c.IsIndividualAcc,
+                        c.TaxNumber,
+                        c.TaxOfficeCode,
+                        c.IdentityNum,
+                        c.CreditLimit,
+                        c.CurrencyCode,
+                        c.PaymentTerm as PaymentPlanCode,
+                        c.IsBlocked,
+                        c.IsVIP,
+                        c.CompanyCode,
+                        c.OfficeCode,
+                        c.CreatedDate,
+                        c.CreatedUserName,
+                        c.IsSubjectToEInvoice
+                    FROM cdCurrAcc c
+                    LEFT JOIN cdCurrAccDesc cd ON c.CurrAccCode = cd.CurrAccCode AND c.CurrAccTypeCode = cd.CurrAccTypeCode AND cd.LangCode = 'TR'
+                    WHERE c.CurrAccCode = @CustomerCode
+                      AND c.CurrAccTypeCode = 3";
+
+                CustomerDetailResponse customer = null;
+
+                // Müşteri temel bilgilerini getir
+                var customerParams = new List<SqlParameter>
+                {
+                    new SqlParameter("@CustomerCode", customerCode)
+                };
+
+                using (var reader = await _context.ExecuteReaderAsync(query, customerParams.ToArray()))
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        customer = new CustomerDetailResponse
+                        {
+                            CustomerCode = reader["CurrAccCode"].ToString(),
+                            CustomerTypeCode = Convert.ToInt32(reader["CurrAccTypeCode"]),
+                            CustomerName = reader["CurrAccDescription"]?.ToString() ?? string.Empty,
+                            IsIndividual = reader["IsIndividualAcc"] != DBNull.Value && Convert.ToBoolean(reader["IsIndividualAcc"]),
+                            TaxNumber = reader["TaxNumber"]?.ToString(),
+                            TaxOfficeCode = reader["TaxOfficeCode"]?.ToString(),
+                            IdentityNum = reader["IdentityNum"]?.ToString(),
+                            CreditLimit = reader["CreditLimit"] != DBNull.Value ? Convert.ToDecimal(reader["CreditLimit"]) : 0,
+                            CurrencyCode = reader["CurrencyCode"]?.ToString(),
+                            PaymentPlanCode = reader["PaymentPlanCode"]?.ToString(),
+                            IsBlocked = reader["IsBlocked"] != DBNull.Value && Convert.ToBoolean(reader["IsBlocked"]),
+                            IsVIP = reader["IsVIP"] != DBNull.Value && Convert.ToBoolean(reader["IsVIP"]),
+                            CompanyCode = reader["CompanyCode"]?.ToString(),
+                            OfficeCode = reader["OfficeCode"]?.ToString(),
+                            CreatedDate = reader["CreatedDate"] != DBNull.Value ? Convert.ToDateTime(reader["CreatedDate"]) : DateTime.MinValue,
+                            CreatedUserName = reader["CreatedUserName"]?.ToString(),
+                            IsSubjectToEInvoice = reader["IsSubjectToEInvoice"] != DBNull.Value && Convert.ToBoolean(reader["IsSubjectToEInvoice"]),
+                            IsSubjectToEArchive = false, // Varsayılan değer olarak false atandı
+                            Addresses = new List<CustomerAddressResponse>(),
+                            Communications = new List<CustomerCommunicationResponse>(),
+                            Contacts = new List<CustomerContactResponse>()
+                        };
+                    }
+                }
+
+                if (customer == null)
+                {
+                    _logger.LogWarning("Customer not found with code: {CustomerCode}", customerCode);
+                    return NotFound(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = $"Customer not found with code: {customerCode}",
+                        Data = null
+                    });
+                }
+
+                // Müşteri adreslerini getir
+                var addressQuery = @"
+                    SELECT 
+                        pa.PostalAddressID as PostalAddressId,
+                        pa.AddressTypeCode,
+                        pa.CountryCode,
+                        pa.CityCode,
+                        pa.StateCode,
+                        pa.DistrictCode,
+                        pa.ZipCode as PostalCode,
+                        pa.Address,
+                        CAST(0 as bit) as IsDefault,
+                        pa.CreatedDate,
+                        pa.CreatedUserName
+                    FROM prCurrAccPostalAddress pa
+                    WHERE pa.CurrAccCode = @CustomerCode
+                      AND pa.CurrAccTypeCode = 3";
+
+                var addressParams = new List<SqlParameter>
+                {
+                    new SqlParameter("@CustomerCode", customerCode)
+                };
+
+                using (var reader = await _context.ExecuteReaderAsync(addressQuery, addressParams.ToArray()))
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        customer.Addresses.Add(new CustomerAddressResponse
+                        {
+                            PostalAddressId = reader["PostalAddressId"] != DBNull.Value ? reader["PostalAddressId"].ToString() : string.Empty,
+                            AddressTypeCode = reader["AddressTypeCode"]?.ToString(),
+                            CountryCode = reader["CountryCode"]?.ToString(),
+                            CityCode = reader["CityCode"]?.ToString(),
+                            StateCode = reader["StateCode"]?.ToString(),
+                            DistrictCode = reader["DistrictCode"]?.ToString(),
+                            PostalCode = reader["PostalCode"]?.ToString(),
+                            Address = reader["Address"]?.ToString(),
+                            IsDefault = reader["IsDefault"] != DBNull.Value && Convert.ToBoolean(reader["IsDefault"]),
+                            CreatedDate = reader["CreatedDate"] != DBNull.Value ? Convert.ToDateTime(reader["CreatedDate"]) : DateTime.MinValue,
+                            CreatedUserName = reader["CreatedUserName"]?.ToString()
+                        });
+                    }
+                }
+
+                // Müşteri iletişim bilgilerini getir
+                var communicationQuery = @"
+                    SELECT 
+                        c.CommunicationID as CommunicationId,
+                        c.CommunicationTypeCode,
+                        c.CommAddress as CommunicationValue,
+                        CAST(0 as bit) as IsDefault,
+                        c.CreatedDate,
+                        c.CreatedUserName
+                    FROM prCurrAccCommunication c
+                    WHERE c.CurrAccCode = @CustomerCode
+                      AND c.CurrAccTypeCode = 3";
+
+                var commParams = new List<SqlParameter>
+                {
+                    new SqlParameter("@CustomerCode", customerCode)
+                };
+
+                using (var reader = await _context.ExecuteReaderAsync(communicationQuery, commParams.ToArray()))
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        customer.Communications.Add(new CustomerCommunicationResponse
+                        {
+                            CommunicationId = reader["CommunicationId"] != DBNull.Value ? reader["CommunicationId"].ToString() : string.Empty,
+                            CommunicationTypeCode = reader["CommunicationTypeCode"]?.ToString(),
+                            CommunicationValue = reader["CommunicationValue"]?.ToString(),
+                            IsDefault = reader["IsDefault"] != DBNull.Value && Convert.ToBoolean(reader["IsDefault"]),
+                            CreatedDate = reader["CreatedDate"] != DBNull.Value ? Convert.ToDateTime(reader["CreatedDate"]) : DateTime.MinValue,
+                            CreatedUserName = reader["CreatedUserName"]?.ToString()
+                        });
+                    }
+                }
+
+                // Müşteri kişilerini getir
+                var contactQuery = @"
+                    SELECT 
+                        c.ContactID as ContactId,
+                        c.ContactTypeCode,
+                        c.FirstName as ContactName,
+                        c.LastName as ContactSurname,
+                        c.TitleCode as ContactTitle,
+                        '' as ContactEmail,
+                        '' as ContactPhone,
+                        CAST(0 as bit) as IsDefault,
+                        c.CreatedDate,
+                        c.CreatedUserName
+                    FROM prCurrAccContact c
+                    WHERE c.CurrAccCode = @CustomerCode
+                      AND c.CurrAccTypeCode = 3";
+
+                var contactParams = new List<SqlParameter>
+                {
+                    new SqlParameter("@CustomerCode", customerCode)
+                };
+
+                using (var reader = await _context.ExecuteReaderAsync(contactQuery, contactParams.ToArray()))
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        customer.Contacts.Add(new CustomerContactResponse
+                        {
+                            ContactId = reader["ContactId"] != DBNull.Value ? reader["ContactId"].ToString() : string.Empty,
+                            ContactTypeCode = reader["ContactTypeCode"]?.ToString(),
+                            ContactName = reader["ContactName"]?.ToString(),
+                            ContactSurname = reader["ContactSurname"]?.ToString(),
+                            ContactTitle = reader["ContactTitle"]?.ToString(),
+                            ContactEmail = reader["ContactEmail"]?.ToString(),
+                            ContactPhone = reader["ContactPhone"]?.ToString(),
+                            IsDefault = reader["IsDefault"] != DBNull.Value && Convert.ToBoolean(reader["IsDefault"]),
+                            CreatedDate = reader["CreatedDate"] != DBNull.Value ? Convert.ToDateTime(reader["CreatedDate"]) : DateTime.MinValue,
+                            CreatedUserName = reader["CreatedUserName"]?.ToString()
+                        });
+                    }
+                }
+                
+                return Ok(new ApiResponse<CustomerDetailResponse>
+                {
+                    Success = true,
+                    Message = "Customer details retrieved successfully",
+                    Data = customer
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting customer details. CustomerCode: {CustomerCode}", customerCode);
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "An error occurred while getting customer details",
+                    Error = ex.Message,
+                    Data = null
+                });
+            }
+        }
+
+        /// <summary>
+        /// Create a new customer
+        /// </summary>
+        /// <param name="request">Customer create request</param>
+        /// <returns>Created customer</returns>
+        [HttpPost("Create")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateCustomer([FromBody] CustomerCreateRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Creating new customer: {@Request}", request);
+
+                var customer = await _customerService.CreateCustomerAsync(request);
+
+                var response = new ApiResponse<CustomerResponse>
+                {
+                    Success = true,
+                    Data = customer,
+                    Message = "Customer created successfully"
+                };
+
+                return CreatedAtAction(nameof(GetCustomerByCode), new { customerCode = customer.CustomerCode }, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating customer");
+
+                var response = new ApiResponse<string>
+                {
+                    Success = false,
+                    Data = null,
+                    Message = "An error occurred while creating the customer",
+                    Error = ex.Message
+                };
+
+                return StatusCode(500, response);
+            }
+        }
+
+        /// <summary>
+        /// Create a new customer with basic information
+        /// </summary>
+        /// <param name="request">Customer create request</param>
+        /// <returns>Created customer information</returns>
+        [HttpPost("create-basic")]
+        public async Task<IActionResult> CreateCustomerBasic([FromBody] CustomerCreateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("Temel müşteri oluşturma isteği alındı: {CustomerCode}", request.CustomerCode);
+                _logger.LogInformation("Gelen veri (create-basic): {RequestData}", System.Text.Json.JsonSerializer.Serialize(request));
+
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToList();
+                    
+                    _logger.LogWarning("Model doğrulama hatası (create-basic): {Errors}", string.Join(", ", errors));
+                    
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz müşteri bilgileri",
+                        Data = string.Join(", ", errors)
+                    });
+                }
+
+                // Müşteri kodu otomatik oluşturma (eğer belirtilmemişse)
+                if (string.IsNullOrEmpty(request.CustomerCode))
+                {
+                    request.CustomerCode = $"M{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+                }
+
+                // Adres, iletişim ve kişi bilgilerini boş liste olarak ayarla (null yerine)
+                if (request.Addresses == null)
+                    request.Addresses = new List<CustomerAddressCreateRequestNew>();
+                
+                if (request.Communications == null)
+                    request.Communications = new List<CustomerCommunicationCreateRequestNew>();
+                
+                if (request.Contacts == null)
+                    request.Contacts = new List<CustomerContactCreateRequestNew>();
+
+                var result = await _customerService.CreateCustomerAsync(request);
+
+                if (result != null)
+                {
+                    return Ok(new ApiResponse<CustomerDetailResponse>
+                    {
+                        Success = true,
+                        Message = "Müşteri temel bilgileri başarıyla oluşturuldu",
+                        Data = result
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Müşteri oluşturma sırasında bir hata oluştu",
+                        Data = null
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri oluşturma sırasında hata: {Message}", ex.Message);
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri oluşturma sırasında bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri adreslerini getirir
+        /// </summary>
+        [HttpGet("{customerCode}/addresses")]
+        public async Task<ActionResult<List<CustomerAddressResponse>>> GetCustomerAddresses(string customerCode)
+        {
+            try
+            {
+                var addresses = await _customerAddressService.GetCustomerAddressesAsync(customerCode);
+                return Ok(addresses);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting customer addresses. CustomerCode: {CustomerCode}", customerCode);
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
+        }
+
+        /// <summary>
+        /// Müşteri iletişim bilgilerini getirir
+        /// </summary>
+        [HttpGet("{customerCode}/communications")]
+        public async Task<ActionResult<List<CustomerCommunicationResponse>>> GetCustomerCommunications(string customerCode)
+        {
+            try
+            {
+                var communications = await _customerCommunicationService.GetCustomerCommunicationsAsync(customerCode);
+                return Ok(communications);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting customer communications. CustomerCode: {CustomerCode}", customerCode);
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
+        }
+
+        /// <summary>
+        /// Müşteri kişilerini getirir
+        /// </summary>
+        [HttpGet("{customerCode}/contacts")]
+        public async Task<ActionResult<List<CustomerContactResponse>>> GetCustomerContacts(string customerCode)
+        {
+            try
+            {
+                var customerContacts = await _customerContactService.GetCustomerContactsAsync(customerCode);
+                return Ok(customerContacts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting customer contacts. CustomerCode: {CustomerCode}", customerCode);
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
+        }
+
+        /// <summary>
+        /// Müşteri tiplerini getirir
+        /// </summary>
+        [HttpGet("types")]
+        public async Task<ActionResult<List<CustomerTypeResponse>>> GetCustomerTypes()
+        {
+            try
+            {
+                var types = await _customerService.GetCustomerTypesAsync();
+                return Ok(types);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri tipleri alınırken hata oluştu");
+                return StatusCode(500, "Müşteri tipleri alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Müşteri indirim gruplarını getirir
+        /// </summary>
+        [HttpGet("discount-groups")]
+        public async Task<ActionResult<List<CustomerDiscountGroupResponse>>> GetCustomerDiscountGroups()
+        {
+            try
+            {
+                var groups = await _customerService.GetCustomerDiscountGroupsAsync();
+                return Ok(groups);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri indirim grupları alınırken hata oluştu");
+                return StatusCode(500, "Müşteri indirim grupları alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Müşteri ödeme planı gruplarını getirir
+        /// </summary>
+        [HttpGet("payment-plan-groups")]
+        public async Task<ActionResult<List<CustomerPaymentPlanGroupResponse>>> GetCustomerPaymentPlanGroups()
+        {
+            try
+            {
+                var groups = await _customerService.GetCustomerPaymentPlanGroupsAsync();
+                return Ok(groups);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri ödeme planı grupları alınırken hata oluştu");
+                return StatusCode(500, "Müşteri ödeme planı grupları alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Bölgeleri getirir
+        /// </summary>
+        [HttpGet("regions")]
+        public async Task<ActionResult<List<RegionResponse>>> GetRegions()
+        {
+            try
+            {
+                var regions = await _customerService.GetRegionsAsync();
+                return Ok(regions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Bölgeler alınırken hata oluştu");
+                return StatusCode(500, "Bölgeler alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Bölgeleri getirir (States)
+        /// </summary>
+        [HttpGet("states")]
+        public async Task<ActionResult<List<StateResponse>>> GetStates([FromQuery] string countryCode = null)
+        {
+            try
+            {
+                var states = await _customerService.GetStatesAsync(countryCode);
+                return Ok(states);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Bölgeleri alınırken hata oluştu");
+                return StatusCode(500, "Bölgeleri alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Şehirleri getirir (Cities)
+        /// </summary>
+        [HttpGet("cities")]
+        public async Task<ActionResult<List<CityResponse>>> GetCities()
+        {
+            try
+            {
+                var cities = await _customerService.GetCitiesAsync();
+                return Ok(cities);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Şehirler alınırken hata oluştu");
+                return StatusCode(500, "Şehirler alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// İle göre şehirleri getirir
+        /// </summary>
+        [HttpGet("states/{stateCode}/cities")]
+        public async Task<ActionResult<List<CityResponse>>> GetCitiesByState(string stateCode)
+        {
+            try
+            {
+                var cities = await _customerService.GetCitiesByStateAsync(stateCode);
+                return Ok(cities);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İle göre şehirler alınırken hata oluştu. İl Kodu: {StateCode}", stateCode);
+                return StatusCode(500, "İle göre şehirler alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Bölgeye göre şehirleri getirir
+        /// </summary>
+        [HttpGet("regions/{regionCode}/cities")]
+        public async Task<ActionResult<List<CityResponse>>> GetCitiesByRegion(string regionCode)
+        {
+            try
+            {
+                var cities = await _customerService.GetCitiesByRegionAsync(regionCode);
+                return Ok(cities);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Bölgeye göre şehirler alınırken hata oluştu. Bölge Kodu: {RegionCode}", regionCode);
+                return StatusCode(500, "Bölgeye göre şehirler alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Şehre göre ilçeleri getirir
+        /// </summary>
+        [HttpGet("cities/{cityCode}/districts")]
+        public async Task<ActionResult<List<DistrictResponse>>> GetDistrictsByCity(string cityCode)
+        {
+            try
+            {
+                var districts = await _customerService.GetDistrictsByCityAsync(cityCode);
+                return Ok(districts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Şehre göre ilçeler alınırken hata oluştu. Şehir Kodu: {CityCode}", cityCode);
+                return StatusCode(500, "Şehre göre ilçeler alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// İlçeleri getirir (Districts)
+        /// </summary>
+        [HttpGet("districts")]
+        public async Task<ActionResult<List<DistrictResponse>>> GetDistricts()
+        {
+            try
+            {
+                var districts = await _customerService.GetAllDistrictsAsync();
+                return Ok(districts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İlçeler alınırken hata oluştu");
+                return StatusCode(500, "İlçeler alınırken bir hata oluştu");
+            }
+        }
+
+        [HttpGet("address-types")]
+        public async Task<ActionResult<List<AddressTypeResponse>>> GetAddressTypes()
+        {
+            try
+            {
+                var response = await _customerAddressService.GetAddressTypesAsync();
+                return Ok(response);
+            }
+            catch (SqlException ex)
+            {
+                _logger.LogError(ex, "Database connection error while getting address types");
+                return StatusCode(500, "Veritabanı bağlantı hatası: Adres tipleri alınamadı. Lütfen sistem yöneticisiyle iletişime geçin.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting address types");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpGet("address-types/{code}")]
+        public async Task<ActionResult<AddressTypeResponse>> GetAddressTypeByCode(string code)
+        {
+            try
+            {
+                var response = await _customerAddressService.GetAddressTypeByCodeAsync(code);
+                if (response == null)
+                {
+                    return NotFound($"Address type not found with code: {code}");
+                }
+                return Ok(response);
+            }
+            catch (SqlException ex)
+            {
+                _logger.LogError(ex, "Database connection error while getting address type by code: {Code}", code);
+                return StatusCode(500, "Veritabanı bağlantı hatası: Adres tipi alınamadı. Lütfen sistem yöneticisiyle iletişime geçin.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting address type by code");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpPost("address-types")]
+        public async Task<ActionResult<AddressTypeResponse>> CreateAddressType([FromBody] AddressTypeCreateRequest request)
+        {
+            try
+            {
+                // ERP sisteminde AddressType bir tablo değil, fonksiyon olduğu için ekleme yapılamaz
+                return StatusCode(StatusCodes.Status405MethodNotAllowed, "ERP sisteminde AddressType bir fonksiyon/saklı prosedür olduğundan API üzerinden ekleme yapılamaz. Lütfen sistem yöneticinize başvurun.");
+            }
+            catch (NotSupportedException ex)
+            {
+                _logger.LogWarning(ex, "Operation not supported: Creating address type is not supported in ERP system");
+                return StatusCode(StatusCodes.Status405MethodNotAllowed, ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating address type");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpGet("customers/{customerCode}/addresses")]
+        public async Task<ActionResult<List<AddressResponse>>> GetAddresses(string customerCode)
+        {
+            try
+            {
+                var addresses = await _customerAddressService.GetAddressesAsync(customerCode);
+                return Ok(addresses);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting addresses");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpGet("customers/{customerCode}/addresses/{addressId}")]
+        public async Task<ActionResult<AddressResponse>> GetAddressById(string customerCode, string addressId)
+        {
+            try
+            {
+                var response = await _customerAddressService.GetAddressByIdAsync(customerCode, addressId);
+                if (response == null)
+                {
+                    return NotFound($"Address not found for customer {customerCode} with id: {addressId}");
+                }
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting address by id");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpPost("{customerCode}/addresses")]
+        [ProducesResponseType(typeof(ApiResponse<AddressResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateAddress(string customerCode, [FromBody] AddressCreateRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (request == null)
+                {
+                    _logger.LogWarning("Address create request was null");
+                    return BadRequest(new ApiResponse<string>("Address create request cannot be null", false, "Adres oluşturma isteği boş olamaz"));
+                }
+
+                var address = await _customerAddressService.CreateAddressAsync(customerCode, request);
+                return Created($"/api/v1/Customer/{customerCode}/addresses/{address.Id}",
+                    new ApiResponse<AddressResponse>(address, true, "Adres başarıyla oluşturuldu"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while creating address for customer {CustomerCode}", customerCode);
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new ApiResponse<string>("An error occurred while creating the address.", false, "Adres oluştururken bir hata oluştu", ex.Message));
+            }
+        }
+
+        [HttpGet("customers/{customerCode}/contacts")]
+        public async Task<ActionResult<List<ErpMobile.Api.Models.Responses.ContactResponse>>> GetContacts(string customerCode)
+        {
+            try
+            {
+                var response = await _customerContactService.GetContactsAsync(customerCode);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting contacts");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpGet("customers/{customerCode}/contacts/{contactId}")]
+        public async Task<ActionResult<ErpMobile.Api.Models.Responses.ContactResponse>> GetContactById(string customerCode, string contactId)
+        {
+            try
+            {
+                var response = await _customerContactService.GetContactByIdAsync(customerCode, contactId);
+                if (response == null)
+                {
+                    return NotFound($"Contact not found for customer {customerCode} with id: {contactId}");
+                }
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting contact by id");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpPost("customers/{customerCode}/contacts")]
+        public async Task<ActionResult<ErpMobile.Api.Models.Responses.ContactResponse>> CreateContact(string customerCode, [FromBody] ContactCreateRequest request)
+        {
+            try
+            {
+                var response = await _customerContactService.CreateContactAsync(customerCode, request);
+                return CreatedAtAction(nameof(GetContactById), new { customerCode = customerCode, contactId = response.ContactTypeCode }, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating contact");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        /// <summary>
+        /// Kişi tiplerini getirir
+        /// </summary>
+        [HttpGet("contact-types")]
+        public async Task<ActionResult<List<ContactTypeResponse>>> GetContactTypes()
+        {
+            try
+            {
+                var response = await _customerContactService.GetContactTypesAsync();
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting contact types");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        /// <summary>
+        /// Kişi tipini koda göre getirir
+        /// </summary>
+        [HttpGet("contact-types/{code}")]
+        public async Task<ActionResult<ContactTypeResponse>> GetContactTypeByCode(string code)
+        {
+            try
+            {
+                var response = await _customerContactService.GetContactTypeByCodeAsync(code);
+                if (response == null)
+                {
+                    return NotFound($"Contact type not found with code: {code}");
+                }
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting contact type by code");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        /// <summary>
+        /// Vergi dairelerini getirir
+        /// </summary>
+        [HttpGet("tax-offices")]
+        public async Task<ActionResult<List<ErpMobile.Api.Models.TaxOfficeResponse>>> GetTaxOffices([FromQuery] string langCode = "TR")
+        {
+            try
+            {
+                var taxOffices = await _customerService.GetTaxOfficesAsync(langCode);
+                return Ok(new ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>
+                {
+                    Success = true,
+                    Message = "Vergi daireleri başarıyla getirildi",
+                    Data = taxOffices
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Vergi daireleri alınırken hata oluştu");
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Vergi daireleri alınırken bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Banka hesaplarını getirir
+        /// </summary>
+        [HttpGet("bank-accounts")]
+        public async Task<ActionResult<List<Models.Responses.BankAccountResponse>>> GetBankAccounts([FromQuery] string customerCode = null)
+        {
+            try
+            {
+                var bankAccounts = await _customerLocationService.GetBankAccountsAsync(customerCode);
+                return Ok(new ApiResponse<List<Models.Responses.BankAccountResponse>>
+                {
+                    Success = true,
+                    Message = "Banka hesapları başarıyla getirildi",
+                    Data = bankAccounts
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Banka hesapları alınırken hata oluştu");
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Banka hesapları alınırken bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri güncelleme
+        /// </summary>
+        /// <param name="request">Müşteri güncelleme isteği</param>
+        /// <returns>Müşteri güncelleme yanıtı</returns>
+        [HttpPost("update")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerUpdateResponseNew>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<CustomerUpdateResponseNew>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateCustomer([FromBody] CustomerUpdateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri güncelleme isteği alındı: {CustomerCode}", request.CustomerCode);
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz müşteri bilgileri",
+                        Data = "Lütfen tüm zorunlu alanları doldurun."
+                    });
+                }
+
+                var result = await _customerService.UpdateCustomerAsync(request);
+
+                if (result.Success)
+                {
+                    return Ok(new ApiResponse<CustomerUpdateResponseNew>
+                    {
+                        Success = true,
+                        Message = "Müşteri başarıyla güncellendi",
+                        Data = result
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<CustomerUpdateResponseNew>
+                    {
+                        Success = false,
+                        Message = "Müşteri güncelleme işlemi başarısız",
+                        Data = result
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri güncelleme sırasında hata: {ErrorMessage}", ex.Message);
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri güncelleme sırasında bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri kredi limiti ve bakiye bilgilerini getirir
+        /// </summary>
+        [HttpGet("{customerCode}/credit-info")]
+        [Obsolete("Bu endpoint yakında kaldırılacaktır. Lütfen /api/v1/CustomerFinancial/{customerCode}/credit-info endpoint'ini kullanın.")]
+        public async Task<ActionResult<ApiResponse<Models.Responses.CustomerCreditInfoResponse>>> GetCustomerCreditInfo(string customerCode)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri kredi bilgileri getiriliyor (eski endpoint): {CustomerCode}", customerCode);
+                
+                // CustomerFinancialController'a yönlendir
+                var customerFinancialController = HttpContext.RequestServices.GetRequiredService<CustomerFinancialController>();
+                customerFinancialController.ControllerContext = ControllerContext;
+                return await customerFinancialController.GetCustomerCreditInfo(customerCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri kredi bilgileri getirilirken hata oluştu. CustomerCode: {CustomerCode}", customerCode);
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<Models.Responses.CustomerCreditInfoResponse>
+                {
+                    Success = false,
+                    Message = "Müşteri kredi bilgileri getirilirken bir hata oluştu",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri için adres ekler
+        /// </summary>
+        /// <param name="customerCode">Müşteri kodu</param>
+        /// <param name="request">Adres bilgileri</param>
+        /// <returns>Eklenen adres bilgileri</returns>
+        [HttpPost("{customerCode}/address")]
+        public async Task<IActionResult> AddCustomerAddress(string customerCode, [FromBody] CustomerAddressCreateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri adres ekleme isteği alındı: {CustomerCode}", customerCode);
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz adres bilgileri",
+                        Data = "Lütfen tüm zorunlu alanları doldurun."
+                    });
+                }
+
+                // Müşteri kodunu atama
+                request.CustomerCode = customerCode;
+
+                var result = await _customerAddressService.AddCustomerAddressAsync(request);
+
+                if (result)
+                {
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = true,
+                        Message = "Müşteri adresi başarıyla eklendi",
+                        Data = new { CustomerCode = customerCode }
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Müşteri adresi eklenirken bir hata oluştu",
+                        Data = "Veritabanı işlemi başarısız oldu."
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri adresi eklenirken hata: {Message}", ex.Message);
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri adresi eklenirken bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri için iletişim bilgisi ekler
+        /// </summary>
+        /// <param name="customerCode">Müşteri kodu</param>
+        /// <param name="request">İletişim bilgileri</param>
+        /// <returns>Eklenen iletişim bilgileri</returns>
+        [HttpPost("{customerCode}/communication")]
+        public async Task<IActionResult> AddCustomerCommunication(string customerCode, [FromBody] CustomerCommunicationCreateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri iletişim bilgisi ekleme isteği alındı: {CustomerCode}", customerCode);
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz iletişim bilgileri",
+                        Data = "Lütfen tüm zorunlu alanları doldurun."
+                    });
+                }
+
+                // Müşteri kodunu atama
+                request.CustomerCode = customerCode;
+
+                var result = await _customerCommunicationService.AddCustomerCommunicationAsync(request);
+
+                if (result)
+                {
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = true,
+                        Message = "Müşteri iletişim bilgisi başarıyla eklendi",
+                        Data = new { CustomerCode = customerCode }
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Müşteri iletişim bilgisi eklenirken bir hata oluştu",
+                        Data = "Veritabanı işlemi başarısız oldu."
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri iletişim bilgisi eklenirken hata: {Message}", ex.Message);
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri iletişim bilgisi eklenirken bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri için kişi ekler
+        /// </summary>
+        /// <param name="customerCode">Müşteri kodu</param>
+        /// <param name="request">Kişi bilgileri</param>
+        /// <returns>Eklenen kişi bilgileri</returns>
+        [HttpPost("{customerCode}/contact")]
+        public async Task<IActionResult> AddCustomerContact(string customerCode, [FromBody] CustomerContactCreateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri kişisi ekleme isteği alındı: {CustomerCode}", customerCode);
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz kişi bilgileri",
+                        Data = "Lütfen tüm zorunlu alanları doldurun."
+                    });
+                }
+
+                // Müşteri kodunu atama
+                request.CustomerCode = customerCode;
+
+                var result = await _customerContactService.AddCustomerContactAsync(request);
+
+                if (result)
+                {
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = true,
+                        Message = "Müşteri kişisi başarıyla eklendi",
+                        Data = new { CustomerCode = customerCode }
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Müşteri kişisi eklenirken bir hata oluştu",
+                        Data = "Veritabanı işlemi başarısız oldu."
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri kişisi eklenirken hata: {Message}", ex.Message);
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri kişisi eklenirken bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri finansal bilgilerini günceller
+        /// </summary>
+        /// <param name="customerCode">Müşteri kodu</param>
+        /// <param name="request">Finansal bilgiler</param>
+        /// <returns>Güncellenen müşteri bilgileri</returns>
+        [HttpPost("{customerCode}/financial")]
+        public async Task<IActionResult> UpdateCustomerFinancial(string customerCode, [FromBody] CustomerFinancialUpdateRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri finansal bilgileri güncelleme isteği alındı: {CustomerCode}", customerCode);
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Geçersiz finansal bilgiler",
+                        Data = "Lütfen tüm zorunlu alanları doldurun."
+                    });
+                }
+
+                // Müşteri kodunu atama
+                request.CustomerCode = customerCode;
+
+                var result = await _customerService.UpdateCustomerFinancialAsync(request);
+
+                if (result.Success)
+                {
+                    return Ok(new ApiResponse<CustomerFinancialUpdateResponse>
+                    {
+                        Success = true,
+                        Message = "Müşteri finansal bilgileri başarıyla güncellendi",
+                        Data = result
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Müşteri finansal bilgileri güncelleme işlemi başarısız",
+                        Data = result.Message
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri finansal bilgileri güncelleme sırasında hata: {ErrorMessage}", ex.Message);
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri finansal bilgileri güncelleme sırasında bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri özelliklerini (attributes) getirir
+        /// </summary>
+        /// <param name="customerCode">Müşteri kodu</param>
+        /// <returns>Müşteri özellikleri listesi</returns>
+        [HttpGet("{customerCode}/attributes")]
+        [ProducesResponseType(typeof(ApiResponse<List<CustomerAttributeResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetCustomerAttributes(string customerCode)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri özellikleri getirme isteği alındı: {CustomerCode}", customerCode);
+
+                // Önce müşterinin var olup olmadığını kontrol et
+                var customerExists = await _customerService.CustomerExistsAsync(customerCode);
+                if (!customerExists)
+                {
+                    return NotFound(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = $"Müşteri bulunamadı: {customerCode}",
+                        Data = null
+                    });
+                }
+
+                var query = @"
+                    SELECT 
+                        AttributeTypeCode,
+                        AttributeCode,
+                        AttributeValue,
+                        AttributeDescription = ISNULL(AttributeDescription, ''),
+                        CreatedDate,
+                        CreatedUserName
+                    FROM prCurrAccAttribute WITH (NOLOCK)
+                    WHERE CurrAccCode = @CustomerCode
+                    AND CurrAccTypeCode = 3
+                    ORDER BY AttributeTypeCode, AttributeCode";
+
+                var parameters = new List<SqlParameter>
+                {
+                    new SqlParameter("@CustomerCode", customerCode)
+                };
+
+                var attributes = new List<CustomerAttributeResponse>();
+
+                using (var reader = await _context.ExecuteReaderAsync(query, parameters.ToArray()))
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        attributes.Add(new CustomerAttributeResponse
+                        {
+                            CustomerCode = customerCode,
+                            AttributeTypeCode = reader["AttributeTypeCode"].ToString(),
+                            AttributeCode = reader["AttributeCode"].ToString(),
+                            AttributeValue = reader["AttributeValue"].ToString(),
+                            AttributeDescription = reader["AttributeDescription"].ToString(),
+                            CreatedDate = reader["CreatedDate"] != DBNull.Value ? Convert.ToDateTime(reader["CreatedDate"]) : (DateTime?)null,
+                            CreatedUserName = reader["CreatedUserName"].ToString()
+                        });
+                    }
+                }
+
+                return Ok(new ApiResponse<List<CustomerAttributeResponse>>
+                {
+                    Success = true,
+                    Message = "Müşteri özellikleri başarıyla getirildi",
+                    Data = attributes
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri özellikleri getirilirken hata oluştu. CustomerCode: {CustomerCode}", customerCode);
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri özellikleri getirilirken bir hata oluştu",
+                    Error = ex.Message,
+                    Data = null
+                });
+            }
+        }
+
+        /// <summary>
+        /// Müşteri borç/alacak bilgilerini getirir
+        /// </summary>
+        /// <param name="customerCode">Müşteri kodu</param>
+        /// <param name="startDate">Başlangıç tarihi (opsiyonel)</param>
+        /// <param name="endDate">Bitiş tarihi (opsiyonel)</param>
+        /// <param name="pageNumber">Sayfa numarası</param>
+        /// <param name="pageSize">Sayfa boyutu</param>
+        /// <returns>Müşteri borç/alacak hareketleri</returns>
+        [HttpGet("{customerCode}/transactions")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<CustomerTransactionResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        [Obsolete("Bu endpoint yakında kaldırılacaktır. Lütfen /api/v1/CustomerFinancial/{customerCode}/transactions endpoint'ini kullanın.")]
+        public async Task<IActionResult> GetCustomerTransactions(
+            string customerCode, 
+            [FromQuery] DateTime? startDate = null, 
+            [FromQuery] DateTime? endDate = null,
+            [FromQuery] int pageNumber = 1, 
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                _logger.LogInformation("Müşteri borç/alacak bilgileri getirme isteği alındı (eski endpoint): {CustomerCode}", customerCode);
+                
+                // CustomerFinancialController'a yönlendir
+                var customerFinancialController = HttpContext.RequestServices.GetRequiredService<CustomerFinancialController>();
+                customerFinancialController.ControllerContext = ControllerContext;
+                return await customerFinancialController.GetCustomerTransactions(customerCode, startDate, endDate, pageNumber, pageSize);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri borç/alacak bilgileri getirilirken hata oluştu. CustomerCode: {CustomerCode}", customerCode);
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Müşteri borç/alacak bilgileri getirilirken bir hata oluştu",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        [HttpPut("update/{customerCode}")]
+        public async Task<IActionResult> UpdateCustomer(string customerCode, [FromBody] CustomerUpdateRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrEmpty(customerCode))
+                {
+                    return BadRequest("Geçersiz müşteri bilgileri");
+                }
+
+                // Müşteri kodlarının eşleştiğini kontrol et
+                if (request.CustomerCode != customerCode)
+                {
+                    return BadRequest("Müşteri kodları eşleşmiyor");
+                }
+
+                var result = await _customerService.UpdateCustomerAsync(request);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Müşteri güncelleme hatası");
+                return StatusCode(500, "Müşteri güncellenirken bir hata oluştu");
+            }
+        }
+    }
+}

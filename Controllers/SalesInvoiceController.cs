@@ -3,13 +3,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using erp_api.Interfaces;
-using erp_api.Models;
-using erp_api.Models.Requests;
-using erp_api.Models.Responses;
-using erp_api.Models.Common;
+using ErpMobile.Api.Interfaces;
+using ErpMobile.Api.Models;
+using ErpMobile.Api.Models.Requests;
+using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Models.Common;
 
-namespace erp_api.Controllers
+namespace ErpMobile.Api.Controllers
 {
     [Authorize]
     [ApiController]
@@ -28,7 +28,7 @@ namespace erp_api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<ApiResponse<InvoiceListResponse>>> GetInvoices(
+        public async Task<ActionResult<ApiResponse<InvoiceResponseList>>> GetInvoices(
             [FromQuery] int pageSize = 10, 
             [FromQuery] int pageNumber = 1,
             [FromQuery] string sortBy = "invoiceDate",
@@ -55,12 +55,12 @@ namespace erp_api.Controllers
                 };
 
                 var response = await _invoiceService.GetInvoicesAsync(request);
-                return Ok(new ApiResponse<InvoiceListResponse>(response, true, "Invoices retrieved successfully"));
+                return Ok(new ApiResponse<InvoiceResponseList>(response, true, "Invoices retrieved successfully"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting invoices");
-                return StatusCode(500, new ApiResponse<InvoiceListResponse>(null, false, "An error occurred while retrieving invoice list.", "InternalServerError"));
+                return StatusCode(500, new ApiResponse<InvoiceResponseList>(null, false, "An error occurred while retrieving invoice list.", "InternalServerError"));
             }
         }
 

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace erp_api.Models.Requests
+namespace ErpMobile.Api.Models.Requests
 {
     /// <summary>
     /// Request model for creating a new customer address
@@ -70,5 +70,17 @@ namespace erp_api.Models.Requests
         /// Indicates if this address is blocked
         /// </summary>
         public bool IsBlocked { get; set; }
+        
+        /// <summary>
+        /// Vergi dairesi
+        /// </summary>
+        [StringLength(100)]
+        public string TaxOffice { get; set; }
+        
+        /// <summary>
+        /// Vergi numarası
+        /// </summary>
+        [StringLength(20)]
+        public string TaxNumber { get; set; }
     }
 } 
