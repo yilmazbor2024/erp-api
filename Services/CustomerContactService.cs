@@ -42,10 +42,6 @@ namespace ErpMobile.Api.Services
                             c.CurrAccCode AS CustomerCode,
                             c.ContactTypeCode,
                             ct.ContactTypeDescription,
-                            c.TitleCode,
-                            td.TitleDescription,
-                            c.JobTitleCode,
-                            jtd.JobTitleDescription,
                             c.FirstName,
                             c.LastName,
                             c.FirstName + ' ' + c.LastName AS Contact,
@@ -55,8 +51,6 @@ namespace ErpMobile.Api.Services
                             CASE WHEN cad.ContactID IS NOT NULL THEN 1 ELSE 0 END AS IsDefault
                         FROM prCurrAccContact c WITH(NOLOCK)
                         LEFT JOIN cdContactTypeDesc ct WITH(NOLOCK) ON ct.ContactTypeCode = c.ContactTypeCode AND ct.LangCode = 'TR'
-                        LEFT JOIN cdTitleDesc td WITH(NOLOCK) ON td.TitleCode = c.TitleCode AND td.LangCode = 'TR'
-                        LEFT JOIN cdJobTitleDesc jtd WITH(NOLOCK) ON jtd.JobTitleCode = c.JobTitleCode AND jtd.LangCode = 'TR'
                         LEFT JOIN prCurrAccDefault cad WITH(NOLOCK) ON cad.CurrAccTypeCode = c.CurrAccTypeCode AND cad.CurrAccCode = c.CurrAccCode AND cad.ContactID = c.ContactID
                         WHERE c.CurrAccTypeCode = 3 AND c.CurrAccCode = @CustomerCode
                         ORDER BY c.ContactTypeCode";
@@ -87,10 +81,7 @@ namespace ErpMobile.Api.Services
                             c.CurrAccCode AS CustomerCode,
                             c.ContactTypeCode,
                             ct.ContactTypeDescription,
-                            c.TitleCode,
-                            td.TitleDescription,
-                            c.JobTitleCode,
-                            jtd.JobTitleDescription,
+                      
                             c.FirstName,
                             c.LastName,
                             c.FirstName + ' ' + c.LastName AS Contact,
@@ -100,8 +91,7 @@ namespace ErpMobile.Api.Services
                             CASE WHEN cad.ContactID IS NOT NULL THEN 1 ELSE 0 END AS IsDefault
                         FROM prCurrAccContact c WITH(NOLOCK)
                         LEFT JOIN cdContactTypeDesc ct WITH(NOLOCK) ON ct.ContactTypeCode = c.ContactTypeCode AND ct.LangCode = 'TR'
-                        LEFT JOIN cdTitleDesc td WITH(NOLOCK) ON td.TitleCode = c.TitleCode AND td.LangCode = 'TR'
-                        LEFT JOIN cdJobTitleDesc jtd WITH(NOLOCK) ON jtd.JobTitleCode = c.JobTitleCode AND jtd.LangCode = 'TR'
+                         
                         LEFT JOIN prCurrAccDefault cad WITH(NOLOCK) ON cad.CurrAccTypeCode = c.CurrAccTypeCode AND cad.CurrAccCode = c.CurrAccCode AND cad.ContactID = c.ContactID
                         WHERE c.CurrAccTypeCode = 3 AND c.CurrAccCode = @CustomerCode AND c.ContactID = @ContactID";
 
@@ -133,12 +123,12 @@ namespace ErpMobile.Api.Services
                 var sql = @"
                     INSERT INTO prCurrAccContact WITH(ROWLOCK)
                     (
-                        ContactID, CurrAccTypeCode, CurrAccCode, ContactTypeCode, TitleCode, JobTitleCode, FirstName, LastName,
+                        ContactID, CurrAccTypeCode, CurrAccCode, ContactTypeCode, FirstName, LastName,
                         IsAuthorized, IdentityNum, IsBlocked, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
                     )
                     VALUES
                     (
-                        @ContactID, 3, @CustomerCode, @ContactTypeCode, '', '', @FirstName, @LastName, @IsDefault, '', 0,
+                        @ContactID, 3, @CustomerCode, @ContactTypeCode, @FirstName, @LastName, @IsDefault, '', 0,
                         @CreatedBy, GETDATE(), @CreatedBy, GETDATE()
                     )";
 
@@ -378,10 +368,6 @@ namespace ErpMobile.Api.Services
                             c.CurrAccCode AS CustomerCode,
                             c.ContactTypeCode,
                             ct.ContactTypeDescription,
-                            c.TitleCode,
-                            td.TitleDescription,
-                            c.JobTitleCode,
-                            jtd.JobTitleDescription,
                             c.FirstName,
                             c.LastName,
                             c.FirstName + ' ' + c.LastName AS Contact,
@@ -391,8 +377,6 @@ namespace ErpMobile.Api.Services
                             CASE WHEN cad.ContactID IS NOT NULL THEN 1 ELSE 0 END AS IsDefault
                         FROM prCurrAccContact c WITH(NOLOCK)
                         LEFT JOIN cdContactTypeDesc ct WITH(NOLOCK) ON ct.ContactTypeCode = c.ContactTypeCode AND ct.LangCode = 'TR'
-                        LEFT JOIN cdTitleDesc td WITH(NOLOCK) ON td.TitleCode = c.TitleCode AND td.LangCode = 'TR'
-                        LEFT JOIN cdJobTitleDesc jtd WITH(NOLOCK) ON jtd.JobTitleCode = c.JobTitleCode AND jtd.LangCode = 'TR'
                         LEFT JOIN prCurrAccDefault cad WITH(NOLOCK) ON cad.CurrAccTypeCode = c.CurrAccTypeCode AND cad.CurrAccCode = c.CurrAccCode AND cad.ContactID = c.ContactID
                         WHERE c.CurrAccTypeCode = 3 AND c.CurrAccCode = @CustomerCode
                         ORDER BY c.ContactTypeCode";
@@ -514,17 +498,36 @@ namespace ErpMobile.Api.Services
                 // Kişi ID'si oluştur
                 var contactId = Guid.NewGuid();
                 
-                // Kişi bilgisi ekleme SQL sorgusu
-                var sql = @"
-                    INSERT INTO prCurrAccContact (
-                        ContactID, CurrAccTypeCode, CurrAccCode, SubCurrAccID, ContactTypeCode, FirstName, LastName, 
-                        TitleCode, JobTitleCode, IdentityNum, IsBlocked, IsAuthorized, 
-                        CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                    ) VALUES (
-                        @ContactID, @CurrAccTypeCode, @CurrAccCode, @SubCurrAccID, @ContactTypeCode, @FirstName, @LastName, 
-                        @TitleCode, @JobTitleCode, @IdentityNum, @IsBlocked, @IsAuthorized, 
-                        @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE()
-                    )";
+                string sql;
+        
+                // IdentityNum boş string değilse SQL sorgusuna ekle
+                if (!string.IsNullOrEmpty(request.IdentityNum))
+                {
+                    sql = @"
+                        INSERT INTO prCurrAccContact (
+                            ContactID, CurrAccTypeCode, CurrAccCode, SubCurrAccID, ContactTypeCode, FirstName, LastName, 
+                            IsBlocked, IsAuthorized, IdentityNum,
+                            CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                        ) VALUES (
+                            @ContactID, @CurrAccTypeCode, @CurrAccCode, @SubCurrAccID, @ContactTypeCode, @FirstName, @LastName, 
+                            @IsBlocked, @IsAuthorized, @IdentityNum,
+                            @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE()
+                        )";
+                }
+                else
+                {
+                    // IdentityNum boş string ise SQL sorgusuna ekleme
+                    sql = @"
+                        INSERT INTO prCurrAccContact (
+                            ContactID, CurrAccTypeCode, CurrAccCode, SubCurrAccID, ContactTypeCode, FirstName, LastName, 
+                            IsBlocked, IsAuthorized, 
+                            CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                        ) VALUES (
+                            @ContactID, @CurrAccTypeCode, @CurrAccCode, @SubCurrAccID, @ContactTypeCode, @FirstName, @LastName, 
+                            @IsBlocked, @IsAuthorized, 
+                            @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE()
+                        )";
+                }
                 
                 var parameters = new
                 {
@@ -535,11 +538,9 @@ namespace ErpMobile.Api.Services
                     ContactTypeCode = request.ContactTypeCode,
                     FirstName = request.FirstName,
                     LastName = request.LastName,
-                    TitleCode = request.TitleCode,
-                    JobTitleCode = request.JobTitleCode,
-                    IdentityNum = request.IdentityNum,
-                    IsBlocked = request.IsBlocked,
+                    IsBlocked = false,
                     IsAuthorized = request.IsAuthorized,
+                    IdentityNum = request.IdentityNum, // Kimlik numarası (boş olabilir)
                     CreatedUserName = request.CreatedUserName ?? "SYSTEM",
                     LastUpdatedUserName = request.LastUpdatedUserName ?? "SYSTEM"
                 };

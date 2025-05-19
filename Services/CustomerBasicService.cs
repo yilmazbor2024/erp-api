@@ -283,16 +283,7 @@ namespace ErpMobile.Api.Services
                                 WHERE cab.CurrAccCode = @CustomerCode
                             ) AS FinancialData";
                         
-                        // A005 müşterisi için bakiye değerini özel olarak ayarlayalım
-                        if (customerCode == "A005")
-                        {
-                            financialSql = @"
-                                SELECT 
-                                    12500 AS TotalDebit,
-                                    7500 AS TotalCredit,
-                                    5000 AS Balance
-                                ";
-                        }
+                        
 
                         var financialInfo = await connection.QueryFirstOrDefaultAsync<dynamic>(financialSql, new { CustomerCode = customerCode });
                         
@@ -330,22 +321,59 @@ namespace ErpMobile.Api.Services
                     {
                         try
                         {
-                            // Temel müşteri bilgilerini ekleme
-                            var sql = @"
-                                INSERT INTO cdCurrAcc (
+                            // Temel müşteri bilgilerini ekleme - MersisNum, TitleCode, Patronym, DueDateFormulaCode, DiscountGroupCode, PaymentPlanGroupCode, RiskLimit ve CreditLimit alanları gönderilmiyor
+                            string sql;
+                            object parameters;
+                            
+                            // Boş string kontrolleri yapıp SQL sorgusunu dinamik oluştur
+                            bool hasIdentityNum = !string.IsNullOrEmpty(request.IdentityNum);
+                            bool hasTaxNumber = !string.IsNullOrEmpty(request.TaxNumber);
+                            bool hasTaxOfficeCode = !string.IsNullOrEmpty(request.TaxOfficeCode);
+                            
+                            // SQL sorgusu başlangıcı
+                            string sqlStart = @"
+                                INSERT INTO cdCurrAcc (";
+                                
+                            // SQL sorgusu alanları
+                            string sqlFields = @"
                                     CurrAccTypeCode, CurrAccCode, CustomerTypeCode, CurrencyCode, IsVIP, PromotionGroupCode,
-                                    CompanyCode, OfficeCode, IdentityNum, TaxNumber, TaxOfficeCode, IsSubjectToEInvoice,
+                                    CompanyCode, OfficeCode, ";
+                                    
+                            // Koşullu alanlar
+                            if (hasIdentityNum) sqlFields += "IdentityNum, ";
+                            if (hasTaxNumber) sqlFields += "TaxNumber, ";
+                            if (hasTaxOfficeCode) sqlFields += "TaxOfficeCode, ";
+                            
+                            // Kalan alanlar
+                            sqlFields += @"IsSubjectToEInvoice,
                                     UseDBSIntegration, IsBlocked, CreatedDate, CreatedUsername, LastUpdatedDate, LastUpdatedUsername,
-                                    IsIndividualAcc
+                                    IsIndividualAcc";
+                                    
+                            // SQL sorgusu VALUES başlangıcı
+                            string sqlValues = @"
                                 )
-                                VALUES (
+                                VALUES (";
+                                
+                            // SQL sorgusu VALUES değerleri
+                            string sqlValueFields = @"
                                     3, @CustomerCode, @CustomerTypeCode, @CurrencyCode, @IsVIP, @PromotionGroupCode,
-                                    @CompanyCode, @OfficeCode, @IdentityNum, @TaxNumber, @TaxOfficeCode, @IsSubjectToEInvoice,
+                                    @CompanyCode, @OfficeCode, ";
+                                    
+                            // Koşullu değerler
+                            if (hasIdentityNum) sqlValueFields += "@IdentityNum, ";
+                            if (hasTaxNumber) sqlValueFields += "@TaxNumber, ";
+                            if (hasTaxOfficeCode) sqlValueFields += "@TaxOfficeCode, ";
+                            
+                            // Kalan değerler
+                            sqlValueFields += @"@IsSubjectToEInvoice,
                                     @UseDBSIntegration, @IsBlocked, GETDATE(), @CreatedUserName, GETDATE(), @LastUpdatedUserName,
-                                    @IsRealPerson
-                                )";
-
-                            await connection.ExecuteAsync(sql, new
+                                    @IsRealPerson";
+                                    
+                            // SQL sorgusunu birleştir
+                            sql = sqlStart + sqlFields + sqlValues + sqlValueFields + "\n                                )";
+                            
+                            // Parametreleri oluştur
+                            parameters = new
                             {
                                 request.CustomerCode,
                                 request.CustomerTypeCode,
@@ -354,16 +382,19 @@ namespace ErpMobile.Api.Services
                                 request.PromotionGroupCode,
                                 request.CompanyCode,
                                 request.OfficeCode,
-                                request.IdentityNum,
-                                request.TaxNumber,
-                                request.TaxOfficeCode,
+                                IdentityNum = hasIdentityNum ? request.IdentityNum : null,
+                                TaxNumber = hasTaxNumber ? request.TaxNumber : null,
+                                TaxOfficeCode = hasTaxOfficeCode ? request.TaxOfficeCode : null,
                                 request.IsSubjectToEInvoice,
                                 request.UseDBSIntegration,
                                 request.IsBlocked,
                                 request.CreatedUserName,
                                 request.LastUpdatedUserName,
                                 request.IsRealPerson
-                            }, transaction);
+                                // MersisNum, TitleCode, Patronym, DueDateFormulaCode, DiscountGroupCode, PaymentPlanGroupCode, RiskLimit, CreditLimit parametreleri kaldırıldı
+                            };
+                            
+                            await connection.ExecuteAsync(sql, parameters, transaction);
 
                             // Müşteri açıklamasını ekleme
                             if (!string.IsNullOrEmpty(request.CustomerName))
@@ -416,15 +447,6 @@ namespace ErpMobile.Api.Services
                                         StateCode = address.StateCode,
                                         CityCode = address.CityCode,
                                         DistrictCode = address.DistrictCode,
-                                        ZipCode = address.ZipCode,
-                                        SiteName = address.SiteName,
-                                        BuildingName = address.BuildingName,
-                                        BuildingNum = address.BuildingNum,
-                                        FloorNum = address.FloorNum,
-                                        DoorNum = address.DoorNum,
-                                        QuarterName = address.QuarterName ?? "Merkez Mahallesi",
-                                        Street = address.Street ?? address.Address,
-                                        DrivingDirections = address.DrivingDirections ?? "Merkez",
                                         TaxOfficeCode = address.TaxOfficeCode,
                                         TaxNumber = address.TaxNumber,
                                         IsBlocked = address.IsBlocked,
@@ -479,14 +501,12 @@ namespace ErpMobile.Api.Services
                                     var contactRequest = new CustomerContactCreateRequestNew
                                     {
                                         CustomerCode = request.CustomerCode,
-                                        ContactTypeCode = contact.ContactTypeCode,
-                                        FirstName = contact.ContactTypeCode, // ContactCreateRequest'te FirstName yok, ContactTypeCode kullanıyoruz
-                                        LastName = "", // Boş değer atıyoruz
-                                        TitleCode = "", // Boş değer atıyoruz
-                                        JobTitleCode = "", // Boş değer atıyoruz
+                                        ContactTypeCode = "C", // Bağlantılı kişi tipi kodu (C: BAĞLANTILI)
+                                        FirstName = contact.FirstName ?? "", // FirstName alanını doğru şekilde kullan
+                                        LastName = contact.LastName ?? "", // LastName alanını doğru şekilde kullan
                                         IdentityNum = contact.IdentityNum, // IdentityNum kullanılmalı
-                                        IsBlocked = contact.IsAuthorized, // IsAuthorized alanını kullanıyoruz
-                                        IsAuthorized = contact.IsAuthorized, // IsAuthorized alanını ekliyoruz
+                                        IsBlocked = false, // Sabit false olarak ayarla
+                                        IsAuthorized = false, // Sabit false olarak ayarla
                                         IsDefault = contact.IsDefault,
                                         CreatedUserName = request.CreatedUserName ?? "SYSTEM",
                                         LastUpdatedUserName = request.LastUpdatedUserName ?? "SYSTEM"
@@ -774,7 +794,7 @@ namespace ErpMobile.Api.Services
                                 TaxOfficeCode = request.TaxOfficeCode,
                                 CurrAccTypeCode = request.CustomerTypeCode,
                                 IdentityNumber = request.CustomerIdentityNumber,
-                                CreditLimit = request.CreditLimit,
+                                CreditLimit = 0, // Frontend'den gönderilmeyecek, varsayılan değer kullanılıyor
                                 MinBalance = request.MinBalance,
                                 LastUpdatedUserName = request.LastUpdatedUserName ?? "SYSTEM"
                             };
@@ -840,7 +860,6 @@ namespace ErpMobile.Api.Services
                                         CityCode = addr.CityCode,
                                         DistrictCode = addr.DistrictCode,
                                         Address = addr.Address,
-                                        ZipCode = addr.ZipCode, // PostalCode yerine ZipCode kullanılmalı
                                         IsDefault = addr.IsDefault,
                                         CreatedUserName = request.LastUpdatedUserName ?? "SYSTEM",
                                         LastUpdatedUserName = request.LastUpdatedUserName ?? "SYSTEM"
@@ -862,8 +881,6 @@ namespace ErpMobile.Api.Services
                                         ContactTypeCode = contact.ContactTypeCode,
                                         FirstName = contact.FirstName,
                                         LastName = contact.LastName,
-                                        TitleCode = contact.TitleCode,
-                                        JobTitleCode = contact.JobTitleCode,
                                         IdentityNum = contact.IdentityNum, // IdentityNum kullanılmalı
                                         IsBlocked = contact.IsBlocked,
                                         IsAuthorized = contact.IsAuthorized,
@@ -1071,7 +1088,7 @@ namespace ErpMobile.Api.Services
                 TaxNumber = request.TaxNumber,
                 TaxOfficeCode = request.TaxOfficeCode,
                 IdentityNumber = request.CustomerIdentityNumber,
-                CreditLimit = request.CreditLimit,
+                CreditLimit = 0, // Frontend'den gönderilmeyecek, varsayılan değer kullanılıyor
                 RiskLimit = 0, // Varsayılan değer
                 PaymentTerm = 30, // Varsayılan değer
                 CreatedUserName = request.CreatedUserName ?? "SYSTEM",
@@ -1275,7 +1292,7 @@ namespace ErpMobile.Api.Services
                 CityCode = request.CityCode,
                 DistrictCode = request.DistrictCode,
                 CountryCode = request.CountryCode,
-                PostalCode = request.ZipCode,
+            
                 IsDefault = request.IsDefault
             };
             return await _addressService.CreateAddressAsync(customerCode, addressRequest);

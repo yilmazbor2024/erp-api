@@ -14,7 +14,7 @@ using Microsoft.Extensions.Configuration;
 namespace ErpMobile.Api.Controllers
 {
     [Authorize]
-    [ApiController]
+    // [ApiController] - Model validation'ı devre dışı bırakmak için kaldırıldı
     [Route("api/v1/[controller]")]
     public class CustomerContactController : ControllerBase
     {
@@ -74,8 +74,11 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                _logger.LogInformation("Müşteri kişisi ekleniyor: {CustomerCode}", customerCode);
-
+                _logger.LogInformation("Müşteri kişisi ekleme işlemi başlatıldı: {CustomerCode}", customerCode);
+                
+                // Model state kontrolünü devre dışı bırak
+                ModelState.Clear();
+                
                 if (request == null)
                 {
                     return BadRequest(new ApiResponse<CustomerContactResponse>
@@ -87,6 +90,18 @@ namespace ErpMobile.Api.Controllers
 
                 // Müşteri kodunu request'e ekle
                 request.CustomerCode = customerCode;
+                
+                // Frontend'den gelmeyecek zorunlu alanları doğrudan ata
+                // Kontrol etmeye gerek yok, bu alanlar frontend'den gönderilmeyecek
+                request.ContactTypeCode = "C"; // Bağlantılı kişi tipi kodu
+                request.CreatedUserName = "SYSTEM";
+                request.LastUpdatedUserName = "SYSTEM";
+                
+                // IdentityNum alanı boşsa varsayılan değer ata
+                if (string.IsNullOrEmpty(request.IdentityNum))
+                {
+                    request.IdentityNum = ""; // Varsayılan kimlik numarası
+                }
                 
                 // Gerçek implementasyon - servis çağrısı
                 var result = await _customerContactService.AddCustomerContactAsync(request);
