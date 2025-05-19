@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Dapper;
-using ErpMobile.Api.Models.Requests;
 using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Models.Requests;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -285,7 +286,7 @@ namespace ErpMobile.Api.Services
                             cid.CityDescription,
                             pa.DistrictCode,
                             dd.DistrictDescription,
-                            pa.ZipCode AS PostalCode,
+                         
                             pa.IsBlocked,
                             CASE WHEN cad.PostalAddressID IS NOT NULL THEN 1 ELSE 0 END AS IsDefault
                         FROM prCurrAccPostalAddress pa WITH(NOLOCK)
@@ -333,7 +334,7 @@ namespace ErpMobile.Api.Services
                             cid.CityDescription,
                             pa.DistrictCode,
                             dd.DistrictDescription,
-                            pa.ZipCode AS PostalCode,
+                           
                             pa.IsBlocked,
                             CASE WHEN cad.PostalAddressID IS NOT NULL THEN 1 ELSE 0 END AS IsDefault
                         FROM prCurrAccPostalAddress pa WITH(NOLOCK)
@@ -372,14 +373,13 @@ namespace ErpMobile.Api.Services
                             var addressSql = @"
                                 INSERT INTO prCurrAccPostalAddress (
                                     PostalAddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode, AddressID, Address, CountryCode,
-                                    StateCode, CityCode, DistrictCode, PostalCode, QuarterCode, QuarterName, BoulevardCode,
-                                    StreetCode, Street, Road, DrivingDirections, TaxOfficeCode, TaxNumber, IsBlocked,
+                                    StateCode, CityCode, DistrictCode,TaxOfficeCode, TaxNumber, IsBlocked,
                                     CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
                                 )
                                 VALUES
                                 (
                                     @PostalAddressID, 3, @CustomerCode, @AddressTypeCode, 0, @Address, @CountryCode, @StateCode, @CityCode,
-                                    @DistrictCode, @PostalCode, '', '', '', 0, 0, 0, '', '', '', @IsBlocked, 'SYSTEM',
+                                    @DistrictCode,  '', '', @IsBlocked, 'SYSTEM',
                                     GETDATE(), 'SYSTEM', GETDATE()
                                 )";
 
@@ -393,7 +393,7 @@ namespace ErpMobile.Api.Services
                                 request.StateCode,
                                 request.CityCode,
                                 request.DistrictCode,
-                                PostalCode = request.ZipCode,
+                             
                                 request.IsBlocked
                             }, transaction);
 
@@ -483,7 +483,7 @@ namespace ErpMobile.Api.Services
                                     StateCode = @StateCode,
                                     CityCode = @CityCode,
                                     DistrictCode = @DistrictCode,
-                                    PostalCode = @PostalCode,
+                                   
                                     IsBlocked = @IsBlocked,
                                     LastUpdatedUserName = 'SYSTEM',
                                     LastUpdatedDate = GETDATE()
@@ -498,7 +498,6 @@ namespace ErpMobile.Api.Services
                                 request.StateCode,
                                 request.CityCode,
                                 request.DistrictCode,
-                                PostalCode = request.ZipCode,
                                 request.IsBlocked
                             }, transaction);
 
@@ -644,7 +643,6 @@ namespace ErpMobile.Api.Services
                             cid.CityDescription,
                             pa.DistrictCode,
                             dd.DistrictDescription,
-                            pa.ZipCode AS PostalCode,
                             pa.IsBlocked,
                             CASE WHEN cad.PostalAddressID IS NOT NULL THEN 1 ELSE 0 END AS IsDefault
                         FROM prCurrAccPostalAddress pa WITH(NOLOCK)
@@ -712,63 +710,63 @@ namespace ErpMobile.Api.Services
                 // Adres ID'si oluştur
                 var addressId = request.PostalAddressID ?? Guid.NewGuid();
                 
-                // Adres ekleme SQL sorgusu
-                var sql = @"
-                    INSERT INTO prCurrAccPostalAddress (
-                        PostalAddressID, CurrAccTypeCode, CurrAccCode, SubCurrAccID, ContactID, AddressTypeCode, CountryCode, 
-                        StateCode, CityCode, DistrictCode, Address, ZipCode, 
-                        TaxOfficeCode, TaxNumber, Street, QuarterName, DrivingDirections,
-                        AddressID, SiteName, BuildingName, BuildingNum, FloorNum, DoorNum,
-                        QuarterCode, Boulevard, StreetCode, Road, IsBlocked,
-                        CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                    ) VALUES (
-                        @PostalAddressID, @CurrAccTypeCode, @CurrAccCode, @SubCurrAccID, @ContactID, @AddressTypeCode, @CountryCode, 
-                        @StateCode, @CityCode, @DistrictCode, @Address, @ZipCode, 
-                        @TaxOfficeCode, @TaxNumber, @Street, @QuarterName, @DrivingDirections,
-                        @AddressID, @SiteName, @BuildingName, @BuildingNum, @FloorNum, @DoorNum,
-                        @QuarterCode, @Boulevard, @StreetCode, @Road, @IsBlocked,
-                        @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE()
-                    )";
+                // Dinamik SQL sorgusu oluşturma
+                var sqlColumns = new StringBuilder();
+                var sqlValues = new StringBuilder();
+                var parameters = new DynamicParameters();
                 
-                var parameters = new
+                // Zorunlu alanlar
+                sqlColumns.Append("PostalAddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode, Address, CountryCode, StateCode, CityCode, DistrictCode, IsBlocked, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate");
+                sqlValues.Append("@PostalAddressID, @CurrAccTypeCode, @CurrAccCode, @AddressTypeCode, @Address, @CountryCode, @StateCode, @CityCode, @DistrictCode, @IsBlocked, @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE()");
+                
+                // Parametre değerlerini ekle
+                parameters.Add("@PostalAddressID", addressId);
+                parameters.Add("@CurrAccTypeCode", currAccTypeCode);
+                parameters.Add("@CurrAccCode", request.CustomerCode);
+                parameters.Add("@AddressTypeCode", request.AddressTypeCode);
+                parameters.Add("@Address", request.Address ?? "");
+                parameters.Add("@CountryCode", request.CountryCode ?? "TR");
+                parameters.Add("@StateCode", request.StateCode ?? "TR.00");
+                parameters.Add("@CityCode", request.CityCode ?? "TR.00");
+                parameters.Add("@DistrictCode", request.DistrictCode ?? "");
+                parameters.Add("@IsBlocked", false);
+                parameters.Add("@CreatedUserName", request.CreatedUserName ?? "SYSTEM");
+                parameters.Add("@LastUpdatedUserName", request.LastUpdatedUserName ?? "SYSTEM");
+                
+                // TaxOffice ve TaxNumber alanları için kontrol
+                if (!string.IsNullOrEmpty(request.TaxOffice))
                 {
-                    PostalAddressID = addressId,
-                    CurrAccTypeCode = currAccTypeCode,
-                    CurrAccCode = request.CustomerCode,
-                    SubCurrAccID = (Guid?)null, // Null olabilir
-                    ContactID = (Guid?)null, // Null olabilir
-                    AddressTypeCode = request.AddressTypeCode,
-                    CountryCode = request.CountryCode,
-                    StateCode = request.StateCode,
-                    CityCode = request.CityCode,
-                    DistrictCode = request.DistrictCode,
-                    Address = request.Address,
-                    ZipCode = request.ZipCode,
-                    TaxOfficeCode = request.TaxOfficeCode ?? "KADIKOY",
-                    TaxNumber = request.TaxNumber ?? "",
-                    Street = request.Street ?? "",
-                    QuarterName = request.QuarterName ?? "",
-                    DrivingDirections = request.DrivingDirections ?? "",
-                    AddressID = 0, // Varsayılan değer
-                    SiteName = "", // Varsayılan değer
-                    BuildingName = "", // Varsayılan değer
-                    BuildingNum = "", // Varsayılan değer
-                    FloorNum = (short)0, // Varsayılan değer
-                    DoorNum = (short)0, // Varsayılan değer
-                    QuarterCode = 0, // Varsayılan değer
-                    Boulevard = "", // Varsayılan değer
-                    StreetCode = 0, // Varsayılan değer
-                    Road = "", // Varsayılan değer
-                    IsBlocked = false, // Varsayılan değer
-                    CreatedUserName = request.CreatedUserName ?? "SYSTEM",
-                    LastUpdatedUserName = request.LastUpdatedUserName ?? "SYSTEM"
-                };
+                    sqlColumns.Append(", TaxOffice");
+                    sqlValues.Append(", @TaxOffice");
+                    parameters.Add("@TaxOffice", request.TaxOffice);
+                }
+                
+                if (!string.IsNullOrEmpty(request.TaxOfficeCode))
+                {
+                    sqlColumns.Append(", TaxOfficeCode");
+                    sqlValues.Append(", @TaxOfficeCode");
+                    parameters.Add("@TaxOfficeCode", request.TaxOfficeCode);
+                }
+                
+                if (!string.IsNullOrEmpty(request.TaxNumber))
+                {
+                    sqlColumns.Append(", TaxNumber");
+                    sqlValues.Append(", @TaxNumber");
+                    parameters.Add("@TaxNumber", request.TaxNumber);
+                }
+                
+                // SQL sorgusunu oluştur
+                var sql = $"INSERT INTO prCurrAccPostalAddress ({sqlColumns}) VALUES ({sqlValues})";
                 
                 try
                 {
                     _logger.LogInformation("SQL sorgusu: {SQL}", sql);
                     _logger.LogInformation("Parametreler: CurrAccTypeCode={CurrAccTypeCode}, CurrAccCode={CurrAccCode}, AddressTypeCode={AddressTypeCode}", 
                         currAccTypeCode, request.CustomerCode, request.AddressTypeCode);
+                    
+                    // Detaylı log ekleyelim
+                    _logger.LogInformation("CountryCode={CountryCode}, StateCode={StateCode}, CityCode={CityCode}, DistrictCode={DistrictCode}",
+                        request.CountryCode, request.StateCode, request.CityCode, request.DistrictCode);
                     
                     await connection.ExecuteAsync(sql, parameters, transaction);
                     
@@ -797,6 +795,17 @@ namespace ErpMobile.Api.Services
                 {
                     _logger.LogError("Adres ekleme hatası: {Error}, SQL: {SQL}", ex.Message, sql);
                     _logger.LogError("Hata detayı: {StackTrace}", ex.StackTrace);
+                    
+                    // SQL hatası detaylarını loglayalım
+                    if (ex.InnerException != null)
+                    {
+                        _logger.LogError("Inner Exception: {InnerErrorMessage}", ex.InnerException.Message);
+                    }
+                    
+                    // Tüm parametreleri loglayalım
+                    _logger.LogError("Parametre detayları: CountryCode={CountryCode}, StateCode={StateCode}, CityCode={CityCode}, DistrictCode={DistrictCode}",
+                        request.CountryCode, request.StateCode, request.CityCode, request.DistrictCode);
+                    
                     return false;
                 }
             }

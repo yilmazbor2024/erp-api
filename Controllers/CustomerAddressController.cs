@@ -86,20 +86,44 @@ namespace ErpMobile.Api.Controllers
                     });
                 }
 
+                // TaxOffice alanı boş ise boş olarak kalmalıdır
+                // Dinamik SQL yaklaşımı ile boş alanlar SQL sorgusuna dahil edilmeyecek
+
                 // CustomerAddressCreateRequest'i CustomerAddressCreateRequestNew'e dönüştür
+                // prCurrAccPostalAddress tablosuyla %100 uyumlu olacak şekilde
                 var newRequest = new CustomerAddressCreateRequestNew
                 {
-                    CustomerCode = customerCode,
-                    AddressTypeCode = request.AddressTypeCode,
-                    Address = request.Address,
-                    CountryCode = request.CountryCode,
-                    StateCode = request.StateCode,
-                    CityCode = request.CityCode,
-                    DistrictCode = request.DistrictCode,
-                    ZipCode = request.PostalCode,
-                    TaxOffice = request.TaxOffice ?? "",
-                    TaxNumber = request.TaxNumber ?? "",
-                    IsDefault = request.IsDefault
+                    // Müşteri bilgileri - prCurrAccPostalAddress.CurrAccCode
+                    CustomerCode = customerCode, // Müşteri kodu, NOT NULL alan
+                    
+                    // Adres tipi bilgileri - prCurrAccPostalAddress.AddressTypeCode
+                    AddressTypeCode = request.AddressTypeCode, // Adres tipi kodu, NOT NULL alan
+                    
+                    // Adres bilgileri - prCurrAccPostalAddress.Address
+                    Address = request.Address ?? "", // Açık adres, NOT NULL alan
+                    
+                    // Ülke, şehir, bölge bilgileri - prCurrAccPostalAddress tablosundaki ilgili alanlar
+                    CountryCode = request.CountryCode ?? "TR", // Ülke kodu, NOT NULL alan, varsayılan: Türkiye
+                    StateCode = request.StateCode ?? "TR.00", // Eyalet/Bölge kodu, NOT NULL alan
+                    CityCode = request.CityCode ?? "TR.00", // Şehir kodu, NOT NULL alan
+                    DistrictCode = request.DistrictCode ?? "", // İlçe kodu, NOT NULL alan
+                    // TaxOffice alanı boş ise boş olarak kalmalıdır
+                    TaxOffice = string.IsNullOrEmpty(request.TaxOffice) ? null : request.TaxOffice, // Vergi dairesi adı
+                    TaxOfficeCode = request.TaxOfficeCode ?? "", // Vergi dairesi kodu, NOT NULL alan
+                    TaxNumber = request.TaxNumber ?? "", // Vergi numarası, NOT NULL alan
+                    
+                    // Bina ve site bilgileri - prCurrAccPostalAddress tablosundaki ilgili alanlar
+                    AddressID = "0", // Adres ID, NOT NULL alan, otomatik artan
+                    
+                    // Durum bilgileri
+                    IsBlocked = false, // Adres bloke mi?, NOT NULL alan, varsayılan: false
+                    IsDefault = request.IsDefault, // Varsayılan adres mi?
+                    IsBillingAddress = request.IsDefault, // Fatura adresi mi?
+                    IsShippingAddress = request.IsDefault, // Sevkiyat adresi mi?
+                    
+                    // Kullanıcı bilgileri - prCurrAccPostalAddress tablosundaki ilgili alanlar
+                    CreatedUserName = "SYSTEM", // Oluşturan kullanıcı, NOT NULL alan
+                    LastUpdatedUserName = "SYSTEM" // Son güncelleyen kullanıcı, NOT NULL alan
                 };
 
                 // Servis çağrısını yap
