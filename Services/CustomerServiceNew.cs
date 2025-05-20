@@ -68,35 +68,35 @@ namespace ErpMobile.Api.Services
                             
                             if (request.CustomerTypeCode == 3) // Müşteri
                             {
-                                // Önce 120. ile başlayan son kodu kontrol et
-                                string query = "SELECT TOP 1 CurrAccCode FROM cdCurrAcc WHERE CurrAccCode LIKE '120.%' ORDER BY CurrAccCode DESC";
+                                // Önce 121. ile başlayan son kodu kontrol et
+                                string query = "SELECT TOP 1 CurrAccCode FROM cdCurrAcc WHERE CurrAccCode LIKE '121.%' ORDER BY CurrAccCode DESC";
                                 string lastCode = await connection.QueryFirstOrDefaultAsync<string>(query);
                                 
                                 if (!string.IsNullOrEmpty(lastCode))
                                 {
-                                    // "120." sonrasını sayısal değere çevir
+                                    // "121." sonrasını sayısal değere çevir
                                     string lastNumberStr = lastCode.Substring(4);
                                     if (int.TryParse(lastNumberStr, out int lastNum))
                                     {
-                                        // Eğer 999'dan büyükse, 121 serisine geç
-                                        if (lastNum >= 999)
+                                        // Eğer 9999'dan büyükse, 122 serisine geç
+                                        if (lastNum >= 9999)
                                         {
-                                            // 121. ile başlayan son kodu kontrol et
-                                            query = "SELECT TOP 1 CurrAccCode FROM cdCurrAcc WHERE CurrAccCode LIKE '121.%' ORDER BY CurrAccCode DESC";
-                                            string lastCode121 = await connection.QueryFirstOrDefaultAsync<string>(query);
+                                            // 122. ile başlayan son kodu kontrol et
+                                            query = "SELECT TOP 1 CurrAccCode FROM cdCurrAcc WHERE CurrAccCode LIKE '122.%' ORDER BY CurrAccCode DESC";
+                                            string lastCode122 = await connection.QueryFirstOrDefaultAsync<string>(query);
                                             
-                                            if (!string.IsNullOrEmpty(lastCode121))
+                                            if (!string.IsNullOrEmpty(lastCode122))
                                             {
-                                                // "121." sonrasını sayısal değere çevir
-                                                string lastNum121Str = lastCode121.Substring(4);
-                                                if (int.TryParse(lastNum121Str, out int lastNum121))
+                                                // "122." sonrasını sayısal değere çevir
+                                                string lastNum122Str = lastCode122.Substring(4);
+                                                if (int.TryParse(lastNum122Str, out int lastNum122))
                                                 {
-                                                    prefix = "121.";
-                                                    nextNumber = lastNum121 + 1;
+                                                    prefix = "122.";
+                                                    nextNumber = lastNum122 + 1;
                                                 }
                                                 else
                                                 {
-                                                    prefix = "121.";
+                                                    prefix = "122.";
                                                     nextNumber = 1;
                                                 }
                                             }
@@ -108,20 +108,20 @@ namespace ErpMobile.Api.Services
                                         }
                                         else
                                         {
-                                            // 120 serisinde devam et
-                                            prefix = "120.";
+                                            // 121 serisinde devam et
+                                            prefix = "121.";
                                             nextNumber = lastNum + 1;
                                         }
                                     }
                                     else
                                     {
-                                        prefix = "120.";
+                                        prefix = "121.";
                                         nextNumber = 1;
                                     }
                                 }
                                 else
                                 {
-                                    prefix = "120.";
+                                    prefix = "121.";
                                     nextNumber = 1;
                                 }
                             }

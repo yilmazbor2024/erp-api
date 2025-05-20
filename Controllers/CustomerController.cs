@@ -712,36 +712,47 @@ namespace ErpMobile.Api.Controllers
                     _logger.LogInformation("\u001b[33m[CustomerController.CreateCustomerNew] - E-İrsaliye başlangıç tarihi ayarlandı: {EShipmentStartDate}\u001b[0m", request.EShipmentStartDate);
                 }
                 
-                // MANUEL DÜZELTME - Frontend'den gelen veriler düzeltilene kadar geçici çözüm
-                // Görüntüden vergi dairesi, para birimi ve e-fatura/e-irsaliye bilgilerini al
+                // Frontend'den gelen vergi dairesi ve vergi numarası bilgilerini kontrol et
                 if (string.IsNullOrEmpty(request.TaxOfficeCode))
                 {
-                    request.TaxOfficeCode = "ACIPAYAM VERGİ DAİRESİ";
-                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - Vergi dairesi manuel olarak eklendi: {TaxOfficeCode}\u001b[0m", request.TaxOfficeCode);
+                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - Vergi dairesi boş geldi\u001b[0m");
+                }
+                
+                if (string.IsNullOrEmpty(request.TaxNumber))
+                {
+                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - Vergi numarası boş geldi\u001b[0m");
                 }
                 
                 // Para birimi kontrolü
-                if (request.CurrencyCode == "TRY")
+                if (string.IsNullOrEmpty(request.CurrencyCode))
                 {
-                    request.CurrencyCode = "USD";
-                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - Para birimi manuel olarak USD olarak düzeltildi\u001b[0m");
+                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - Para birimi boş geldi\u001b[0m");
+                }
+                else
+                {
+                    _logger.LogInformation("\u001b[33m[CustomerController.CreateCustomerNew] - Para birimi: {CurrencyCode}\u001b[0m", request.CurrencyCode);
                 }
                 
-                // E-Fatura ve E-İrsaliye bilgilerini manuel olarak düzelt
-                if (!request.IsSubjectToEInvoice)
+                // E-Fatura bilgilerini kontrol et
+                if (request.IsSubjectToEInvoice && !request.EInvoiceStartDate.HasValue)
                 {
-                    request.IsSubjectToEInvoice = true;
-                    request.EInvoiceStartDate = DateTime.Parse("2023-08-05");
-                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - E-Fatura bilgileri manuel olarak düzeltildi: {Date}\u001b[0m", 
-                        request.EInvoiceStartDate.Value.ToString("yyyy-MM-dd"));
+                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - E-Fatura mükellefi seçili ama başlangıç tarihi boş\u001b[0m");
+                }
+                else if (request.IsSubjectToEInvoice)
+                {
+                    _logger.LogInformation("\u001b[33m[CustomerController.CreateCustomerNew] - E-Fatura bilgileri: {IsSubject}, {Date}\u001b[0m", 
+                        request.IsSubjectToEInvoice, request.EInvoiceStartDate?.ToString("yyyy-MM-dd") ?? "Tarih yok");
                 }
                 
-                if (!request.IsSubjectToEShipment)
+                // E-İrsaliye bilgilerini kontrol et
+                if (request.IsSubjectToEShipment && !request.EShipmentStartDate.HasValue)
                 {
-                    request.IsSubjectToEShipment = true;
-                    request.EShipmentStartDate = DateTime.Parse("2023-04-05");
-                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - E-İrsaliye bilgileri manuel olarak düzeltildi: {Date}\u001b[0m", 
-                        request.EShipmentStartDate.Value.ToString("yyyy-MM-dd"));
+                    _logger.LogWarning("\u001b[33m[CustomerController.CreateCustomerNew] - E-İrsaliye mükellefi seçili ama başlangıç tarihi boş\u001b[0m");
+                }
+                else if (request.IsSubjectToEShipment)
+                {
+                    _logger.LogInformation("\u001b[33m[CustomerController.CreateCustomerNew] - E-İrsaliye bilgileri: {IsSubject}, {Date}\u001b[0m", 
+                        request.IsSubjectToEShipment, request.EShipmentStartDate?.ToString("yyyy-MM-dd") ?? "Tarih yok");
                 }
                 
                 // Düzeltilmiş request'i logla
@@ -765,7 +776,7 @@ namespace ErpMobile.Api.Controllers
                     {
                         // Müşteri tipi 3 (Customer) veya 1 (Vendor) olabilir
                         byte currAccTypeCode = 3; // Varsayılan olarak müşteri (Customer)
-                        string prefix = "120."; // Müşteriler için 120.XXX formatı
+                        string prefix = "121."; // Müşteriler için 120.XXX formatı
                         
                         // CustomerTypeCode değerini kullan
                         currAccTypeCode = request.CustomerTypeCode;
