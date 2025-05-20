@@ -236,5 +236,20 @@ namespace ErpMobile.Api.Models.Requests
         /// E-Fatura mükellefi mi?
         /// </summary>
         public bool IsSubjectToEInvoice { get; set; } = false;
+
+        /// <summary>
+        /// E-Fatura başlangıç tarihi
+        /// </summary>
+        public DateTime? EInvoiceStartDate { get; set; } = null;
+
+        /// <summary>
+        /// E-İrsaliye mükellefi mi?
+        /// </summary>
+        public bool IsSubjectToEShipment { get; set; } = false;
+
+        /// <summary>
+        /// E-İrsaliye başlangıç tarihi
+        /// </summary>
+        public DateTime? EShipmentStartDate { get; set; } = null;
     }
 }

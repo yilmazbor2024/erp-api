@@ -37,6 +37,29 @@ namespace ErpMobile.Api.Services
             _contactService = new CustomerContactService(loggerFactory.CreateLogger<CustomerContactService>(), configuration);
             _communicationService = new CustomerCommunicationService(loggerFactory.CreateLogger<CustomerCommunicationService>(), configuration);
             _locationService = new CustomerLocationService(loggerFactory.CreateLogger<CustomerLocationService>(), configuration);
+            
+            _logger.LogInformation("[CustomerBasicService.Constructor] - CustomerBasicService başlatıldı");
+        }
+
+        /// <summary>
+        /// Yeni müşteri oluşturur (Geliştirilmiş versiyon) - Detaylı yanıt döndürür
+        /// </summary>
+        /// <param name="request">Müşteri oluşturma isteği</param>
+        /// <returns>Oluşturulan müşteri bilgileri</returns>
+        public async Task<CustomerDetailResponse> CreateCustomerDetailAsync(CustomerCreateRequestNew request)
+        {
+            try
+            {
+                _logger.LogInformation("[CustomerBasicService.CreateCustomerDetailAsync] - Geliştirilmiş API ile müşteri oluşturma isteği alındı");
+                
+                // Bu metot şu an için desteklenmiyor
+                throw new NotImplementedException("Bu metot henüz uygulanmadı.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[CustomerBasicService.CreateCustomerDetailAsync] - Geliştirilmiş API ile müşteri oluşturma hatası: {Message}", ex.Message);
+                throw;
+            }
         }
 
         /// <summary>
@@ -48,17 +71,22 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.CustomerExistsAsync] - Müşteri varlık kontrolü başlatıldı: {CustomerCode}", customerCode);
+                
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
                     var query = "SELECT COUNT(1) FROM cdCurrAcc WHERE CurrAccCode = @CustomerCode AND CurrAccTypeCode = 3";
+                    _logger.LogInformation("[CustomerBasicService.CustomerExistsAsync] - SQL: {Query}", query);
+                    
                     var count = await connection.ExecuteScalarAsync<int>(query, new { CustomerCode = customerCode });
+                    _logger.LogInformation("[CustomerBasicService.CustomerExistsAsync] - Sonuç: {Count}", count);
                     return count > 0;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri varlık kontrolü sırasında hata oluştu: {CustomerCode}", customerCode);
+                _logger.LogError(ex, "[CustomerBasicService.CustomerExistsAsync] - Müşteri varlık kontrolü sırasında hata oluştu: {CustomerCode}", customerCode);
                 return false;
             }
         }
@@ -67,6 +95,8 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.GetCustomerListAsync] - Müşteri listesi getirme isteği alındı");
+                
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
@@ -168,7 +198,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting customer list. Filter: {@Filter}", filter);
+                _logger.LogError(ex, "[CustomerBasicService.GetCustomerListAsync] - Müşteri listesi getirme sırasında hata oluştu. Filter: {@Filter}", filter);
                 throw;
             }
         }
@@ -177,6 +207,8 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.GetCustomerByCodeAsync] - Müşteri detay bilgisi getirme isteği alındı: {CustomerCode}", customerCode);
+                
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
@@ -296,7 +328,7 @@ namespace ErpMobile.Api.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Finansal bilgiler getirilirken hata oluştu. CustomerCode: {CustomerCode}", customerCode);
+                        _logger.LogWarning(ex, "[CustomerBasicService.GetCustomerByCodeAsync] - Finansal bilgiler getirilirken hata oluştu. CustomerCode: {CustomerCode}", customerCode);
                         // Finansal bilgileri getirirken hata oluşursa, işlemi durdurmadan devam et
                     }
 
@@ -305,7 +337,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting customer by code. CustomerCode: {CustomerCode}, CurrAccTypeCode: {CurrAccTypeCode}", customerCode, currAccTypeCode);
+                _logger.LogError(ex, "[CustomerBasicService.GetCustomerByCodeAsync] - Müşteri detay bilgisi getirme sırasında hata oluştu. CustomerCode: {CustomerCode}, CurrAccTypeCode: {CurrAccTypeCode}", customerCode, currAccTypeCode);
                 throw;
             }
         }
@@ -314,6 +346,7 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - Geliştirilmiş API ile müşteri oluşturma isteği alındı");
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
@@ -321,59 +354,37 @@ namespace ErpMobile.Api.Services
                     {
                         try
                         {
-                            // Temel müşteri bilgilerini ekleme - MersisNum, TitleCode, Patronym, DueDateFormulaCode, DiscountGroupCode, PaymentPlanGroupCode, RiskLimit ve CreditLimit alanları gönderilmiyor
-                            string sql;
-                            object parameters;
-                            
-                            // Boş string kontrolleri yapıp SQL sorgusunu dinamik oluştur
-                            bool hasIdentityNum = !string.IsNullOrEmpty(request.IdentityNum);
-                            bool hasTaxNumber = !string.IsNullOrEmpty(request.TaxNumber);
-                            bool hasTaxOfficeCode = !string.IsNullOrEmpty(request.TaxOfficeCode);
-                            
-                            // SQL sorgusu başlangıcı
-                            string sqlStart = @"
-                                INSERT INTO cdCurrAcc (";
-                                
-                            // SQL sorgusu alanları
-                            string sqlFields = @"
+                            // Temel müşteri bilgilerini oluştur
+                            _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - Temel müşteri bilgileri oluşturuluyor");
+                            string insertQuery = @"
+                                INSERT INTO cdCurrAcc (
                                     CurrAccTypeCode, CurrAccCode, CustomerTypeCode, CurrencyCode, IsVIP, PromotionGroupCode,
                                     CompanyCode, OfficeCode, ";
                                     
                             // Koşullu alanlar
-                            if (hasIdentityNum) sqlFields += "IdentityNum, ";
-                            if (hasTaxNumber) sqlFields += "TaxNumber, ";
-                            if (hasTaxOfficeCode) sqlFields += "TaxOfficeCode, ";
+                            if (!string.IsNullOrEmpty(request.IdentityNum)) insertQuery += "IdentityNum, ";
+                            if (!string.IsNullOrEmpty(request.TaxNumber)) insertQuery += "TaxNumber, ";
+                            if (!string.IsNullOrEmpty(request.TaxOfficeCode)) insertQuery += "TaxOfficeCode, ";
                             
                             // Kalan alanlar
-                            sqlFields += @"IsSubjectToEInvoice,
+                            insertQuery += @"IsSubjectToEInvoice,
                                     UseDBSIntegration, IsBlocked, CreatedDate, CreatedUsername, LastUpdatedDate, LastUpdatedUsername,
-                                    IsIndividualAcc";
-                                    
-                            // SQL sorgusu VALUES başlangıcı
-                            string sqlValues = @"
-                                )
-                                VALUES (";
-                                
-                            // SQL sorgusu VALUES değerleri
-                            string sqlValueFields = @"
+                                    IsIndividualAcc)
+                                VALUES (
                                     3, @CustomerCode, @CustomerTypeCode, @CurrencyCode, @IsVIP, @PromotionGroupCode,
                                     @CompanyCode, @OfficeCode, ";
                                     
                             // Koşullu değerler
-                            if (hasIdentityNum) sqlValueFields += "@IdentityNum, ";
-                            if (hasTaxNumber) sqlValueFields += "@TaxNumber, ";
-                            if (hasTaxOfficeCode) sqlValueFields += "@TaxOfficeCode, ";
+                            if (!string.IsNullOrEmpty(request.IdentityNum)) insertQuery += "@IdentityNum, ";
+                            if (!string.IsNullOrEmpty(request.TaxNumber)) insertQuery += "@TaxNumber, ";
+                            if (!string.IsNullOrEmpty(request.TaxOfficeCode)) insertQuery += "@TaxOfficeCode, ";
                             
                             // Kalan değerler
-                            sqlValueFields += @"@IsSubjectToEInvoice,
+                            insertQuery += @"@IsSubjectToEInvoice,
                                     @UseDBSIntegration, @IsBlocked, GETDATE(), @CreatedUserName, GETDATE(), @LastUpdatedUserName,
-                                    @IsRealPerson";
-                                    
-                            // SQL sorgusunu birleştir
-                            sql = sqlStart + sqlFields + sqlValues + sqlValueFields + "\n                                )";
+                                    @IsRealPerson)";
                             
-                            // Parametreleri oluştur
-                            parameters = new
+                            var parameters = new
                             {
                                 request.CustomerCode,
                                 request.CustomerTypeCode,
@@ -382,9 +393,9 @@ namespace ErpMobile.Api.Services
                                 request.PromotionGroupCode,
                                 request.CompanyCode,
                                 request.OfficeCode,
-                                IdentityNum = hasIdentityNum ? request.IdentityNum : null,
-                                TaxNumber = hasTaxNumber ? request.TaxNumber : null,
-                                TaxOfficeCode = hasTaxOfficeCode ? request.TaxOfficeCode : null,
+                                IdentityNum = !string.IsNullOrEmpty(request.IdentityNum) ? request.IdentityNum : null,
+                                TaxNumber = !string.IsNullOrEmpty(request.TaxNumber) ? request.TaxNumber : null,
+                                TaxOfficeCode = !string.IsNullOrEmpty(request.TaxOfficeCode) ? request.TaxOfficeCode : null,
                                 request.IsSubjectToEInvoice,
                                 request.UseDBSIntegration,
                                 request.IsBlocked,
@@ -394,27 +405,26 @@ namespace ErpMobile.Api.Services
                                 // MersisNum, TitleCode, Patronym, DueDateFormulaCode, DiscountGroupCode, PaymentPlanGroupCode, RiskLimit, CreditLimit parametreleri kaldırıldı
                             };
                             
-                            await connection.ExecuteAsync(sql, parameters, transaction);
+                            await connection.ExecuteAsync(insertQuery, parameters, transaction);
 
-                            // Müşteri açıklamasını ekleme
-                            if (!string.IsNullOrEmpty(request.CustomerName))
+                            // Müşteri açıklamasını oluştur
+                            _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - Müşteri açıklaması oluşturuluyor");
+                            string descInsertQuery = @"
+                                INSERT INTO cdCurrAccDesc (
+                                    CurrAccTypeCode, CurrAccCode, LangCode, CurrAccDescription
+                                )
+                                VALUES (
+                                    3, @CustomerCode, 'TR', @CustomerName
+                                )";
+
+                            await connection.ExecuteAsync(descInsertQuery, new
                             {
-                                var descSql = @"
-                                    INSERT INTO cdCurrAccDesc (
-                                        CurrAccTypeCode, CurrAccCode, LangCode, CurrAccDescription
-                                    )
-                                    VALUES (
-                                        3, @CustomerCode, 'TR', @CustomerName
-                                    )";
-
-                                await connection.ExecuteAsync(descSql, new
-                                {
-                                    request.CustomerCode,
-                                    request.CustomerName
-                                }, transaction);
-                            }
+                                request.CustomerCode,
+                                request.CustomerName
+                            }, transaction);
                             
                             // prCurrAccDefault tablosuna kayıt ekleme
+                            _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - prCurrAccDefault tablosuna kayıt ekleme");
                             var defaultSql = @"
                                 INSERT INTO prCurrAccDefault (
                                     CurrAccTypeCode, CurrAccCode, CreatedUserName, CreatedDate, 
@@ -433,6 +443,7 @@ namespace ErpMobile.Api.Services
                             }, transaction);
 
                             // Adres bilgilerini ekleme
+                            _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - Adres bilgileri ekleniyor");
                             if (request.Addresses != null && request.Addresses.Any())
                             {
                                 foreach (var address in request.Addresses)
@@ -464,6 +475,7 @@ namespace ErpMobile.Api.Services
                             }
 
                             // İletişim bilgilerini ekleme
+                            _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - İletişim bilgileri ekleniyor");
                             if (request.Communications != null && request.Communications.Any())
                             {
                                 foreach (var communication in request.Communications)
@@ -494,6 +506,7 @@ namespace ErpMobile.Api.Services
                             }
 
                             // Kişi bilgilerini ekleme
+                            _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - Kişi bilgileri ekleniyor");
                             if (request.Contacts != null && request.Contacts.Any())
                             {
                                 foreach (var contact in request.Contacts)
@@ -524,7 +537,7 @@ namespace ErpMobile.Api.Services
                         catch (Exception ex)
                         {
                             await transaction.RollbackAsync();
-                            _logger.LogError(ex, "Error occurred during customer creation. Request: {@Request}", request);
+                            _logger.LogError(ex, "[CustomerBasicService.CreateCustomerAsync] - Müşteri oluşturma sırasında hata oluştu. Request: {@Request}", request);
                             throw; // Re-throw the exception after logging and rollback
                         }
                     }
@@ -532,7 +545,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred during customer creation. Request: {@Request}", request);
+                _logger.LogError(ex, "[CustomerBasicService.CreateCustomerAsync] - Müşteri oluşturma sırasında hata oluştu. Request: {@Request}", request);
                 throw;
             }
         }
@@ -541,6 +554,7 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - Müşteri oluşturma isteği alındı");
                 _logger.LogInformation("Müşteri oluşturma işlemi başlatıldı: {CustomerCode}", request.CustomerCode);
 
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
@@ -552,6 +566,7 @@ namespace ErpMobile.Api.Services
                         try
                         {
                             // Müşteri temel bilgilerini oluştur
+                            _logger.LogInformation("[CustomerBasicService.CreateCustomerAsync] - Temel müşteri bilgileri oluşturuluyor");
                             var customerId = await CreateCustomerBasicAsync(connection, transaction, request);
 
                             // İşlemi tamamla
@@ -563,7 +578,7 @@ namespace ErpMobile.Api.Services
                         catch (Exception ex)
                         {
                             await transaction.RollbackAsync();
-                            _logger.LogError(ex, "Müşteri oluşturma işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
+                            _logger.LogError(ex, "[CustomerBasicService.CreateCustomerAsync] - Müşteri oluşturma işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
                             throw;
                         }
                     }
@@ -571,7 +586,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri oluşturma işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
+                _logger.LogError(ex, "[CustomerBasicService.CreateCustomerAsync] - Müşteri oluşturma işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
                 throw;
             }
         }
@@ -584,14 +599,16 @@ namespace ErpMobile.Api.Services
 
         public async Task<List<CustomerTypeResponse>> GetCustomerTypesAsync()
         {
+            _logger.LogInformation("[CustomerBasicService.GetCustomerTypesAsync] - Müşteri tipleri getirme isteği alındı");
             return await GetCustomerTypesInternalAsync("TR");
         }
 
         // Dahili metot - dil kodu parametresi alır
-        private async Task<List<CustomerTypeResponse>> GetCustomerTypesInternalAsync(string langCode = "TR")
+        private async Task<List<CustomerTypeResponse>> GetCustomerTypesInternalAsync(string langCode)
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.GetCustomerTypesInternalAsync] - Dahili müşteri tipleri getirme isteği alındı: {LangCode}", langCode);
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
@@ -618,12 +635,12 @@ namespace ErpMobile.Api.Services
             catch (SqlException ex) // Catch specific SQL errors
             {
                 // Log specific SQL errors
-                _logger.LogWarning(ex, "Database error occurred while getting customer types. Will return empty list.");
+                _logger.LogWarning(ex, "[CustomerBasicService.GetCustomerTypesInternalAsync] - Database error occurred while getting customer types. Will return empty list.");
                 return new List<CustomerTypeResponse>(); // Return empty on SQL error
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting customer types. Will return empty list.");
+                _logger.LogError(ex, "[CustomerBasicService.GetCustomerTypesInternalAsync] - Error occurred while getting customer types. Will return empty list.");
                 return new List<CustomerTypeResponse>(); // Return empty on general error
             }
         }
@@ -632,6 +649,7 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.GetCustomerDiscountGroupsAsync] - Müşteri indirim grupları getirme isteği alındı");
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
@@ -651,7 +669,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting customer discount groups. Will return empty list.");
+                _logger.LogError(ex, "[CustomerBasicService.GetCustomerDiscountGroupsAsync] - Error occurred while getting customer discount groups. Will return empty list.");
                 return new List<CustomerDiscountGroupResponse>(); // Return empty on error
             }
         }
@@ -660,6 +678,7 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.UpdateCustomerAsync] - Müşteri güncelleme isteği alındı: {CustomerCode}", request.CustomerCode);
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
@@ -668,6 +687,7 @@ namespace ErpMobile.Api.Services
                         try
                         {
                             // Temel müşteri bilgilerini güncelleme
+                            _logger.LogInformation("[CustomerBasicService.UpdateCustomerAsync] - Temel müşteri bilgileri güncelleniyor");
                             var sql = @"
                                 UPDATE cdCurrAcc SET
                                     CustomerTypeCode = @CustomerTypeCode,
@@ -737,7 +757,7 @@ namespace ErpMobile.Api.Services
                         catch (Exception ex)
                         {
                             await transaction.RollbackAsync();
-                            _logger.LogError(ex, "Error occurred during customer update. Request: {@Request}", request);
+                            _logger.LogError(ex, "[CustomerBasicService.UpdateCustomerAsync] - Müşteri güncellenirken hata oluştu. Request: {@Request}", request);
                             throw; // Re-throw the exception after logging and rollback
                         }
                     }
@@ -745,7 +765,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred during customer update. Request: {@Request}", request);
+                _logger.LogError(ex, "[CustomerBasicService.UpdateCustomerAsync] - Müşteri güncellenirken hata oluştu. Request: {@Request}", request);
                 throw;
             }
         }
@@ -770,6 +790,7 @@ namespace ErpMobile.Api.Services
                         try
                         {
                             // Müşteri temel bilgilerini güncelleme SQL sorgusu
+                            _logger.LogInformation("[CustomerBasicService.UpdateCustomerAsync] - Müşteri temel bilgileri güncelleniyor");
                             var sql = @"
                                 UPDATE cdCurrAcc
                                 SET
@@ -802,6 +823,7 @@ namespace ErpMobile.Api.Services
                             await connection.ExecuteAsync(sql, parameters, transaction);
                             
                             // Müşteri açıklama bilgilerini güncelleme
+                            _logger.LogInformation("[CustomerBasicService.UpdateCustomerAsync] - Müşteri açıklama bilgileri güncelleniyor");
                             var descSql = @"
                                 UPDATE cdCurrAccDesc
                                 SET
@@ -907,7 +929,7 @@ namespace ErpMobile.Api.Services
                         catch (Exception ex)
                         {
                             await transaction.RollbackAsync();
-                            _logger.LogError(ex, "Müşteri güncelleme işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
+                            _logger.LogError(ex, "[CustomerBasicService.UpdateCustomerAsync] - Müşteri güncelleme işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
                             
                             return new CustomerUpdateResponseNew
                             {
@@ -921,7 +943,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri güncelleme işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
+                _logger.LogError(ex, "[CustomerBasicService.CreateCustomerAsync] - Müşteri oluşturma işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
                 
                 return new CustomerUpdateResponseNew
                 {
@@ -931,7 +953,6 @@ namespace ErpMobile.Api.Services
                 };
             }
         }
-
         /// <summary>
         /// Müşteri finansal bilgilerini günceller
         /// </summary>
@@ -971,6 +992,7 @@ namespace ErpMobile.Api.Services
                     }
                     
                     // Müşteri finansal bilgilerini güncelleme SQL sorgusu
+                    _logger.LogInformation("[CustomerBasicService.UpdateCustomerFinancialAsync] - Müşteri finansal bilgileri güncelleniyor");
                     var sql = @"
                         UPDATE cdCurrAcc
                         SET
@@ -1024,7 +1046,7 @@ namespace ErpMobile.Api.Services
                     
                     var result = await connection.ExecuteAsync(sql, parameters);
                     
-                    _logger.LogInformation("Müşteri finansal bilgileri güncelleme işlemi tamamlandı: {CustomerCode}, Etkilenen satır: {AffectedRows}", request.CustomerCode, result);
+                    _logger.LogInformation("[CustomerBasicService.UpdateCustomerFinancialAsync] - Müşteri finansal bilgileri güncelleme işlemi tamamlandı: {CustomerCode}, Etkilenen satır: {AffectedRows}", request.CustomerCode, result);
                     
                     if (result > 0)
                     {
@@ -1042,7 +1064,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri finansal bilgileri güncelleme işlemi sırasında hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
+                _logger.LogError(ex, "[CustomerBasicService.UpdateCustomerFinancialAsync] - Müşteri finansal bilgileri güncellenirken hata oluştu: {CustomerCode}, Hata: {Message}", request.CustomerCode, ex.Message);
                 
                 response.Success = false;
                 response.Message = $"Müşteri finansal bilgileri güncellenirken hata oluştu: {ex.Message}";
@@ -1249,11 +1271,13 @@ namespace ErpMobile.Api.Services
         #region Address Operations
         public async Task<List<AddressTypeResponse>> GetAddressTypesAsync()
         {
+            _logger.LogInformation("[CustomerBasicService.GetAddressTypesAsync] - Adres tipleri getirme isteği alındı");
             return await _addressService.GetAddressTypesAsync();
         }
 
         public async Task<AddressTypeResponse> GetAddressTypeByCodeAsync(string code)
         {
+            _logger.LogInformation("[CustomerBasicService.GetAddressTypeByCodeAsync] - Adres tipi getirme isteği alındı: {Code}", code);
             return await _addressService.GetAddressTypeByCodeAsync(code);
         }
 
@@ -1269,6 +1293,7 @@ namespace ErpMobile.Api.Services
 
         public async Task<bool> DeleteAddressTypeAsync(string code)
         {
+            _logger.LogInformation("[CustomerBasicService.DeleteAddressTypeAsync] - Adres tipi silme isteği alındı: {Code}", code);
             return await _addressService.DeleteAddressTypeAsync(code);
         }
 
@@ -1310,6 +1335,7 @@ namespace ErpMobile.Api.Services
 
         public async Task<List<CustomerAddressResponse>> GetCustomerAddressesAsync(string customerCode)
         {
+            _logger.LogInformation("[CustomerBasicService.GetCustomerAddressesAsync] - Müşteri adres listesi getirme isteği alındı: {CustomerCode}", customerCode);
             return await _addressService.GetCustomerAddressesAsync(customerCode);
         }
         #endregion
@@ -1344,21 +1370,25 @@ namespace ErpMobile.Api.Services
 
         public async Task<bool> DeleteContactAsync(string customerCode, string contactTypeCode)
         {
+            _logger.LogInformation("[CustomerBasicService.DeleteContactAsync] - Kişi silme isteği alındı: {CustomerCode}, {ContactTypeCode}", customerCode, contactTypeCode);
             return await _contactService.DeleteContactAsync(customerCode, contactTypeCode);
         }
 
         public async Task<List<CustomerContactResponse>> GetCustomerContactsAsync(string customerCode)
         {
+            _logger.LogInformation("[CustomerBasicService.GetCustomerContactsAsync] - Müşteri kişi listesi getirme isteği alındı: {CustomerCode}", customerCode);
             return await _contactService.GetCustomerContactsAsync(customerCode);
         }
 
         public async Task<List<ContactTypeResponse>> GetContactTypesAsync()
         {
+            _logger.LogInformation("[CustomerBasicService.GetContactTypesAsync] - Kişi tipleri getirme isteği alındı");
             return await _contactService.GetContactTypesAsync();
         }
 
         public async Task<ContactTypeResponse> GetContactTypeByCodeAsync(string code)
         {
+            _logger.LogInformation("[CustomerBasicService.GetContactTypeByCodeAsync] - Kişi tipi getirme isteği alındı: {Code}", code);
             return await _contactService.GetContactTypeByCodeAsync(code);
         }
         #endregion
@@ -1366,6 +1396,7 @@ namespace ErpMobile.Api.Services
         #region Communication Operations
         public async Task<List<CustomerCommunicationResponse>> GetCustomerCommunicationsAsync(string customerCode)
         {
+            _logger.LogInformation("[CustomerBasicService.GetCustomerCommunicationsAsync] - Müşteri iletişim bilgileri getirme isteği alındı: {CustomerCode}", customerCode);
             return await _communicationService.GetCustomerCommunicationsAsync(customerCode);
         }
         #endregion
@@ -1373,36 +1404,43 @@ namespace ErpMobile.Api.Services
         #region Location Operations
         public async Task<List<RegionResponse>> GetRegionsAsync()
         {
+            _logger.LogInformation("[CustomerBasicService.GetRegionsAsync] - Bölge listesi getirme isteği alındı");
             return await _locationService.GetRegionsAsync();
         }
 
         public async Task<List<StateResponse>> GetStatesAsync(string countryCode = null)
         {
+            _logger.LogInformation("[CustomerBasicService.GetStatesAsync] - İl listesi getirme isteği alındı");
             return await _locationService.GetStatesAsync();
         }
 
         public async Task<List<CityResponse>> GetCitiesAsync()
         {
+            _logger.LogInformation("[CustomerBasicService.GetCitiesAsync] - Şehir listesi getirme isteği alındı");
             return await _locationService.GetCitiesAsync();
         }
 
         public async Task<List<CityResponse>> GetCitiesByStateAsync(string stateCode)
         {
+            _logger.LogInformation("[CustomerBasicService.GetCitiesByStateAsync] - İle göre şehir listesi getirme isteği alındı: {StateCode}", stateCode);
             return await _locationService.GetCitiesByStateAsync(stateCode);
         }
 
         public async Task<List<CityResponse>> GetCitiesByRegionAsync(string regionCode)
         {
+            _logger.LogInformation("[CustomerBasicService.GetCitiesByRegionAsync] - Bölgeye göre şehir listesi getirme isteği alındı: {RegionCode}", regionCode);
             return await _locationService.GetCitiesByRegionAsync(regionCode);
         }
 
         public async Task<List<DistrictResponse>> GetDistrictsByCityAsync(string cityCode)
         {
+            _logger.LogInformation("[CustomerBasicService.GetDistrictsByCityAsync] - Şehire göre ilçe listesi getirme isteği alındı: {CityCode}", cityCode);
             return await _locationService.GetDistrictsByCityAsync(cityCode);
         }
 
         public async Task<List<DistrictResponse>> GetAllDistrictsAsync()
         {
+            _logger.LogInformation("[CustomerBasicService.GetAllDistrictsAsync] - Tüm ilçe listesi getirme isteği alındı");
             return await _locationService.GetAllDistrictsAsync();
         }
 
@@ -1410,6 +1448,7 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                _logger.LogInformation("[CustomerBasicService.GetCustomerPaymentPlanGroupsAsync] - Müşteri ödeme planı grupları getirme isteği alındı");
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
@@ -1429,13 +1468,14 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting customer payment plan groups. Will return empty list.");
+                _logger.LogError(ex, "[CustomerBasicService.GetCustomerPaymentPlanGroupsAsync] - Müşteri ödeme planı grupları getirilirken hata oluştu. Boş liste döndürülecek.");
                 return new List<CustomerPaymentPlanGroupResponse>(); // Return empty on error
             }
         }
 
         public async Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync(string langCode = "TR")
         {
+            _logger.LogInformation("[CustomerBasicService.GetTaxOfficesAsync] - Vergi daireleri getirme isteği alındı: {LangCode}", langCode);
             return await _locationService.GetTaxOfficesAsync(langCode);
         }
 

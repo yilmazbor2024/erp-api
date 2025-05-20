@@ -35,8 +35,11 @@ namespace ErpMobile.Api.Services
         /// <returns>Oluşturulan müşteri bilgileri</returns>
         public async Task<CustomerCreateResponseNew> CreateCustomerAsync(CustomerCreateRequestNew request)
         {
+            _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Başlatıldı\u001b[0m");
+            
             if (request == null)
             {
+                _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Geçersiz istek (null)\u001b[0m");
                 return new CustomerCreateResponseNew
                 {
                     Success = false,
@@ -46,7 +49,7 @@ namespace ErpMobile.Api.Services
 
             try
             {
-                _logger.LogInformation("Yeni müşteri oluşturuluyor: {CustomerCode}", request.CustomerCode);
+                _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Yeni müşteri oluşturuluyor: {CustomerCode}\u001b[0m", request.CustomerCode);
 
                 // Müşteri kodu elle verilmişse, doğrudan kullan
                 if (string.IsNullOrEmpty(request.CustomerCode))
@@ -151,12 +154,12 @@ namespace ErpMobile.Api.Services
                             }
                             
                             request.CustomerCode = newCode;
-                            _logger.LogInformation("Otomatik müşteri kodu oluşturuldu: {CustomerCode}", request.CustomerCode);
+                            _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Otomatik müşteri kodu oluşturuldu: {CustomerCode}\u001b[0m", request.CustomerCode);
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Müşteri kodu otomatik oluşturulurken hata oluştu");
+                        _logger.LogError(ex, "\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri kodu otomatik oluşturulurken hata oluştu\u001b[0m");
                         return new CustomerCreateResponseNew
                         {
                             Success = false,
@@ -167,7 +170,7 @@ namespace ErpMobile.Api.Services
                 }
                 else
                 {
-                    _logger.LogInformation("Müşteri kodu elle verildi: {CustomerCode}", request.CustomerCode);
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri kodu elle verildi: {CustomerCode}\u001b[0m", request.CustomerCode);
                 }
 
                 // Veritabanı bağlantısı
@@ -175,13 +178,16 @@ namespace ErpMobile.Api.Services
                 {
                     await connection.OpenAsync();
 
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri kodu kontrolü yapılıyor: {CustomerCode}\u001b[0m", request.CustomerCode);
                     // Müşteri zaten var mı kontrol et
                     var existingCustomer = await connection.QueryFirstOrDefaultAsync<int>(
                         "SELECT COUNT(1) FROM cdCurrAcc WHERE CurrAccCode = @CurrAccCode AND CurrAccTypeCode = @CurrAccTypeCode",
                         new { CurrAccCode = request.CustomerCode, CurrAccTypeCode = request.CustomerTypeCode });
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri kodu kontrolü sonucu: {ExistingCount}\u001b[0m", existingCustomer);
 
                     if (existingCustomer > 0)
                     {
+                        _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri kodu zaten kullanımda: {CustomerCode}\u001b[0m", request.CustomerCode);
                         return new CustomerCreateResponseNew
                         {
                             Success = false,
@@ -190,31 +196,239 @@ namespace ErpMobile.Api.Services
                         };
                     }
 
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri oluşturma parametreleri hazırlanıyor\u001b[0m");
                     // Müşteri oluşturma için parametreleri hazırla
                     var parameters = new DynamicParameters();
                     parameters.Add("@CurrAccTypeCode", request.CustomerTypeCode);
                     parameters.Add("@CurrAccCode", request.CustomerCode);
-                    parameters.Add("@FirstName", request.CustomerName);
-                    parameters.Add("@LastName", request.CustomerSurname);
                     parameters.Add("@CompanyCode", request.CompanyCode);
                     parameters.Add("@OfficeCode", request.OfficeCode);
                     parameters.Add("@CreatedUserName", request.CreatedUserName);
                     parameters.Add("@DataLanguageCode", "TR"); // Varsayılan dil kodu
                     parameters.Add("@IsIndividualAcc", request.IsIndividualAcc);
+                    
+                    // Koşullu alanlar
+                    if (request.IsIndividualAcc)
+                    {
+                        parameters.Add("@FirstName", request.CustomerName);
+                        parameters.Add("@LastName", request.CustomerSurname);
+                        if (!string.IsNullOrEmpty(request.TaxNumber))
+                        {
+                            parameters.Add("@TaxNumber", request.TaxNumber);
+                        }
+                    }
+                    else
+                    {
+                        parameters.Add("@FirstName", request.CustomerName);
+                        parameters.Add("@LastName", string.Empty);
+                    }
+                    
+                    // CurrencyCode alanını ekle
+                    if (!string.IsNullOrEmpty(request.CurrencyCode))
+                    {
+                        parameters.Add("@CurrencyCode", request.CurrencyCode);
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Para birimi parametresi eklendi: {CurrencyCode}\u001b[0m", request.CurrencyCode);
+                    }
+                    else
+                    {
+                        // Frontend'den para birimi gelmediğinde varsayılan olarak TRY ekle
+                        parameters.Add("@CurrencyCode", "TRY");
+                        _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Para birimi gelmedi! Varsayılan olarak TRY eklendi.\u001b[0m");
+                    }
+                    
+                    // Diğer koşullu alanlar
+                    if (!string.IsNullOrEmpty(request.IdentityNum))
+                    {
+                        parameters.Add("@IdentityNum", request.IdentityNum);
+                    }
+                    
+                    if (!string.IsNullOrEmpty(request.TaxNumber) && !request.IsIndividualAcc)
+                    {
+                        parameters.Add("@TaxNumber", request.TaxNumber);
+                    }
+                    
+                    if (!string.IsNullOrEmpty(request.TaxOfficeCode))
+                    {
+                        parameters.Add("@TaxOfficeCode", request.TaxOfficeCode);
+                    }
+                    
+                    if (request.IsSubjectToEInvoice)
+                    {
+                        parameters.Add("@IsSubjectToEInvoice", true);
+                        parameters.Add("@EInvoiceStartDate", request.EInvoiceStartDate ?? DateTime.Now);
+                    }
+                    
+                    if (request.IsSubjectToEShipment)
+                    {
+                        parameters.Add("@IsSubjectToEShipment", true);
+                        parameters.Add("@EShipmentStartDate", request.EShipmentStartDate ?? DateTime.Now);
+                    }
 
-                    // Saklı prosedür yerine doğrudan SQL sorgusu kullan
-                    string insertQuery = @"
+                    // Dinamik SQL sorgusu oluştur
+                    var columnNames = new List<string> { 
+                        "CurrAccTypeCode", "CurrAccCode", "FirstName", "LastName",
+                        "CompanyCode", "OfficeCode", "CreatedUserName",
+                        "CreatedDate", "DataLanguageCode", "IsIndividualAcc"
+                    };
+                    
+                    var parameterNames = new List<string> {
+                        "@CurrAccTypeCode", "@CurrAccCode", "@FirstName", "@LastName",
+                        "@CompanyCode", "@OfficeCode", "@CreatedUserName",
+                        "GETDATE()", "@DataLanguageCode", "@IsIndividualAcc"
+                    };
+                    
+                    // Koşullu alanları ekle
+                    if (!string.IsNullOrEmpty(request.IdentityNum))
+                    {
+                        columnNames.Add("IdentityNumber");
+                        parameterNames.Add("@IdentityNum");
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Kimlik numarası eklendi: {IdentityNum}\u001b[0m", request.IdentityNum);
+                    }
+                    
+                    if (!string.IsNullOrEmpty(request.TaxNumber))
+                    {
+                        columnNames.Add("TaxNumber");
+                        parameterNames.Add("@TaxNumber");
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Vergi numarası eklendi: {TaxNumber}\u001b[0m", request.TaxNumber);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Vergi numarası boş olduğu için SQL sorgusuna eklenmedi!\u001b[0m");
+                    }
+                    
+                    if (!string.IsNullOrEmpty(request.TaxOfficeCode))
+                    {
+                        columnNames.Add("TaxOfficeCode");
+                        parameterNames.Add("@TaxOfficeCode");
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Vergi dairesi eklendi: {TaxOfficeCode}\u001b[0m", request.TaxOfficeCode);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Vergi dairesi boş olduğu için SQL sorgusuna eklenmedi!\u001b[0m");
+                    }
+                    
+                    // CurrencyCode alanını ekle
+                    if (!string.IsNullOrEmpty(request.CurrencyCode))
+                    {
+                        columnNames.Add("CurrencyCode");
+                        parameterNames.Add("@CurrencyCode");
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Para birimi ekleniyor: {CurrencyCode}\u001b[0m", request.CurrencyCode);
+                    }
+                    else
+                    {
+                        // Frontend'den para birimi gelmediğinde varsayılan olarak TRY ekle
+                        columnNames.Add("CurrencyCode");
+                        parameterNames.Add("@CurrencyCode");
+                        _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Para birimi gelmedi! SQL sorgusuna varsayılan olarak TRY eklendi.\u001b[0m");
+                    }
+                    
+                    // E-Fatura mükellefi kontrolü
+                    if (request.IsSubjectToEInvoice)
+                    {
+                        columnNames.Add("IsSubjectToEInvoice");
+                        parameterNames.Add("@IsSubjectToEInvoice");
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-Fatura mükellefi eklendi\u001b[0m");
+                        
+                        if (request.EInvoiceStartDate.HasValue)
+                        {
+                            columnNames.Add("EInvoiceStartDate");
+                            parameterNames.Add("@EInvoiceStartDate");
+                            _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-Fatura başlangıç tarihi eklendi: {Date}\u001b[0m", 
+                                request.EInvoiceStartDate.Value.ToString("yyyy-MM-dd"));
+                        }
+                        else
+                        {
+                            // E-Fatura başlangıç tarihi gelmediğinde bugünün tarihini ekle
+                            columnNames.Add("EInvoiceStartDate");
+                            parameterNames.Add("@EInvoiceStartDate");
+                            parameters.Add("@EInvoiceStartDate", DateTime.Now.Date);
+                            _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-Fatura başlangıç tarihi gelmedi! Bugünün tarihi eklendi: {Date}\u001b[0m", 
+                                DateTime.Now.Date.ToString("yyyy-MM-dd"));
+                        }
+                    }
+                    
+                    // E-İrsaliye mükellefi kontrolü
+                    if (request.IsSubjectToEShipment)
+                    {
+                        columnNames.Add("IsSubjectToEShipment");
+                        parameterNames.Add("@IsSubjectToEShipment");
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-İrsaliye mükellefi eklendi\u001b[0m");
+                        
+                        if (request.EShipmentStartDate.HasValue)
+                        {
+                            columnNames.Add("EShipmentStartDate");
+                            parameterNames.Add("@EShipmentStartDate");
+                            _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-İrsaliye başlangıç tarihi eklendi: {Date}\u001b[0m", 
+                                request.EShipmentStartDate.Value.ToString("yyyy-MM-dd"));
+                        }
+                        else
+                        {
+                            // E-İrsaliye başlangıç tarihi gelmediğinde bugünün tarihini ekle
+                            columnNames.Add("EShipmentStartDate");
+                            parameterNames.Add("@EShipmentStartDate");
+                            parameters.Add("@EShipmentStartDate", DateTime.Now.Date);
+                            _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-İrsaliye başlangıç tarihi gelmedi! Bugünün tarihi eklendi: {Date}\u001b[0m", 
+                                DateTime.Now.Date.ToString("yyyy-MM-dd"));
+                        }
+                    }
+                    
+                    // SQL sorgusunu oluştur
+                    string insertQuery = $@"
                         INSERT INTO cdCurrAcc (
-                            CurrAccTypeCode, CurrAccCode, FirstName, LastName, 
-                            CompanyCode, OfficeCode, CreatedUserName, 
-                            CreatedDate, DataLanguageCode, IsIndividualAcc
+                            {string.Join(", ", columnNames)}
                         ) VALUES (
-                            @CurrAccTypeCode, @CurrAccCode, @FirstName, @LastName, 
-                            @CompanyCode, @OfficeCode, @CreatedUserName, 
-                            GETDATE(), @DataLanguageCode, @IsIndividualAcc
+                            {string.Join(", ", parameterNames)}
                         )";
                     
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri oluşturma işlemi başladı\u001b[0m");
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri tipi: {Type}\u001b[0m", request.IsIndividualAcc ? "Bireysel" : "Kurumsal");
+                    
+                    // Frontend'den gelen verileri kontrol et ve logla
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Vergi Numarası: {TaxNumber}\u001b[0m", 
+                        string.IsNullOrEmpty(request.TaxNumber) ? "GELMEDI" : request.TaxNumber);
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Vergi Dairesi: {TaxOfficeCode}\u001b[0m", 
+                        string.IsNullOrEmpty(request.TaxOfficeCode) ? "GELMEDI" : request.TaxOfficeCode);
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-Fatura Mükellefi: {IsSubjectToEInvoice}\u001b[0m", request.IsSubjectToEInvoice);
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-Fatura Başlangıç Tarihi: {EInvoiceStartDate}\u001b[0m", 
+                        request.EInvoiceStartDate.HasValue ? request.EInvoiceStartDate.Value.ToString("yyyy-MM-dd") : "GELMEDI");
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-İrsaliye Mükellefi: {IsSubjectToEShipment}\u001b[0m", request.IsSubjectToEShipment);
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-İrsaliye Başlangıç Tarihi: {EShipmentStartDate}\u001b[0m", 
+                        request.EShipmentStartDate.HasValue ? request.EShipmentStartDate.Value.ToString("yyyy-MM-dd") : "GELMEDI");
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Para Birimi: {CurrencyCode}\u001b[0m", 
+                        string.IsNullOrEmpty(request.CurrencyCode) ? "GELMEDI" : request.CurrencyCode);
                     await connection.ExecuteAsync(insertQuery, parameters);
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri kaydı eklendi\u001b[0m");
+                    
+                    // Koşullu alanların loglanması
+                    if (request.IsIndividualAcc)
+                    {
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Gerçek kişi müşteri oluşturuldu: FirstName={FirstName}, LastName={LastName}\u001b[0m", request.CustomerName, request.CustomerSurname);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Tüzel kişi müşteri oluşturuldu: CustomerName={CustomerName}\u001b[0m", request.CustomerName);
+                    }
+                    
+                    // Özetleyici log mesajları
+                    if (request.IsSubjectToEInvoice)
+                    {
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-Fatura mükellefi: EInvoiceStartDate={Date}\u001b[0m", 
+                            request.EInvoiceStartDate.HasValue ? request.EInvoiceStartDate.Value.ToString("yyyy-MM-dd") : "GELMEDI (Bugünün tarihi kullanıldı)");
+                    }
+                    
+                    if (request.IsSubjectToEShipment)
+                    {
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - E-İrsaliye mükellefi: EShipmentStartDate={Date}\u001b[0m", 
+                            request.EShipmentStartDate.HasValue ? request.EShipmentStartDate.Value.ToString("yyyy-MM-dd") : "GELMEDI (Bugünün tarihi kullanıldı)");
+                    }
+                    
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Para birimi: {CurrencyCode}\u001b[0m", 
+                        string.IsNullOrEmpty(request.CurrencyCode) ? "GELMEDI (TRY kullanıldı)" : request.CurrencyCode);
+                    
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Vergi numarası: {TaxNumber}, Vergi dairesi: {TaxOfficeCode}\u001b[0m", 
+                        string.IsNullOrEmpty(request.TaxNumber) ? "GELMEDI" : request.TaxNumber,
+                        string.IsNullOrEmpty(request.TaxOfficeCode) ? "GELMEDI" : request.TaxOfficeCode);
+
                     
                     // cdCurrAccDesc tablosuna açıklama ekle
                     string description = request.IsIndividualAcc 
@@ -236,6 +450,7 @@ namespace ErpMobile.Api.Services
                     
                     await connection.ExecuteAsync(insertDescQuery, descParameters);
 
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - İşlem başarılı, müşteri oluşturuldu: {CustomerCode}\u001b[0m", request.CustomerCode);
                     // Başarılı yanıt döndür
                     return new CustomerCreateResponseNew
                     {
@@ -250,7 +465,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri oluşturma hatası: {Message}", ex.Message);
+                _logger.LogError(ex, "\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri oluşturma hatası: {Message}\u001b[0m", ex.Message);
                 return new CustomerCreateResponseNew
                 {
                     Success = false,
@@ -267,8 +482,11 @@ namespace ErpMobile.Api.Services
         /// <returns>Güncellenen müşteri bilgileri</returns>
         public async Task<CustomerUpdateResponseNew> UpdateCustomerAsync(CustomerUpdateRequestNew request)
         {
+            _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Başlatıldı\u001b[0m");
+            
             if (request == null)
             {
+                _logger.LogWarning("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Geçersiz istek (null)\u001b[0m");
                 return new CustomerUpdateResponseNew
                 {
                     Success = false,
@@ -278,20 +496,23 @@ namespace ErpMobile.Api.Services
 
             try
             {
-                _logger.LogInformation("Müşteri güncelleniyor: {CustomerCode}", request.CustomerCode);
+                _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri güncelleniyor: {CustomerCode}\u001b[0m", request.CustomerCode);
 
                 // Veritabanı bağlantısı
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
 
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri kontrolü yapılıyor: {CustomerCode}\u001b[0m", request.CustomerCode);
                     // Müşteri var mı kontrol et
                     var existingCustomer = await connection.QueryFirstOrDefaultAsync<int>(
                         "SELECT COUNT(1) FROM cdCurrAcc WHERE CurrAccCode = @CurrAccCode AND CurrAccTypeCode = @CurrAccTypeCode",
                         new { CurrAccCode = request.CustomerCode, CurrAccTypeCode = request.CustomerTypeCode });
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri kontrolü sonucu: {ExistingCount}\u001b[0m", existingCustomer);
 
                     if (existingCustomer == 0)
                     {
+                        _logger.LogWarning("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri bulunamadı: {CustomerCode}\u001b[0m", request.CustomerCode);
                         return new CustomerUpdateResponseNew
                         {
                             Success = false,
@@ -300,6 +521,7 @@ namespace ErpMobile.Api.Services
                         };
                     }
 
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri güncelleme parametreleri hazırlanıyor\u001b[0m");
                     // Müşteri güncelleme için parametreleri hazırla
                     var parameters = new DynamicParameters();
                     parameters.Add("@CurrAccTypeCode", request.CustomerTypeCode);
@@ -321,17 +543,21 @@ namespace ErpMobile.Api.Services
                             LastUpdatedDate = GETDATE()
                         WHERE CurrAccCode = @CurrAccCode AND CurrAccTypeCode = @CurrAccTypeCode";
 
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri kaydı güncelleniyor: {SQL}\u001b[0m", updateQuery);
                     await connection.ExecuteAsync(updateQuery, parameters);
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri kaydı güncellendi\u001b[0m");
                     
                     // cdCurrAccDesc tablosundaki açıklamayı güncelle
                     string description = request.IsIndividualAcc 
                         ? $"{request.CustomerName} {request.CustomerSurname}".Trim() 
                         : request.CustomerName.Trim();
                     
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri açıklama kaydı kontrolü yapılıyor\u001b[0m");
                     // Önce açıklama var mı kontrol et
                     var descExists = await connection.QueryFirstOrDefaultAsync<int>(
                         "SELECT COUNT(1) FROM cdCurrAccDesc WHERE CurrAccCode = @CurrAccCode AND CurrAccTypeCode = @CurrAccTypeCode AND LangCode = @LangCode",
                         new { CurrAccCode = request.CustomerCode, CurrAccTypeCode = request.CustomerTypeCode, LangCode = "TR" });
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri açıklama kaydı kontrolü sonucu: {ExistingCount}\u001b[0m", descExists);
                     
                     if (descExists > 0)
                     {
@@ -347,7 +573,9 @@ namespace ErpMobile.Api.Services
                         descParameters.Add("@LangCode", "TR"); // Varsayılan dil kodu
                         descParameters.Add("@CurrAccDescription", description);
                         
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri açıklama kaydı güncelleniyor\u001b[0m");
                         await connection.ExecuteAsync(updateDescQuery, descParameters);
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri açıklama kaydı güncellendi\u001b[0m");
                     }
                     else
                     {
@@ -365,9 +593,12 @@ namespace ErpMobile.Api.Services
                         descParameters.Add("@LangCode", "TR"); // Varsayılan dil kodu
                         descParameters.Add("@CurrAccDescription", description);
                         
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri açıklama kaydı ekleniyor\u001b[0m");
                         await connection.ExecuteAsync(insertDescQuery, descParameters);
+                        _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri açıklama kaydı eklendi\u001b[0m");
                     }
 
+                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - İşlem başarılı, müşteri güncellendi: {CustomerCode}\u001b[0m", request.CustomerCode);
                     // Başarılı yanıt döndür
                     return new CustomerUpdateResponseNew
                     {
@@ -381,7 +612,7 @@ namespace ErpMobile.Api.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri güncelleme hatası: {Message}", ex.Message);
+                _logger.LogError(ex, "\u001b[33m[CustomerServiceNew.UpdateCustomerAsync] - Müşteri güncelleme hatası: {Message}\u001b[0m", ex.Message);
                 return new CustomerUpdateResponseNew
                 {
                     Success = false,
