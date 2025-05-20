@@ -142,19 +142,50 @@ namespace ErpMobile.Api.Services
                                 }
                             }
                             
-                            // Yeni kodu ayarla
+                            // Benzersiz bir müşteri kodu bulana kadar döngü
                             string newCode;
-                            if (nextNumber < 1000)
+                            bool isCodeUnique = false;
+                            int attempts = 0;
+                            int maxAttempts = 100; // Sonsuz döngüye girmemek için maksimum deneme sayısı
+                            
+                            while (!isCodeUnique && attempts < maxAttempts)
                             {
-                                newCode = $"{prefix}{nextNumber:000}";
-                            }
-                            else
-                            {
-                                newCode = $"{prefix}{nextNumber}";
+                                // Yeni kodu oluştur
+                                if (nextNumber < 1000)
+                                {
+                                    newCode = $"{prefix}{nextNumber:000}";
+                                }
+                                else
+                                {
+                                    newCode = $"{prefix}{nextNumber}";
+                                }
+                                
+                                // Bu kod zaten kullanımda mı kontrol et
+                                var existingCount = await connection.QueryFirstOrDefaultAsync<int>(
+                                    "SELECT COUNT(1) FROM cdCurrAcc WHERE CurrAccCode = @CurrAccCode",
+                                    new { CurrAccCode = newCode });
+                                
+                                if (existingCount == 0)
+                                {
+                                    // Benzersiz kod bulundu
+                                    isCodeUnique = true;
+                                    request.CustomerCode = newCode;
+                                    _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Otomatik müşteri kodu oluşturuldu: {CustomerCode}\u001b[0m", request.CustomerCode);
+                                }
+                                else
+                                {
+                                    // Bu kod zaten kullanımda, sonraki sayıyı dene
+                                    nextNumber++;
+                                    attempts++;
+                                    _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Müşteri kodu '{Code}' zaten kullanımda, yeni kod deneniyor...\u001b[0m", newCode);
+                                }
                             }
                             
-                            request.CustomerCode = newCode;
-                            _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Otomatik müşteri kodu oluşturuldu: {CustomerCode}\u001b[0m", request.CustomerCode);
+                            if (!isCodeUnique)
+                            {
+                                _logger.LogError("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Benzersiz müşteri kodu oluşturulamadı, maksimum deneme sayısına ulaşıldı\u001b[0m");
+                                throw new Exception("Benzersiz müşteri kodu oluşturulamadı, lütfen daha sonra tekrar deneyin.");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -280,7 +311,7 @@ namespace ErpMobile.Api.Services
                     // Koşullu alanları ekle
                     if (!string.IsNullOrEmpty(request.IdentityNum))
                     {
-                        columnNames.Add("IdentityNumber");
+                        columnNames.Add("IdentityNum"); // Veritabanı sütun adı IdentityNum olarak düzeltildi
                         parameterNames.Add("@IdentityNum");
                         _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Kimlik numarası eklendi: {IdentityNum}\u001b[0m", request.IdentityNum);
                     }
