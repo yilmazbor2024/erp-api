@@ -43,6 +43,7 @@ namespace ErpMobile.Api.Controllers
         /// <param name="searchTerm">Filter by item code or description</param>
         /// <param name="productTypeCode">Filter by product type code</param>
         /// <param name="isBlocked">Filter by blocked status</param>
+        /// <param name="itemTypeCode">Filter by item type code (1: Product, 2: Material)</param>
         /// <param name="langCode">Language code (default: TR)</param>
         /// <returns>List of items/products</returns>
         [HttpGet]
@@ -54,15 +55,17 @@ namespace ErpMobile.Api.Controllers
             [FromQuery] string searchTerm = null,
             [FromQuery] string productTypeCode = null,
             [FromQuery] bool? isBlocked = null,
+            [FromQuery] int itemTypeCode = 1,
             [FromQuery] string langCode = "TR")
         {
             try
             {
                 // Filtreleme koşullarını oluştur
-                var whereClause = "WHERE cdItem.ItemTypeCode = 1"; // Sadece ürünleri getir (ItemTypeCode = 1)
+                var whereClause = "WHERE cdItem.ItemTypeCode = @ItemTypeCode"; // ItemTypeCode parametresine göre filtrele (1: Ürün, 2: Malzeme)
                 var parameters = new List<SqlParameter>
                 {
-                    new SqlParameter("@LangCode", langCode)
+                    new SqlParameter("@LangCode", langCode),
+                    new SqlParameter("@ItemTypeCode", itemTypeCode)
                 };
 
                 if (!string.IsNullOrEmpty(searchTerm))
@@ -214,21 +217,31 @@ namespace ErpMobile.Api.Controllers
                 });
             }
         }
-
         /// <summary>
-        /// Gets an item by item code
+        /// Gets an item/product by its code
         /// </summary>
         /// <param name="itemCode">Item code</param>
+        /// <param name="itemTypeCode">Item type code (1: Product, 2: Material)</param>
         /// <param name="langCode">Language code (default: TR)</param>
-        /// <returns>Item details</returns>
+        /// <returns>Item/product details</returns>
         [HttpGet("{itemCode}")]
         public async Task<ActionResult<ApiResponse<ItemModel>>> GetItem(
             string itemCode,
+            [FromQuery] int itemTypeCode = 1,
             [FromQuery] string langCode = "TR")
         {
             try
             {
-                // Sorguyu oluştur
+                if (string.IsNullOrEmpty(itemCode))
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Ürün kodu gereklidir",
+                        Data = new object()
+                    });
+                }
+
                 var query = $@"
                 SELECT 
                     ProductCode = RTRIM(LTRIM(cdItem.ItemCode)),
@@ -260,12 +273,13 @@ namespace ErpMobile.Api.Controllers
                 LEFT JOIN bsItemDimType WITH (NOLOCK) ON cdItem.ItemDimTypeCode = bsItemDimType.ItemDimTypeCode
                 LEFT JOIN bsItemDimTypeDesc WITH (NOLOCK) ON bsItemDimType.ItemDimTypeCode = bsItemDimTypeDesc.ItemDimTypeCode 
                     AND bsItemDimTypeDesc.LangCode = @LangCode
-                WHERE cdItem.ItemTypeCode = 1 AND cdItem.ItemCode = @ItemCode";
+                WHERE cdItem.ItemTypeCode = @ItemTypeCode AND cdItem.ItemCode = @ItemCode";
 
                 var parameters = new List<SqlParameter>
                 {
                     new SqlParameter("@ItemCode", itemCode),
-                    new SqlParameter("@LangCode", langCode)
+                    new SqlParameter("@LangCode", langCode),
+                    new SqlParameter("@ItemTypeCode", itemTypeCode)
                 };
                 
                 // Sorguyu çalıştır
@@ -748,7 +762,7 @@ namespace ErpMobile.Api.Controllers
                 await _context.ExecuteNonQueryAsync(insertDescQuery, insertDescParams.ToArray());
 
                 // Get the created item
-                return await GetItem(request.ItemCode, langCode);
+                return await GetItem(request.ItemCode, 1, langCode);
             }
             catch (Exception ex)
             {
@@ -875,7 +889,7 @@ namespace ErpMobile.Api.Controllers
                 }
 
                 // Get the updated item
-                return await GetItem(itemCode, langCode);
+                return await GetItem(itemCode, 1, langCode);
             }
             catch (Exception ex)
             {
