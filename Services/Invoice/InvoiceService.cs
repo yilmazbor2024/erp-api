@@ -163,18 +163,55 @@ namespace ErpMobile.Api.Services.Invoice
         {
             try
             {
-                // Validasyon kontrolü
+                // Gelen isteği logla
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== SERVICE: CreateWholesaleInvoiceAsync STARTED =====\n");
+                Console.WriteLine($"Gelen İstek: {System.Text.Json.JsonSerializer.Serialize(request, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })}");
+                Console.ResetColor();
+                
+                // Fatura numarası kontrolü ve otomatik oluşturma
                 if (string.IsNullOrEmpty(request.InvoiceNumber))
                 {
-                    return new ApiResponse<InvoiceHeaderModel>
+                    Console.BackgroundColor = ConsoleColor.Red;
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine("\n===== SERVICE: Fatura numarası otomatik oluşturuluyor =====\n");
+                    Console.ResetColor();
+                    
+                    // Fatura numarası otomatik olarak oluşturuluyor
+                    var invoiceNumberResponse = await GenerateInvoiceNumberAsync(request.ProcessCode ?? "WS");
+                    
+                    if (!invoiceNumberResponse.Success)
                     {
-                        Success = false,
-                        Message = "Fatura numarası boş olamaz"
-                    };
+                        Console.BackgroundColor = ConsoleColor.Red;
+                        Console.ForegroundColor = ConsoleColor.White;
+                        Console.WriteLine($"\n===== SERVICE: VALIDATION ERROR - Fatura numarası oluşturulamadı: {invoiceNumberResponse.Message} =====\n");
+                        Console.ResetColor();
+                        
+                        return new ApiResponse<InvoiceHeaderModel>
+                        {
+                            Success = false,
+                            Message = "Fatura numarası oluşturulamadı: " + invoiceNumberResponse.Message
+                        };
+                    }
+                    
+                    // Oluşturulan fatura numarasını request'e atama
+                    request.InvoiceNumber = invoiceNumberResponse.Data;
+                    
+                    Console.BackgroundColor = ConsoleColor.Red;
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine($"\n===== SERVICE: Fatura numarası otomatik oluşturuldu: {request.InvoiceNumber} =====\n");
+                    Console.ResetColor();
                 }
                 
+                // Validasyon kontrolü
                 if (request.InvoiceDate == DateTime.MinValue)
                 {
+                    Console.BackgroundColor = ConsoleColor.Red;
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine("\n===== SERVICE: VALIDATION ERROR - Geçerli bir fatura tarihi girilmelidir =====\n");
+                    Console.ResetColor();
+                    
                     return new ApiResponse<InvoiceHeaderModel>
                     {
                         Success = false,
@@ -184,6 +221,11 @@ namespace ErpMobile.Api.Services.Invoice
                 
                 if (string.IsNullOrEmpty(request.CustomerCode))
                 {
+                    Console.BackgroundColor = ConsoleColor.Red;
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine("\n===== SERVICE: VALIDATION ERROR - Müşteri kodu boş olamaz =====\n");
+                    Console.ResetColor();
+                    
                     return new ApiResponse<InvoiceHeaderModel>
                     {
                         Success = false,
@@ -193,6 +235,11 @@ namespace ErpMobile.Api.Services.Invoice
                 
                 if (request.Details == null || request.Details.Count == 0)
                 {
+                    Console.BackgroundColor = ConsoleColor.Red;
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine("\n===== SERVICE: VALIDATION ERROR - Fatura detayları boş olamaz =====\n");
+                    Console.ResetColor();
+                    
                     return new ApiResponse<InvoiceHeaderModel>
                     {
                         Success = false,
@@ -200,8 +247,19 @@ namespace ErpMobile.Api.Services.Invoice
                     };
                 }
                 
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== SERVICE: Validasyon başarılı, fatura oluşturuluyor =====\n");
+                Console.ResetColor();
+                
                 // Faturayı oluştur
                 var invoice = await _invoiceRepository.CreateWholesaleInvoiceAsync(request);
+                
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== SERVICE: CreateWholesaleInvoiceAsync COMPLETED =====\n");
+                Console.WriteLine($"Oluşturulan Fatura: {System.Text.Json.JsonSerializer.Serialize(invoice, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })}");
+                Console.ResetColor();
                 
                 return new ApiResponse<InvoiceHeaderModel>
                 {
@@ -212,6 +270,14 @@ namespace ErpMobile.Api.Services.Invoice
             }
             catch (Exception ex)
             {
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== SERVICE: CreateWholesaleInvoiceAsync ERROR =====\n");
+                Console.WriteLine($"Hata: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                Console.WriteLine("\n===== SERVICE: CreateWholesaleInvoiceAsync ERROR END =====\n");
+                Console.ResetColor();
+                
                 _logger.LogError(ex, "Fatura oluşturulurken hata oluştu");
                 return new ApiResponse<InvoiceHeaderModel>
                 {

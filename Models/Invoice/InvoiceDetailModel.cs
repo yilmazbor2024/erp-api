@@ -5,7 +5,7 @@ namespace ErpMobile.Api.Models.Invoice
 {
     public class InvoiceDetailModel
     {
-        public int InvoiceDetailID { get; set; }
+        public Guid InvoiceLineID { get; set; }
         public string InvoiceHeaderID { get; set; }
         public string InvoiceNumber { get; set; }
         public int LineNumber { get; set; }

@@ -18,6 +18,8 @@ using ErpMobile.Api.Interfaces;
 using ErpMobile.Api.Repositories.Invoice;
 using ErpMobile.Api.Services.Invoice;
 using ErpMobile.Api.Extensions;
+using ErpMobile.Api.Repositories.Product;
+using ErpMobile.Api.Models.Product;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,7 +38,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://192.168.1.113:3000")
+        policy.WithOrigins("http://localhost:3000", "http://localhost:3001", "http://192.168.1.113:3000", "http://192.168.1.113:3001")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -232,6 +234,9 @@ builder.Services.AddScoped<ICustomerCreditService, CustomerCreditService>();
 // Fatura servisleri
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+
+// Ürün servisleri
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
 var app = builder.Build();
 

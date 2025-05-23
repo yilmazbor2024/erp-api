@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using ErpMobile.Api.Models.Common;
+using ErpMobile.Api.Models.Product;
+using ErpMobile.Api.Repositories.Product;
 
 namespace ErpMobile.Api.Controllers
 {
@@ -15,10 +17,14 @@ namespace ErpMobile.Api.Controllers
     public class ProductController : ControllerBase
     {
         private readonly ILogger<ProductController> _logger;
+        private readonly IProductRepository _productRepository;
 
-        public ProductController(ILogger<ProductController> logger)
+        public ProductController(
+            ILogger<ProductController> logger,
+            IProductRepository productRepository)
         {
             _logger = logger;
+            _productRepository = productRepository;
         }
 
         /// <summary>
@@ -265,6 +271,36 @@ namespace ErpMobile.Api.Controllers
             {
                 _logger.LogError(ex, "Error getting units of measure");
                 return StatusCode(500, new ApiResponse<object>(null, false, "An error occurred while retrieving units of measure.", "InternalServerError"));
+            }
+        }
+        /// <summary>
+        /// Barkod ile ürün varyantlarını arar
+        /// </summary>
+        /// <param name="barcode">Ürün barkodu</param>
+        /// <returns>Ürün varyant listesi</returns>
+        [HttpGet("variants/by-barcode/{barcode}")]
+        public async Task<ActionResult<ApiResponse<List<ProductVariantModel>>>> GetProductVariantsByBarcode(string barcode)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(barcode))
+                {
+                    return BadRequest(new ApiResponse<List<ProductVariantModel>>(null, false, "Barkod boş olamaz", "BadRequest"));
+                }
+
+                var variants = await _productRepository.GetProductVariantsByBarcodeAsync(barcode);
+
+                if (variants == null || variants.Count == 0)
+                {
+                    return NotFound(new ApiResponse<List<ProductVariantModel>>(null, false, $"{barcode} barkoduna sahip ürün bulunamadı", "NotFound"));
+                }
+
+                return Ok(new ApiResponse<List<ProductVariantModel>>(variants, true, "Ürün varyantları başarıyla getirildi"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Barkod ile ürün varyantları aranırken hata oluştu. Barkod: {Barcode}", barcode);
+                return StatusCode(500, new ApiResponse<List<ProductVariantModel>>(null, false, "Ürün varyantları getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
     }

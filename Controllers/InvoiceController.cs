@@ -157,7 +157,22 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
+                // Gelen isteği logla
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== CONTROLLER: CreateWholesaleInvoice STARTED =====\n");
+                Console.WriteLine($"Gelen İstek: {System.Text.Json.JsonSerializer.Serialize(request, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })}");
+                Console.ResetColor();
+                
                 var response = await _invoiceService.CreateWholesaleInvoiceAsync(request);
+                
+                // Yanıtı logla
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== CONTROLLER: CreateWholesaleInvoice RESPONSE =====\n");
+                Console.WriteLine($"Yanıt: {System.Text.Json.JsonSerializer.Serialize(response, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })}");
+                Console.WriteLine("\n===== CONTROLLER: CreateWholesaleInvoice ENDED =====\n");
+                Console.ResetColor();
                 
                 if (!response.Success)
                 {
@@ -168,6 +183,14 @@ namespace ErpMobile.Api.Controllers
             }
             catch (Exception ex)
             {
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== CONTROLLER: CreateWholesaleInvoice ERROR =====\n");
+                Console.WriteLine($"Hata: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                Console.WriteLine("\n===== CONTROLLER: CreateWholesaleInvoice ERROR END =====\n");
+                Console.ResetColor();
+                
                 _logger.LogError(ex, "Toptan satış faturası oluşturulurken hata oluştu");
                 return StatusCode(500, new ApiResponse<object>
                 {

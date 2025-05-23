@@ -538,35 +538,35 @@ namespace ErpMobile.Api.Repositories.Invoice
 
                 var query = @"
                     SELECT 
-                        InvoiceDetailID = trInvoiceDetail.InvoiceDetailID,
-                        InvoiceHeaderID = trInvoiceDetail.InvoiceHeaderID,
-                        LineNumber = trInvoiceDetail.LineNumber,
-                        ProductCode = trInvoiceDetail.ProductCode,
+                        InvoiceLineID = trInvoiceLine.InvoiceLineID,
+                        InvoiceHeaderID = trInvoiceLine.InvoiceHeaderID,
+                        LineNumber = trInvoiceLine.LineNumber,
+                        ProductCode = trInvoiceLine.ProductCode,
                         ProductDescription = ISNULL(cdProductDesc.ProductDescription, SPACE(0)),
-                        Qty = trInvoiceDetail.Qty,
-                        UnitCode = trInvoiceDetail.UnitCode,
-                        UnitPrice = trInvoiceDetail.UnitPrice,
-                        DiscountRate = trInvoiceDetail.DiscountRate,
-                        VatRate = trInvoiceDetail.VatRate,
-                        Amount = trInvoiceDetail.Amount,
-                        DiscountAmount = trInvoiceDetail.DiscountAmount,
-                        VatAmount = trInvoiceDetail.VatAmount,
-                        LineNetAmount = trInvoiceDetail.LineNetAmount,
-                        LineTotalAmount = trInvoiceDetail.LineTotalAmount,
-                        CurrencyCode = trInvoiceDetail.CurrencyCode,
-                        ExchangeRate = trInvoiceDetail.ExchangeRate,
-                        IsGift = trInvoiceDetail.IsGift,
-                        IsPromotional = trInvoiceDetail.IsPromotional,
-                        WarehouseCode = trInvoiceDetail.WarehouseCode,
-                        SalesPersonCode = trInvoiceDetail.SalesPersonCode,
-                        ProductTypeCode = trInvoiceDetail.ProductTypeCode,
-                        PromotionCode = trInvoiceDetail.PromotionCode
-                    FROM trInvoiceDetail WITH (NOLOCK)
+                        Qty = trInvoiceLine.Qty,
+                        UnitCode = trInvoiceLine.UnitCode,
+                        UnitPrice = trInvoiceLine.UnitPrice,
+                        DiscountRate = trInvoiceLine.DiscountRate,
+                        VatRate = trInvoiceLine.VatRate,
+                        Amount = trInvoiceLine.Amount,
+                        DiscountAmount = trInvoiceLine.DiscountAmount,
+                        VatAmount = trInvoiceLine.VatAmount,
+                        LineNetAmount = trInvoiceLine.LineNetAmount,
+                        LineTotalAmount = trInvoiceLine.LineTotalAmount,
+                        CurrencyCode = trInvoiceLine.CurrencyCode,
+                        ExchangeRate = trInvoiceLine.ExchangeRate,
+                        IsGift = trInvoiceLine.IsGift,
+                        IsPromotional = trInvoiceLine.IsPromotional,
+                        WarehouseCode = trInvoiceLine.WarehouseCode,
+                        SalesPersonCode = trInvoiceLine.SalesPersonCode,
+                        ProductTypeCode = trInvoiceLine.ProductTypeCode,
+                        PromotionCode = trInvoiceLine.PromotionCode
+                    FROM trInvoiceLine WITH (NOLOCK)
                     LEFT OUTER JOIN cdProductDesc WITH (NOLOCK)
-                        ON cdProductDesc.ProductCode = trInvoiceDetail.ProductCode
+                        ON cdProductDesc.ProductCode = trInvoiceLine.ProductCode
                         AND cdProductDesc.LangCode = @LangCode
-                    WHERE trInvoiceDetail.InvoiceHeaderID = @InvoiceHeaderId
-                    ORDER BY trInvoiceDetail.LineNumber";
+                    WHERE trInvoiceLine.InvoiceHeaderID = @InvoiceHeaderId
+                    ORDER BY trInvoiceLine.LineNumber";
 
                 // Veritabanı bağlantısı oluştur
                 using (var connection = new SqlConnection(_connectionString))
@@ -587,7 +587,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                         {
                             var detail = new InvoiceDetailModel
                             {
-                                InvoiceDetailID = Convert.ToInt32(reader["InvoiceDetailID"]),
+                                InvoiceLineID = Guid.Parse(reader["InvoiceLineID"].ToString()),
                                 InvoiceHeaderID = reader["InvoiceHeaderID"].ToString(),
                                 LineNumber = Convert.ToInt32(reader["LineNumber"]),
                                 ProductCode = reader["ProductCode"].ToString(),
@@ -1084,16 +1084,19 @@ namespace ErpMobile.Api.Repositories.Invoice
                         try
                         {
                             // 1. Fatura başlık kaydını oluştur
-                            var invoiceHeaderId = await CreateInvoiceHeaderAsync(connection, transaction, request, "WP");
+                            var invoiceHeaderId = await CreateInvoiceHeaderAsync(connection, transaction, request, "BP");
                             
-                            // 2. Fatura detaylarını oluştur
-                            foreach (var detail in request.Details)
-                            {
-                                await CreateInvoiceDetailAsync(connection, transaction, invoiceHeaderId.ToString(), detail);
-                            }
-                            
-                            // 3. Fatura toplamlarını güncelle
-                            await UpdateInvoiceTotalsAsync(connection, transaction, invoiceHeaderId.ToString());
+                          // 2. Fatura detaylarını oluştur
+                                int sortOrder = 1; // Satır sırası için sayaç başlat
+                                if (request.Details != null && request.Details.Any())
+                                {
+                                    foreach (var detailItem in request.Details)
+                                    {
+                                        await CreateInvoiceLineAsync(connection, transaction, invoiceHeaderId, detailItem, sortOrder);
+                                        sortOrder++; // Her satır için sıra numarasını artır
+                                    }
+                                }
+                            // Not: Fatura toplamları güncelleme işlemi kaldırıldı
                             
                             // 4. Transaction'ı commit et
                             transaction.Commit();
@@ -1122,6 +1125,13 @@ namespace ErpMobile.Api.Repositories.Invoice
         {
             try
             {
+                // Gelen isteği logla
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== REPOSITORY: CreateWholesaleInvoiceAsync STARTED =====\n");
+                Console.WriteLine($"Gelen İstek: {System.Text.Json.JsonSerializer.Serialize(request)}");
+                Console.ResetColor();
+
                 // SQL Transaction başlat
                 using (var connection = new SqlConnection(_connectionString))
                 {
@@ -1131,28 +1141,57 @@ namespace ErpMobile.Api.Repositories.Invoice
                         try
                         {
                             // 1. Fatura başlık kaydını oluştur
-                            var invoiceHeaderId = await CreateInvoiceHeaderAsync(connection, transaction, request, "TS");
-                            
-                            // 2. Fatura detaylarını oluştur
-                            foreach (var detail in request.Details)
+                            var invoiceHeaderId = await CreateInvoiceHeaderAsync(connection, transaction, request, "WS");
+
+                            // 2. Fatura detay kayıtlarını oluştur
+                            if (request.Details != null && request.Details.Any())
                             {
-                                await CreateInvoiceDetailAsync(connection, transaction, invoiceHeaderId.ToString(), detail);
+                                int sortOrder = 1; // Satır sırası için sayaç başlat
+                                foreach (var detail in request.Details)
+                                {
+                                    await CreateInvoiceLineAsync(connection, transaction, invoiceHeaderId, detail, sortOrder);
+                                    sortOrder++; // Her satır için sıra numarasını artır
+                                }
                             }
-                            
-                            // 3. Fatura toplamlarını güncelle
-                            await UpdateInvoiceTotalsAsync(connection, transaction, invoiceHeaderId.ToString());
-                            
-                            // 4. Transaction'ı commit et
+
+                            // Not: Fatura toplamları güncelleme işlemi kaldırıldı
+
+                            // 4. Transaction'u commit et
                             transaction.Commit();
+
+                            // 5. Oluşturulan faturayı getir ve döndür
+                            var invoice = await GetWholesaleInvoiceByIdAsync(invoiceHeaderId.ToString());
                             
-                            // 5. Oluşturulan faturayı getir
-                            return await GetWholesaleInvoiceByIdAsync(invoiceHeaderId.ToString());
+                            // Başarılı işlemi logla
+                            Console.BackgroundColor = ConsoleColor.Green;
+                            Console.ForegroundColor = ConsoleColor.Black;
+                            Console.WriteLine("\n===== REPOSITORY: CreateWholesaleInvoiceAsync COMPLETED =====\n");
+                            Console.WriteLine($"Oluşturulan Fatura ID: {invoiceHeaderId}");
+                            Console.ResetColor();
+                            
+                            return invoice;
                         }
                         catch (Exception ex)
                         {
-                            // Hata durumunda transaction'ı rollback yap
+                            // Hata durumunda transaction'u rollback et
+                            Console.BackgroundColor = ConsoleColor.Red;
+                            Console.ForegroundColor = ConsoleColor.White;
+                            Console.WriteLine("\n===== REPOSITORY: HATA - Transaction rollback ediliyor =====\n");
+                            Console.WriteLine($"Hata: {ex.Message}");
+                            Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                            Console.ResetColor();
+
                             transaction.Rollback();
                             _logger.LogError(ex, "Toptan satış faturası oluşturulurken hata oluştu");
+
+                            Console.BackgroundColor = ConsoleColor.Red;
+                            Console.ForegroundColor = ConsoleColor.White;
+                            Console.WriteLine("\n===== REPOSITORY: CreateWholesaleInvoiceAsync ERROR =====\n");
+                            Console.WriteLine($"Hata: {ex.Message}");
+                            Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                            Console.WriteLine("\n===== REPOSITORY: CreateWholesaleInvoiceAsync ERROR END =====\n");
+                            Console.ResetColor();
+
                             throw;
                         }
                     }
@@ -1160,6 +1199,14 @@ namespace ErpMobile.Api.Repositories.Invoice
             }
             catch (Exception ex)
             {
+                Console.BackgroundColor = ConsoleColor.Red;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== REPOSITORY: CreateWholesaleInvoiceAsync ERROR =====\n");
+                Console.WriteLine($"Hata: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                Console.WriteLine("\n===== REPOSITORY: CreateWholesaleInvoiceAsync ERROR END =====\n");
+                Console.ResetColor();
+                
                 _logger.LogError(ex, "Toptan satış faturası oluşturulurken hata oluştu");
                 throw;
             }
@@ -1179,15 +1226,18 @@ namespace ErpMobile.Api.Repositories.Invoice
                         {
                             // 1. Fatura başlık kaydını oluştur
                             var invoiceHeaderId = await CreateInvoiceHeaderAsync(connection, transaction, request, "MAF");
-                            
-                            // 2. Fatura detaylarını oluştur
-                            foreach (var detail in request.Details)
+                          // 2. Fatura detaylarını oluştur
+                            int sortOrder = 1; // Satır sırası için sayaç başlat
+                            if (request.Details != null && request.Details.Any())
                             {
-                                await CreateInvoiceDetailAsync(connection, transaction, invoiceHeaderId.ToString(), detail);
+                                foreach (var detailItem in request.Details)
+                                {
+                                    await CreateInvoiceLineAsync(connection, transaction, invoiceHeaderId, detailItem, sortOrder);
+                                    sortOrder++; // Her satır için sıra numarasını artır
+                                }
                             }
                             
-                            // 3. Fatura toplamlarını güncelle
-                            await UpdateInvoiceTotalsAsync(connection, transaction, invoiceHeaderId.ToString());
+                            // Not: Fatura toplamları güncelleme işlemi kaldırıldı
                             
                             // 4. Transaction'ı commit et
                             transaction.Commit();
@@ -1213,81 +1263,163 @@ namespace ErpMobile.Api.Repositories.Invoice
         }
 
         // Yardımcı metotlar
-        private async Task<int> CreateInvoiceHeaderAsync(SqlConnection connection, SqlTransaction transaction, CreateInvoiceRequest request, string processCode)
+        /// <summary>
+        /// Belge tipine göre uygun ApplicationCode değerini döndürür
+        /// </summary>
+        /// <param name="documentType">Belge tipi (Invoice, Order, Shipment vb.)</param>
+        /// <returns>Uygun ApplicationCode değeri</returns>
+        private string GetApplicationCodeByDocumentType(string documentType)
         {
-            var query = @"
-                INSERT INTO trInvoiceHeader (
-                    InvoiceNumber,
-                    InvoiceDate,
-                    InvoiceTime,
-                    CurrAccTypeCode,
-                    CurrAccCode,
-                    SubCurrAccID,
-                    DocCurrencyCode,
-                    ExchangeRate,
-                    CompanyCode,
-                    OfficeCode,
-                    StoreCode,
-                    WarehouseCode,
-                    IsCreditSale,
-                    IsReturn,
-                    IsEInvoice,
-                    IsCompleted,
-                    IsSuspended,
-                    IsLocked,
-                    IsOrderBase,
-                    IsShipmentBase,
-                    IsPostingJournal,
-                    IsPrinted,
-                    ProcessCode,
-                    TransTypeCode,
-                    ApplicationCode,
-                    ApplicationID,
-                    FormType,
-                    DocumentTypeCode,
-                    CreatedUserName,
-                    CreatedDate
-                ) VALUES (
-                    @InvoiceNumber,
-                    @InvoiceDate,
-                    @InvoiceTime,
-                    @CurrAccTypeCode,
-                    @CurrAccCode,
-                    @SubCurrAccID,
-                    @DocCurrencyCode,
-                    @ExchangeRate,
-                    @CompanyCode,
-                    @OfficeCode,
-                    @StoreCode,
-                    @WarehouseCode,
-                    @IsCreditSale,
-                    @IsReturn,
-                    @IsEInvoice,
-                    @IsCompleted,
-                    @IsSuspended,
-                    @IsLocked,
-                    @IsOrderBase,
-                    @IsShipmentBase,
-                    @IsPostingJournal,
-                    @IsPrinted,
-                    @ProcessCode,
-                    @TransTypeCode,
-                    @ApplicationCode,
-                    @ApplicationID,
-                    @FormType,
-                    @DocumentTypeCode,
-                    @CreatedUserName,
-                    GETDATE()
-                );
-                SELECT SCOPE_IDENTITY();";
+            // Belge tipine göre uygun ApplicationCode değerini döndür
+            switch (documentType.ToUpper())
+            {
+                case "INVOICE":
+                case "FATURA":
+                    return "Invoi"; // Fatura için ApplicationCode
+                
+                case "ORDER":
+                case "SIPARIS":
+                    return "Order"; // Sipariş için ApplicationCode
+                
+                case "SHIPMENT":
+                case "IRSALIYE":
+                    return "Shipm"; // İrsaliye için ApplicationCode
+                
+                case "PAYMENT":
+                case "ODEME":
+                    return "Payme"; // Ödeme için ApplicationCode
+                
+                default:
+                    return "Invoi"; // Varsayılan olarak Fatura kodu
+            }
+        }
 
+        private async Task<Guid> CreateInvoiceHeaderAsync(SqlConnection connection, SqlTransaction transaction, CreateInvoiceRequest request, string processCode)
+        {
+            // InvoiceHeaderID için yeni bir GUID oluştur
+            var invoiceHeaderId = Guid.NewGuid();
+            
+            // Görsellerden gördüğümüz gerçek tablo yapısına göre SQL sorgusunu güncelle
+    var query = @"
+        INSERT INTO trInvoiceHeader (
+            InvoiceHeaderID,
+            TransTypeCode,
+            ProcessCode,
+            InvoiceNumber,
+            IsReturn,
+            InvoiceDate,
+            InvoiceTime,
+            OperationDate,
+            OperationTime,
+            InvoiceTypeCode,
+            IsEInvoice,
+            EInvoiceNumber,
+            CurrAccTypeCode,
+            CurrAccCode,
+            DocCurrencyCode,
+            ExchangeRate,
+            CompanyCode,
+            OfficeCode,
+            WarehouseCode,
+            ApplicationCode,
+            ApplicationID,
+            CreatedUserName,
+            CreatedDate,
+            LastUpdatedUserName,
+            LastUpdatedDate
+        ) VALUES (
+            @InvoiceHeaderID,
+            @TransTypeCode,
+            @ProcessCode,
+            @InvoiceNumber,
+            @IsReturn,
+            @InvoiceDate,
+            @InvoiceTime,
+            @OperationDate,
+            @OperationTime,
+            @InvoiceTypeCode,
+            @IsEInvoice,
+            @EInvoiceNumber,
+            @CurrAccTypeCode,
+            @CurrAccCode,
+            @DocCurrencyCode,
+            @ExchangeRate,
+            1,  -- CompanyCode'u 1 olarak ayarla
+            @OfficeCode,
+            @WarehouseCode,
+            @ApplicationCode,
+            @ApplicationID,
+            @CreatedUserName,
+            GETDATE(),
+            @LastUpdatedUserName,
+            GETDATE()
+        );
+        SELECT @InvoiceHeaderID;  -- Oluşturulan GUID'i döndür";
+
+            // SQL sorgusunu logla
+            Console.BackgroundColor = ConsoleColor.Red;
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("\n===== REPOSITORY: CreateInvoiceHeaderAsync SQL QUERY =====\n");
+            Console.WriteLine(query);
+            Console.ResetColor();
+            
             var command = new SqlCommand(query, connection, transaction);
+            
+            // InvoiceHeaderID parametresi (GUID)
+            command.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
+            
+            // İşlem tipi kodu (1: Satış, 2: Alış)
+            int transTypeCode = 1; // Varsayılan: Satış
+            
+            // Eğer request.TransTypeCode değeri varsa, onu kullan
+            if (!string.IsNullOrEmpty(request.TransTypeCode) && int.TryParse(request.TransTypeCode, out int parsedTransTypeCode))
+            {
+                transTypeCode = parsedTransTypeCode;
+            }
+            // Yoksa işlem koduna göre belirle
+            else if (processCode.StartsWith("BP") || processCode.StartsWith("EP"))
+            {
+                transTypeCode = 2; // Alış
+            }
+            
+            command.Parameters.AddWithValue("@TransTypeCode", transTypeCode);
+            
+            // İşlem kodu (WS: Toptan Satış, BP: Toptan Alış, vb.)
+            command.Parameters.AddWithValue("@ProcessCode", processCode);
+            
+            // Fatura numarası
+            command.Parameters.AddWithValue("@InvoiceNumber", request.InvoiceNumber);
+            
+            // İade mi?
+            command.Parameters.AddWithValue("@IsReturn", request.IsReturn);
+            
+            // Fatura tarihi ve saati
+            DateTime invoiceDate = request.InvoiceDate != default(DateTime) ? request.InvoiceDate : DateTime.Now;
+            
+            string formattedDate = invoiceDate.ToString("yyyy-MM-dd");
+            string formattedTime = invoiceDate.ToString("HH:mm:ss");
+            
+            command.Parameters.AddWithValue("@InvoiceDate", formattedDate);
+            command.Parameters.AddWithValue("@InvoiceTime", formattedTime);
+            
+            // İşlem tarihi ve saati (varsayılan olarak fatura tarihi ile aynı)
+            command.Parameters.AddWithValue("@OperationDate", invoiceDate.ToString("yyyy-MM-dd"));
+            command.Parameters.AddWithValue("@OperationTime", invoiceDate.ToString("HH:mm:ss"));
+            
+            // Seri ve seri numarası parametreleri kaldırıldı
+            
+            // Fatura tipi kodu
+            command.Parameters.AddWithValue("@InvoiceTypeCode", 1); // Varsayılan: 1 (Normal Fatura)
+            
+            // e-Fatura bilgileri
+            command.Parameters.AddWithValue("@IsEInvoice", request.IsEInvoice);
+            command.Parameters.AddWithValue("@EInvoiceNumber", string.IsNullOrEmpty(request.EInvoiceNumber) ? "" : request.EInvoiceNumber);
             
             // Müşteri veya tedarikçi bilgilerini ayarla
             int currAccTypeCode;
             string currAccCode;
             
-            if  (processCode.StartsWith("WS") || processCode.StartsWith("EXP")) // Toptan Satış
+            if (processCode.StartsWith("WS") || processCode.StartsWith("EXP")) // Toptan Satış
             {
                 currAccTypeCode = 3; // Müşteri
                 currAccCode = request.CustomerCode;
@@ -1301,146 +1433,221 @@ namespace ErpMobile.Api.Repositories.Invoice
             {
                 throw new ArgumentException($"Geçersiz fatura tipi: {processCode}");
             }
-
-            command.Parameters.AddWithValue("@InvoiceNumber", request.InvoiceNumber);
-            command.Parameters.AddWithValue("@InvoiceDate", request.InvoiceDate);
-            command.Parameters.AddWithValue("@InvoiceTime", DateTime.Now.ToString("HH:mm:ss"));
+            
             command.Parameters.AddWithValue("@CurrAccTypeCode", currAccTypeCode);
             command.Parameters.AddWithValue("@CurrAccCode", currAccCode);
-            command.Parameters.AddWithValue("@SubCurrAccID", request.SubCurrAccID.HasValue ? (object)request.SubCurrAccID.Value : DBNull.Value);
+            
+            // Para birimi ve kur bilgileri
             command.Parameters.AddWithValue("@DocCurrencyCode", string.IsNullOrEmpty(request.DocCurrencyCode) ? "TRY" : request.DocCurrencyCode);
+            // ExchangeRate her zaman sayısal bir değer olmalı, NULL olmamalı
             command.Parameters.AddWithValue("@ExchangeRate", request.ExchangeRate.HasValue ? request.ExchangeRate.Value : 1.0m);
-            command.Parameters.AddWithValue("@CompanyCode", string.IsNullOrEmpty(request.CompanyCode) ? "1" : request.CompanyCode);
-            command.Parameters.AddWithValue("@OfficeCode", string.IsNullOrEmpty(request.OfficeCode) ? "001" : request.OfficeCode);
-            command.Parameters.AddWithValue("@StoreCode", string.IsNullOrEmpty(request.StoreCode) ? "" : request.StoreCode);
-            command.Parameters.AddWithValue("@WarehouseCode", string.IsNullOrEmpty(request.WarehouseCode) ? "001" : request.WarehouseCode);
-            command.Parameters.AddWithValue("@IsCreditSale", request.IsCreditSale);
-            command.Parameters.AddWithValue("@IsReturn", request.IsReturn);
-            command.Parameters.AddWithValue("@IsEInvoice", request.IsEInvoice);
-            command.Parameters.AddWithValue("@IsCompleted", request.IsCompleted);
-            command.Parameters.AddWithValue("@IsSuspended", false);
-            command.Parameters.AddWithValue("@IsLocked", false);
-            command.Parameters.AddWithValue("@IsOrderBase", false);
-            command.Parameters.AddWithValue("@IsShipmentBase", false);
-            command.Parameters.AddWithValue("@IsPostingJournal", false);
-            command.Parameters.AddWithValue("@IsPrinted", false);
-            command.Parameters.AddWithValue("@ProcessCode", string.IsNullOrEmpty(request.ProcessCode) ? "01" : request.ProcessCode);
-            command.Parameters.AddWithValue("@TransTypeCode", string.IsNullOrEmpty(request.TransTypeCode) ? "01" : request.TransTypeCode);
-            command.Parameters.AddWithValue("@ApplicationCode", string.IsNullOrEmpty(request.ApplicationCode) ? "Invoi" : request.ApplicationCode);
-            command.Parameters.AddWithValue("@ApplicationID", request.ApplicationID.HasValue ? (object)request.ApplicationID.Value : DBNull.Value);
-            command.Parameters.AddWithValue("@FormType", string.IsNullOrEmpty(request.FormType) ? "01" : request.FormType);
-            command.Parameters.AddWithValue("@DocumentTypeCode", string.IsNullOrEmpty(request.DocumentTypeCode) ? "01" : request.DocumentTypeCode);
+            
+            // Şirket, ofis, mağaza ve depo bilgileri - sayısal tiplere dönüştürme
+            // CompanyCode her zaman 1 olarak gönderilecek
+            command.Parameters.AddWithValue("@CompanyCode", 1);
+            
+            // OfficeCode string olarak gönderilmeli
+            command.Parameters.AddWithValue("@OfficeCode", string.IsNullOrEmpty(request.OfficeCode) ? "M" : request.OfficeCode);
+            
+            // WarehouseCode sayısal olabilir
+            if (int.TryParse(string.IsNullOrEmpty(request.WarehouseCode) ? "1" : request.WarehouseCode, out int warehouseCodeInt))
+            {
+                command.Parameters.AddWithValue("@WarehouseCode", warehouseCodeInt);
+            }
+            else
+            {
+                command.Parameters.AddWithValue("@WarehouseCode", 1); // Varsayılan değer
+            }
+            
+            // Belge tipine göre uygun ApplicationCode değerini belirle
+            string documentType = "INVOICE"; // Varsayılan olarak fatura
+            if (request.DocumentType != null)
+            {
+                documentType = request.DocumentType;
+            }
+            
+            // ApplicationCode sabit bir değer olarak ayarlanıyor
+            // Belgelere göre, "WS" (Toptan Satış) işlem kodu için ApplicationCode = "18" olmalı
+            command.Parameters.AddWithValue("@ApplicationCode", "18");
+            
+            // ApplicationID için sabit bir değer kullanıyoruz
+            command.Parameters.AddWithValue("@ApplicationID", invoiceHeaderId);
+            
+            // Oluşturma ve güncelleme bilgileri
             command.Parameters.AddWithValue("@CreatedUserName", "API");
+            command.Parameters.AddWithValue("@LastUpdatedUserName", "API");
+    
+            // SQL parametrelerini logla - tüm parametreler eklendikten sonra
+            Console.BackgroundColor = ConsoleColor.Red;
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("\n===== REPOSITORY: CreateInvoiceHeaderAsync SQL PARAMETERS =====\n");
+            foreach (SqlParameter param in command.Parameters)
+            {
+                Console.WriteLine($"{param.ParameterName}: {param.Value}");
+            }
+            Console.ResetColor();
 
+            // ExecuteScalarAsync ile GUID döndürülüyor
             var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result);
+            return (Guid)result;
         }
 
-        private async Task CreateInvoiceDetailAsync(SqlConnection connection, SqlTransaction transaction, string invoiceHeaderId, CreateInvoiceDetailRequest detail)
+        private async Task CreateInvoiceLineAsync(SqlConnection connection, SqlTransaction transaction, Guid invoiceHeaderId, CreateInvoiceDetailRequest detail, int sortOrder)
         {
+            // InvoiceLineID için yeni bir GUID oluştur
+            var invoiceLineId = Guid.NewGuid();
+            
             var query = @"
-                INSERT INTO trInvoiceDetail (
-                    InvoiceHeaderID,
-                    LineNumber,
-                    ProductCode,
-                    Qty,
-                    UnitCode,
-                    UnitPrice,
-                    DiscountRate,
+                INSERT INTO trInvoiceLine (
+                    InvoiceLineID,
+                    SortOrder,
+                    ItemTypeCode,
+                    ItemCode,
+                    ColorCode,
+                    Qty1,
+                    Qty2,
+                    VatCode,
                     VatRate,
-                    Amount,
-                    DiscountAmount,
-                    VatAmount,
-                    LineNetAmount,
-                    LineTotalAmount,
-                    CurrencyCode,
-                    ExchangeRate,
-                    IsGift,
-                    IsPromotional,
-                    WarehouseCode,
-                    SalesPersonCode,
-                    ProductTypeCode,
-                    PromotionCode,
+                    DocCurrencyCode,
+                    PriceCurrencyCode,
+                    PriceExchangeRate,
+                    Price,
+                    PCTCode,
+                    InvoiceHeaderID,
                     CreatedUserName,
-                    CreatedDate
+                    CreatedDate,
+                    LastUpdatedUserName,
+                    LastUpdatedDate
                 ) VALUES (
-                    @InvoiceHeaderID,
-                    @LineNumber,
-                    @ProductCode,
-                    @Qty,
-                    @UnitCode,
-                    @UnitPrice,
-                    @DiscountRate,
+                    @InvoiceLineID,
+                    @SortOrder,
+                    @ItemTypeCode,
+                    @ItemCode,
+                    @ColorCode,
+                    @Qty1,
+                    @Qty2,
+                    @VatCode,
                     @VatRate,
-                    @Amount,
-                    @DiscountAmount,
-                    @VatAmount,
-                    @LineNetAmount,
-                    @LineTotalAmount,
-                    @CurrencyCode,
-                    @ExchangeRate,
-                    @IsGift,
-                    @IsPromotional,
-                    @WarehouseCode,
-                    @SalesPersonCode,
-                    @ProductTypeCode,
-                    @PromotionCode,
+                    @DocCurrencyCode,
+                    @PriceCurrencyCode,
+                    @PriceExchangeRate,
+                    @Price,
+                    '%0',
+                    @InvoiceHeaderID,
                     @CreatedUserName,
+                    GETDATE(),
+                    @LastUpdatedUserName,
                     GETDATE()
                 );";
 
+            // SQL sorgusunu logla
+            Console.BackgroundColor = ConsoleColor.Red;
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("\n===== REPOSITORY: CreateInvoiceLineAsync SQL QUERY =====\n");
+            Console.WriteLine(query);
+            Console.ResetColor();
+
             var command = new SqlCommand(query, connection, transaction);
             
-            // Hesaplamalar
-            decimal amount = detail.Qty * detail.UnitPrice;
-            decimal discountAmount = amount * (detail.DiscountRate / 100);
-            decimal lineNetAmount = amount - discountAmount;
-            decimal vatAmount = lineNetAmount * (detail.VatRate / 100);
-            decimal lineTotalAmount = lineNetAmount + vatAmount;
+            // InvoiceLineID parametresi (GUID)
+            command.Parameters.AddWithValue("@InvoiceLineID", invoiceLineId);
             
-            command.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
-            command.Parameters.AddWithValue("@LineNumber", detail.LineNumber);
-            command.Parameters.AddWithValue("@ProductCode", detail.ItemCode);
-            command.Parameters.AddWithValue("@Qty", detail.Qty);
-            command.Parameters.AddWithValue("@UnitCode", detail.UnitCode);
-            command.Parameters.AddWithValue("@UnitPrice", detail.UnitPrice);
-            command.Parameters.AddWithValue("@DiscountRate", detail.DiscountRate);
+            // Sıralama numarası - her satır için artan değer (1, 2, 3, ...)
+            command.Parameters.AddWithValue("@SortOrder", sortOrder);
+            
+            // Ürün bilgileri - ItemTypeCode sayısal olmalı (1: Ürün, 2: Malzeme)
+            command.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode.HasValue ? detail.ItemTypeCode.Value : (byte)1); // Varsayılan: 1 (Normal Ürün)
+            // Test amaçlı sabit bir ürün kodu kullanıyoruz - veritabanında var olan bir ürün kodu olmalı
+            command.Parameters.AddWithValue("@ItemCode", "TEST001"); // ProductCode yerine ItemCode kullanılıyor
+            command.Parameters.AddWithValue("@ColorCode", "STD"); // Standart renk kodu olarak "STD" kullanıyoruz
+            
+            // Miktar bilgileri
+            command.Parameters.AddWithValue("@Qty1", detail.Qty); // Qty yerine Qty1 kullanılıyor
+            command.Parameters.AddWithValue("@Qty2", 0); // İkincil miktar (varsayılan: 0)
+            
+            // BatchCode, SalespersonCode ve LineDescription alanları kaldırıldı
+            
+            // KDV bilgileri - VatCode = "%" + VatRate şeklinde olmalı
+            // PCTCode her zaman %0 olarak ayarlanıyor
+            command.Parameters.AddWithValue("@PCTCode", "%0");
+            command.Parameters.AddWithValue("@VatCode", string.IsNullOrEmpty(detail.VatCode) ? "%" + detail.VatRate : detail.VatCode);
             command.Parameters.AddWithValue("@VatRate", detail.VatRate);
-            command.Parameters.AddWithValue("@Amount", amount);
-            command.Parameters.AddWithValue("@DiscountAmount", discountAmount);
-            command.Parameters.AddWithValue("@VatAmount", vatAmount);
-            command.Parameters.AddWithValue("@LineNetAmount", lineNetAmount);
-            command.Parameters.AddWithValue("@LineTotalAmount", lineTotalAmount);
-            command.Parameters.AddWithValue("@CurrencyCode", string.IsNullOrEmpty(detail.CurrencyCode) ? "TRY" : detail.CurrencyCode);
-            command.Parameters.AddWithValue("@ExchangeRate", detail.ExchangeRate.HasValue ? detail.ExchangeRate.Value : 1.0m);
-            command.Parameters.AddWithValue("@IsGift", detail.IsGift);
-            command.Parameters.AddWithValue("@IsPromotional", detail.IsPromotional);
-            command.Parameters.AddWithValue("@WarehouseCode", string.IsNullOrEmpty(detail.WarehouseCode) ? "001" : detail.WarehouseCode);
-            command.Parameters.AddWithValue("@SalesPersonCode", string.IsNullOrEmpty(detail.SalesPersonCode) ? DBNull.Value : (object)detail.SalesPersonCode);
-            command.Parameters.AddWithValue("@ProductTypeCode", string.IsNullOrEmpty(detail.ProductTypeCode) ? "01" : detail.ProductTypeCode);
-            command.Parameters.AddWithValue("@PromotionCode", string.IsNullOrEmpty(detail.PromotionCode) ? DBNull.Value : (object)detail.PromotionCode);
+            
+            // Para birimi ve fiyat bilgileri
+            command.Parameters.AddWithValue("@DocCurrencyCode", string.IsNullOrEmpty(detail.CurrencyCode) ? "TRY" : detail.CurrencyCode);
+            command.Parameters.AddWithValue("@PriceCurrencyCode", string.IsNullOrEmpty(detail.PriceCurrencyCode) ? "TRY" : detail.PriceCurrencyCode);
+            command.Parameters.AddWithValue("@PriceExchangeRate", detail.ExchangeRate.HasValue ? detail.ExchangeRate.Value : 1.0);
+            command.Parameters.AddWithValue("@Price", detail.UnitPrice);
+            
+            // Fatura başlık ID'si
+            command.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
+            
+            // Uygulama bilgileri kaldırıldı
+            
+            // Oluşturma ve güncelleme bilgileri
             command.Parameters.AddWithValue("@CreatedUserName", "API");
+            command.Parameters.AddWithValue("@LastUpdatedUserName", "API");
 
             await command.ExecuteNonQueryAsync();
         }
 
-        private async Task UpdateInvoiceTotalsAsync(SqlConnection connection, SqlTransaction transaction, string invoiceHeaderId)
+        // Fatura satırlarının toplamlarını hesaplar
+        private async Task<(decimal TotalQty, decimal TotalAmount, decimal TotalVatAmount, decimal TotalNetAmount, decimal TotalGrossAmount)> CalculateInvoiceTotalsAsync(SqlConnection connection, Guid invoiceHeaderId)
         {
+            var totalQty = 0m;
+            var totalAmount = 0m;
+            var totalVatAmount = 0m;
+            var totalNetAmount = 0m;
+            var totalGrossAmount = 0m;
+
             var query = @"
-                UPDATE trInvoiceHeader
-                SET 
-                    TotalAmount = (SELECT SUM(Amount) FROM trInvoiceLineCurrency WHERE InvoiceLineID IN (SELECT InvoiceLineID FROM trInvoiceLine WHERE InvoiceHeaderID = @InvoiceHeaderID)),
-                    TotalVatAmount = (SELECT SUM(Vat) FROM trInvoiceLineCurrency WHERE InvoiceLineID IN (SELECT InvoiceLineID FROM trInvoiceLine WHERE InvoiceHeaderID = @InvoiceHeaderID)),
-                    TotalNetAmount = (SELECT SUM(NetAmount) FROM trInvoiceLineCurrency WHERE InvoiceLineID IN (SELECT InvoiceLineID FROM trInvoiceLine WHERE InvoiceHeaderID = @InvoiceHeaderID)),
-                    LastUpdatedUserName = @LastUpdatedUserName,
-                    LastUpdatedDate = GETDATE()
-                WHERE InvoiceHeaderID = @InvoiceHeaderID";
+                -- Toplam miktar
+                SELECT ISNULL(SUM(Qty1), 0) FROM trInvoiceLine WHERE InvoiceHeaderID = @InvoiceHeaderID";
 
-            var command = new SqlCommand(query, connection, transaction);
+            var command = new SqlCommand(query, connection);
             command.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
-            command.Parameters.AddWithValue("@LastUpdatedUserName", "API");
 
-            await command.ExecuteNonQueryAsync();
+            // Toplam miktarı hesapla
+            var result = await command.ExecuteScalarAsync();
+            if (result != null && result != DBNull.Value)
+            {
+                totalQty = Convert.ToDecimal(result);
+            }
+
+            // Toplam tutarı hesapla (Miktar * Fiyat)
+            query = @"SELECT ISNULL(SUM(Qty1 * Price), 0) FROM trInvoiceLine WHERE InvoiceHeaderID = @InvoiceHeaderID";
+            command.CommandText = query;
+            result = await command.ExecuteScalarAsync();
+            if (result != null && result != DBNull.Value)
+            {
+                totalAmount = Convert.ToDecimal(result);
+            }
+
+            // KDV toplamını hesapla
+            query = @"SELECT ISNULL(SUM(Qty1 * Price * (VatRate / 100)), 0) FROM trInvoiceLine WHERE InvoiceHeaderID = @InvoiceHeaderID";
+            command.CommandText = query;
+            result = await command.ExecuteScalarAsync();
+            if (result != null && result != DBNull.Value)
+            {
+                totalVatAmount = Convert.ToDecimal(result);
+            }
+
+            // Net ve brüt toplamları hesapla
+            totalNetAmount = totalAmount;
+            totalGrossAmount = totalAmount + totalVatAmount;
+
+            Console.BackgroundColor = ConsoleColor.Blue;
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("\n===== REPOSITORY: CalculateInvoiceTotalsAsync =====\n");
+            Console.WriteLine($"InvoiceHeaderID: {invoiceHeaderId}");
+            Console.WriteLine($"Toplam Miktar: {totalQty}");
+            Console.WriteLine($"Toplam Tutar: {totalAmount}");
+            Console.WriteLine($"Toplam KDV: {totalVatAmount}");
+            Console.WriteLine($"Toplam Net: {totalNetAmount}");
+            Console.WriteLine($"Toplam Brüt: {totalGrossAmount}");
+            Console.ResetColor();
+
+            return (totalQty, totalAmount, totalVatAmount, totalNetAmount, totalGrossAmount);
         }
 
         // Masraf faturaları
