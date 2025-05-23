@@ -2,8 +2,8 @@
 -- Tüm fatura satırlarını getiren sorgu (para birimi detayları olmadan)
 
 SELECT        dbo.trInvoiceHeader.InvoiceHeaderID, dbo.trInvoiceHeader.TransTypeCode, dbo.trInvoiceHeader.ProcessCode, dbo.trInvoiceHeader.InvoiceNumber, dbo.trInvoiceHeader.IsReturn, dbo.trInvoiceHeader.InvoiceDate, 
-                         dbo.trInvoiceHeader.InvoiceTime, dbo.trInvoiceHeader.OperationDate, dbo.trInvoiceHeader.OperationTime, dbo.trInvoiceHeader.Series, dbo.trInvoiceHeader.SeriesNumber, dbo.trInvoiceHeader.InvoiceTypeCode, 
-                         dbo.trInvoiceHeader.ExpenseTypeCode, dbo.trInvoiceHeader.IsEInvoice, dbo.trInvoiceHeader.EInvoiceNumber, dbo.trInvoiceHeader.EInvoiceStatusCode, dbo.trInvoiceHeader.PaymentTerm, 
+                         dbo.trInvoiceHeader.InvoiceTime, dbo.trInvoiceHeader.OperationDate, dbo.trInvoiceHeader.OperationTime, dbo.trInvoiceHeader.Series, dbo.trInvoiceHeader.SeriesNumber,  
+                         dbo.trInvoiceHeader.IsEInvoice, dbo.trInvoiceHeader.EInvoiceNumber, dbo.trInvoiceHeader.EInvoiceStatusCode, dbo.trInvoiceHeader.PaymentTerm, 
                          dbo.trInvoiceHeader.AverageDueDate, dbo.trInvoiceHeader.Description, dbo.trInvoiceHeader.InternalDescription, dbo.trInvoiceHeader.CurrAccTypeCode, dbo.trInvoiceHeader.CurrAccCode, dbo.trInvoiceHeader.SubCurrAccID, 
                          dbo.trInvoiceHeader.ContactID, dbo.trInvoiceHeader.EInvoiceAliasCode, dbo.trInvoiceHeader.CompanyCreditCardCode, dbo.trInvoiceHeader.ShipmentMethodCode, dbo.trInvoiceHeader.ShippingPostalAddressID, 
                          dbo.trInvoiceHeader.BillingPostalAddressID, dbo.trInvoiceHeader.GuarantorContactID, dbo.trInvoiceHeader.GuarantorContactID2, dbo.trInvoiceHeader.RoundsmanCode, dbo.trInvoiceHeader.DeliveryCompanyCode, 

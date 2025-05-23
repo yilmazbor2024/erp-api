@@ -36,6 +36,44 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
+        /// Fatura numarası oluşturur
+        /// </summary>
+        [HttpGet("generate-number")]
+        public async Task<ActionResult<ApiResponse<string>>> GenerateInvoiceNumber([FromQuery] string processCode)
+        {
+            try
+            {
+                // Process kodu kontrolü
+                if (string.IsNullOrEmpty(processCode))
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Process kodu boş olamaz"
+                    });
+                }
+                
+                var response = await _invoiceService.GenerateInvoiceNumberAsync(processCode);
+                
+                if (!response.Success)
+                {
+                    return StatusCode(500, response);
+                }
+                
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fatura numarası oluşturulurken hata oluştu");
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Fatura numarası oluşturulurken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+        
+        /// <summary>
         /// Toptan satış faturalarını listeler
         /// </summary>
         [HttpGet("wholesale")]
@@ -43,6 +81,26 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+                
+                // Toptan satış faturaları için ProcessCode'u otomatik olarak ayarla
+                request.ProcessCode = "WS"; // Toptan Satış olarak ayarla
+                
+                // Diğer alanları varsayılan değerlerle doldur
+                request.StoreCode = request.StoreCode ?? "";
+                request.VendorCode = request.VendorCode ?? "";
+                request.CompanyCode = request.CompanyCode ?? "";
+                request.CustomerCode = request.CustomerCode ?? "";
+                request.InvoiceNumber = request.InvoiceNumber ?? "";
+                request.WarehouseCode = request.WarehouseCode ?? "";
+            
                 var response = await _invoiceService.GetWholesaleInvoicesAsync(request);
                 
                 if (!response.Success)
@@ -123,10 +181,31 @@ namespace ErpMobile.Api.Controllers
         /// Toptan alış faturalarını listeler
         /// </summary>
         [HttpGet("wholesale-purchase")]
+        [HttpGet("purchase")]
         public async Task<ActionResult<ApiResponse<InvoiceListResult>>> GetWholesalePurchaseInvoices([FromQuery] InvoiceListRequest request)
         {
             try
             {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+
+                // ProcessCode'u otomatik olarak "BP" (Toptan Alış) olarak ayarla
+                request.ProcessCode = "BP";
+                
+                // Diğer alanları varsayılan değerlerle doldur
+                request.StoreCode = request.StoreCode ?? "";
+                request.VendorCode = request.VendorCode ?? "";
+                request.CompanyCode = request.CompanyCode ?? "";
+                request.CustomerCode = request.CustomerCode ?? "";
+                request.InvoiceNumber = request.InvoiceNumber ?? "";
+                request.WarehouseCode = request.WarehouseCode ?? "";
+           
                 var response = await _invoiceService.GetWholesalePurchaseInvoicesAsync(request);
                 
                 if (!response.Success)
@@ -204,13 +283,31 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
-        /// Masraf alış faturalarını listeler
+        /// Masraf faturalarını listeler
         /// </summary>
         [HttpGet("expense")]
         public async Task<ActionResult<ApiResponse<InvoiceListResult>>> GetExpenseInvoices([FromQuery] InvoiceListRequest request)
         {
             try
             {
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+
+                // ProcessCode'u otomatik olarak "EP" (Masraf Alış) olarak ayarla
+                request.ProcessCode = "EP";
+                
+                // Diğer alanları varsayılan değerlerle doldur
+                request.StoreCode = request.StoreCode ?? "001";
+                request.VendorCode = request.VendorCode ?? "";
+                request.CompanyCode = request.CompanyCode ?? "001";
+                request.CustomerCode = request.CustomerCode ?? "";
+                request.InvoiceNumber = request.InvoiceNumber ?? "";
+                request.WarehouseCode = request.WarehouseCode ?? "001";
+              
+
                 var response = await _invoiceService.GetExpenseInvoicesAsync(request);
                 
                 if (!response.Success)
@@ -316,13 +413,369 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
-        /// Tüm faturaları listeler
+        /// Fatura ödeme detaylarını getirir
+        /// </summary>
+        [HttpGet("{id}/payment-details")]
+        public async Task<ActionResult<ApiResponse<List<InvoicePaymentDetailModel>>>> GetInvoicePaymentDetails(string id)
+        {
+            try
+            {
+                var response = await _invoiceService.GetInvoicePaymentDetailsAsync(id);
+                
+                if (!response.Success)
+                {
+                    return NotFound(response);
+                }
+                
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Fatura ödeme detayları getirilirken hata oluştu. ID: {id}");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Fatura ödeme detayları getirilirken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Sipariş bazlı faturaları listeler - ProcessCode kullanılır, diğer parametreler opsiyoneldir
+        /// </summary>
+        [HttpGet("order-based")]
+        public async Task<ActionResult<ApiResponse<InvoiceListResult>>> GetOrderBasedInvoices([FromQuery] InvoiceListRequest request)
+        {
+            try
+            {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+                
+                // Varsayılan değerleri ayarla
+                request.Page = request.Page <= 0 ? 1 : request.Page;
+                request.PageSize = request.PageSize <= 0 ? 10 : request.PageSize;
+                request.LangCode = request.LangCode ?? "TR";
+                
+                // Sipariş bazlı faturaları getir
+                var result = await _invoiceService.GetOrderBasedInvoicesAsync(request);
+                
+                return Ok(new ApiResponse<InvoiceListResult>
+                {
+                    Success = true,
+                    Message = result.items.Count > 0 ? $"{result.totalCount} adet sipariş bazlı fatura bulundu" : "Sipariş bazlı fatura bulunamadı",
+                    Data = new InvoiceListResult
+                    {
+                        Items = result.items,
+                        TotalCount = result.totalCount,
+                        Page = request.Page,
+                        PageSize = request.PageSize
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş bazlı faturalar getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Sipariş bazlı faturalar getirilirken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+        
+        /// <summary>
+        /// İrsaliye bazlı faturaları listeler - ProcessCode kullanılır, diğer parametreler opsiyoneldir
+        /// </summary>
+        [HttpGet("shipment-based")]
+        public async Task<ActionResult<ApiResponse<InvoiceListResult>>> GetShipmentBasedInvoices([FromQuery] InvoiceListRequest request)
+        {
+            try
+            {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+                
+                // Varsayılan değerleri ayarla
+                request.Page = request.Page <= 0 ? 1 : request.Page;
+                request.PageSize = request.PageSize <= 0 ? 10 : request.PageSize;
+                request.LangCode = request.LangCode ?? "TR";
+                
+                // İrsaliye bazlı faturaları getir
+                var result = await _invoiceService.GetShipmentBasedInvoicesAsync(request);
+                
+                return Ok(new ApiResponse<InvoiceListResult>
+                {
+                    Success = true,
+                    Message = result.items.Count > 0 ? $"{result.totalCount} adet irsaliye bazlı fatura bulundu" : "İrsaliye bazlı fatura bulunamadı",
+                    Data = new InvoiceListResult
+                    {
+                        Items = result.items,
+                        TotalCount = result.totalCount,
+                        Page = request.Page,
+                        PageSize = request.PageSize
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İrsaliye bazlı faturalar getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "İrsaliye bazlı faturalar getirilirken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+        
+        /// <summary>
+        /// Direkt toptan satış faturalarını listeler - 
+        /// </summary>
+        [HttpGet("direct-sales")]
+        public async Task<ActionResult<ApiResponse<InvoiceListResult>>> GetDirectSalesInvoices([FromQuery] InvoiceListRequest request)
+        {
+            try
+            {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+                
+                // Varsayılan değerleri ayarla
+                request.Page = request.Page <= 0 ? 1 : request.Page;
+                request.PageSize = request.PageSize <= 0 ? 10 : request.PageSize;
+                request.LangCode = request.LangCode ?? "TR";
+                request.ProcessCode = "WS"; // Toptan Satış
+                
+                // Direkt satış faturalarını getir
+                var result = await _invoiceService.GetDirectSalesInvoicesAsync(request);
+                
+                return Ok(new ApiResponse<InvoiceListResult>
+                {
+                    Success = true,
+                    Message = result.items.Count > 0 ? $"{result.totalCount} adet direkt satış faturası bulundu" : "Direkt satış faturası bulunamadı",
+                    Data = new InvoiceListResult
+                    {
+                        Items = result.items,
+                        TotalCount = result.totalCount,
+                        Page = request.Page,
+                        PageSize = request.PageSize
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Direkt satış faturaları getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Direkt satış faturaları getirilirken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Sipariş bazlı alış faturalarını listeler
+        /// </summary>
+        [HttpGet("order-based-purchase")]
+        public async Task<ActionResult<List<InvoiceHeaderModel>>> GetOrderBasedPurchaseInvoices([FromQuery] InvoiceListRequest request)
+        {
+            try
+            {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+                
+                // Varsayılan değerleri ayarla
+                request.StoreCode = request.StoreCode ?? "001";
+                request.VendorCode = request.VendorCode ?? "";
+                request.CompanyCode = request.CompanyCode ?? "1";
+                request.InvoiceNumber = request.InvoiceNumber ?? "";
+                request.WarehouseCode = request.WarehouseCode ?? "001";
+            
+                var (items, totalCount) = await _invoiceService.GetOrderBasedPurchaseInvoicesAsync(request);
+                
+                if (items == null || items.Count == 0)
+                {
+                    return Ok(new List<InvoiceHeaderModel>());
+                }
+                
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş bazlı alış faturaları getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Sipariş bazlı alış faturaları getirilirken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+        
+        /// <summary>
+        /// İrsaliye bazlı alış faturalarını listeler
+        /// </summary>
+        [HttpGet("shipment-based-purchase")]
+        public async Task<ActionResult<List<InvoiceHeaderModel>>> GetShipmentBasedPurchaseInvoices([FromQuery] InvoiceListRequest request)
+        {
+            try
+            {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+                
+                // Varsayılan değerleri ayarla
+                request.StoreCode = request.StoreCode ?? "001";
+                request.VendorCode = request.VendorCode ?? "";
+                request.CompanyCode = request.CompanyCode ?? "1";
+                request.InvoiceNumber = request.InvoiceNumber ?? "";
+                request.WarehouseCode = request.WarehouseCode ?? "001";
+           
+                var (items, totalCount) = await _invoiceService.GetShipmentBasedPurchaseInvoicesAsync(request);
+                
+                if (items == null || items.Count == 0)
+                {
+                    return Ok(new List<InvoiceHeaderModel>());
+                }
+                
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İrsaliye bazlı alış faturaları getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "İrsaliye bazlı alış faturaları getirilirken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Direkt toptan alış faturalarını listeler
+        /// </summary>
+        [HttpGet("direct-wholesale-purchase")]
+        public async Task<ActionResult<List<InvoiceHeaderModel>>> GetDirectWholesalePurchaseInvoices([FromQuery] InvoiceListRequest request)
+        {
+            try
+            {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+                
+                // Varsayılan değerleri ayarla
+                request.StoreCode = request.StoreCode ?? "001";
+                request.VendorCode = request.VendorCode ?? "";
+                request.CompanyCode = request.CompanyCode ?? "1";
+                request.InvoiceNumber = request.InvoiceNumber ?? "";
+                request.WarehouseCode = request.WarehouseCode ?? "001";
+     
+                var (items, totalCount) = await _invoiceService.GetDirectWholesalePurchaseInvoicesAsync(request);
+                
+                if (items == null || items.Count == 0)
+                {
+                    return Ok(new List<InvoiceHeaderModel>());
+                }
+                
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Direkt toptan alış faturaları getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Direkt toptan alış faturaları getirilirken bir hata oluştu: " + ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Tüm faturaları listeler - ProcessCode kullanılır, diğer parametreler opsiyoneldir
         /// </summary>
         [HttpGet]
+        [HttpGet("all")]
         public async Task<ActionResult<ApiResponse<InvoiceListResult>>> GetAllInvoices([FromQuery] InvoiceListRequest request)
         {
             try
             {
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+                
+                // Null kontrolü
+                if (request == null)
+                {
+                    request = new InvoiceListRequest();
+                }
+
+                // ProcessCode kullanılıyor,  
+                // ProcessCode yoksa uyarı ver ama zorunlu tutma
+                if (string.IsNullOrEmpty(request.ProcessCode))
+                {
+                    _logger.LogWarning("ProcessCode belirtilmemiş, tüm faturalar listelenecek");
+                }
+                
+                // Diğer alanları varsayılan değerlerle doldur
+                request.StoreCode = request.StoreCode ?? "001";
+                request.VendorCode = request.VendorCode ?? "";
+                request.CompanyCode = request.CompanyCode ?? "001";
+                request.CustomerCode = request.CustomerCode ?? "";
+                request.InvoiceNumber = request.InvoiceNumber ?? "";
+                request.WarehouseCode = request.WarehouseCode ?? "001";
+        
+                // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
+                ModelState.Clear();
+
+                // Gelen isteğin parametrelerini logla
+                Console.BackgroundColor = ConsoleColor.Yellow;
+                Console.ForegroundColor = ConsoleColor.Blue;
+                Console.WriteLine("\n===== GetAllInvoices REQUEST PARAMETERS =====\n");
+                Console.WriteLine($"Page/PageNumber: {request.Page}");
+                Console.WriteLine($"PageSize: {request.PageSize}");
+                Console.WriteLine($"SortBy: {request.SortBy}");
+                Console.WriteLine($"SortDirection: {request.SortDirection}");
+                Console.WriteLine($"InvoiceNumber: {request.InvoiceNumber}");
+                Console.WriteLine($"ProcessCode: {request.ProcessCode}");
+                Console.WriteLine($"CustomerCode: {request.CustomerCode}");
+                Console.WriteLine($"VendorCode: {request.VendorCode}");
+                Console.WriteLine($"StartDate: {request.StartDate}");
+                Console.WriteLine($"EndDate: {request.EndDate}");
+                Console.WriteLine($"CompanyCode: {request.CompanyCode}");
+                Console.WriteLine($"StoreCode: {request.StoreCode}");
+                Console.WriteLine($"WarehouseCode: {request.WarehouseCode}");
+              
+                Console.ResetColor();
+                
                 // Doğrudan tüm faturaları getiren servisi çağır
                 var response = await _invoiceService.GetAllInvoicesAsync(request);
                 
@@ -335,11 +788,19 @@ namespace ErpMobile.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Faturalar getirilirken hata oluştu");
+                _logger.LogError(ex, "Faturalar getirilirken hata oluştu: {Message}", ex.Message);
+                
+                // Hata mesajını daha detaylı hale getir
+                string errorMessage = ex.Message;
+                if (ex.InnerException != null)
+                {
+                    errorMessage += " - " + ex.InnerException.Message;
+                }
+                
                 return StatusCode(500, new ApiResponse<object>
                 {
                     Success = false,
-                    Message = "Faturalar getirilirken bir hata oluştu: " + ex.Message
+                    Message = "Faturalar getirilirken bir hata oluştu: " + errorMessage
                 });
             }
         }

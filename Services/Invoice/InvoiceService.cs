@@ -21,6 +21,64 @@ namespace ErpMobile.Api.Services.Invoice
             _invoiceRepository = invoiceRepository;
         }
 
+        // Fatura numarası oluşturan metot
+        public async Task<ApiResponse<string>> GenerateInvoiceNumberAsync(string processCode)
+        {
+            try
+            {
+                // Process kodu kontrolü
+                if (string.IsNullOrEmpty(processCode))
+                {
+                    return new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Process kodu boş olamaz"
+                    };
+                }
+
+                // Veritabanından son fatura numarasını al
+                var lastInvoiceNumber = await _invoiceRepository.GetLastInvoiceNumberByProcessCodeAsync(processCode);
+                
+                // Yeni fatura numarası oluştur
+                string newInvoiceNumber;
+                if (string.IsNullOrEmpty(lastInvoiceNumber))
+                {
+                    // İlk fatura numarası
+                    newInvoiceNumber = $"{processCode}-1";
+                }
+                else
+                {
+                    // Son fatura numarasından yeni numara oluştur
+                    var parts = lastInvoiceNumber.Split('-');
+                    if (parts.Length >= 2 && int.TryParse(parts[1], out int lastNumber))
+                    {
+                        newInvoiceNumber = $"{processCode}-{lastNumber + 1}";
+                    }
+                    else
+                    {
+                        // Format uygun değilse yeni format oluştur
+                        newInvoiceNumber = $"{processCode}-1";
+                    }
+                }
+
+                return new ApiResponse<string>
+                {
+                    Success = true,
+                    Message = "Fatura numarası başarıyla oluşturuldu",
+                    Data = newInvoiceNumber
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fatura numarası oluşturulurken hata oluştu");
+                return new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Fatura numarası oluşturulurken bir hata oluştu: " + ex.Message
+                };
+            }
+        }
+
         // Toptan satış faturaları
         public async Task<ApiResponse<InvoiceListResult>> GetWholesaleInvoicesAsync(InvoiceListRequest request)
         {
@@ -385,12 +443,22 @@ namespace ErpMobile.Api.Services.Invoice
                     };
                 }
                 
-                if (string.IsNullOrEmpty(request.ExpenseTypeCode))
+                if (string.IsNullOrEmpty(request.ProcessCode))
                 {
                     return new ApiResponse<InvoiceHeaderModel>
                     {
                         Success = false,
-                        Message = "Masraf tipi kodu boş olamaz"
+                        Message = "ProcessCode boş olamaz"
+                    };
+                }
+                
+                // Masraf faturaları için ProcessCode EP olmalıdır
+                if (request.ProcessCode != "EP")
+                {
+                    return new ApiResponse<InvoiceHeaderModel>
+                    {
+                        Success = false,
+                        Message = "Masraf faturaları için ProcessCode 'EP' olmalıdır"
                     };
                 }
                 
@@ -421,6 +489,90 @@ namespace ErpMobile.Api.Services.Invoice
                     Success = false,
                     Message = "Fatura oluşturulurken bir hata oluştu: " + ex.Message
                 };
+            }
+        }
+
+        // Sipariş bazlı faturaları getiren metot
+        public async Task<(List<InvoiceHeaderModel> items, int totalCount)> GetOrderBasedInvoicesAsync(InvoiceListRequest request)
+        {
+            try
+            {
+                return await _invoiceRepository.GetOrderBasedInvoicesAsync(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş bazlı faturalar getirilirken hata oluştu");
+                throw;
+            }
+        }
+
+        // İrsaliye bazlı faturaları getiren metot
+        public async Task<(List<InvoiceHeaderModel> items, int totalCount)> GetShipmentBasedInvoicesAsync(InvoiceListRequest request)
+        {
+            try
+            {
+                return await _invoiceRepository.GetShipmentBasedInvoicesAsync(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İrsaliye bazlı faturalar getirilirken hata oluştu");
+                throw;
+            }
+        }
+
+        // Sipariş bazlı alış faturalarını getiren metot
+        public async Task<(List<InvoiceHeaderModel> items, int totalCount)> GetOrderBasedPurchaseInvoicesAsync(InvoiceListRequest request)
+        {
+            try
+            {
+                return await _invoiceRepository.GetOrderBasedPurchaseInvoicesAsync(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş bazlı alış faturaları getirilirken hata oluştu");
+                throw;
+            }
+        }
+
+        // İrsaliye bazlı alış faturalarını getiren metot
+        public async Task<(List<InvoiceHeaderModel> items, int totalCount)> GetShipmentBasedPurchaseInvoicesAsync(InvoiceListRequest request)
+        {
+            try
+            {
+                return await _invoiceRepository.GetShipmentBasedPurchaseInvoicesAsync(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "İrsaliye bazlı alış faturaları getirilirken hata oluştu");
+                throw;
+            }
+        }
+
+        // Direkt toptan alış faturalarını getiren metot
+        public async Task<(List<InvoiceHeaderModel> items, int totalCount)> GetDirectWholesalePurchaseInvoicesAsync(InvoiceListRequest request)
+        {
+            try
+            {
+                return await _invoiceRepository.GetDirectWholesalePurchaseInvoicesAsync(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Direkt toptan alış faturaları getirilirken hata oluştu");
+                throw;
+            }
+        }
+
+        // Direkt satış faturalarını getiren metot
+        public async Task<(List<InvoiceHeaderModel> items, int totalCount)> GetDirectSalesInvoicesAsync(InvoiceListRequest request)
+        {
+            try
+            {
+                return await _invoiceRepository.GetDirectSalesInvoicesAsync(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Direkt satış faturaları getirilirken hata oluştu");
+                throw;
             }
         }
 
@@ -501,6 +653,40 @@ namespace ErpMobile.Api.Services.Invoice
                 {
                     Success = false,
                     Message = "Fatura detayları getirilirken bir hata oluştu: " + ex.Message
+                };
+            }
+        }
+
+        // Fatura ödeme detayları
+        public async Task<ApiResponse<List<InvoicePaymentDetailModel>>> GetInvoicePaymentDetailsAsync(string invoiceHeaderId)
+        {
+            try
+            {
+                var paymentDetails = await _invoiceRepository.GetInvoicePaymentDetailsAsync(invoiceHeaderId);
+                
+                if (paymentDetails == null || paymentDetails.Count == 0)
+                {
+                    return new ApiResponse<List<InvoicePaymentDetailModel>>
+                    {
+                        Success = false,
+                        Message = $"Fatura ödeme detayları bulunamadı. Fatura ID: {invoiceHeaderId}"
+                    };
+                }
+                
+                return new ApiResponse<List<InvoicePaymentDetailModel>>
+                {
+                    Success = true,
+                    Message = "Fatura ödeme detayları başarıyla getirildi",
+                    Data = paymentDetails
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Fatura ödeme detayları getirilirken hata oluştu. Fatura ID: {invoiceHeaderId}");
+                return new ApiResponse<List<InvoicePaymentDetailModel>>
+                {
+                    Success = false,
+                    Message = "Fatura ödeme detayları getirilirken bir hata oluştu: " + ex.Message
                 };
             }
         }

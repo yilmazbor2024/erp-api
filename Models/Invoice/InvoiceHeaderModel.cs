@@ -7,8 +7,7 @@ namespace ErpMobile.Api.Models.Invoice
     {
         public string InvoiceNumber { get; set; }
         public bool IsReturn { get; set; }
-        public bool IsEInvoice { get; set; }
-        public string InvoiceTypeCode { get; set; }
+        public bool IsEInvoice { get; set; } 
         public string InvoiceTypeDescription { get; set; }
         
         public DateTime InvoiceDate { get; set; }
@@ -53,9 +52,9 @@ namespace ErpMobile.Api.Models.Invoice
         public bool IsPrinted { get; set; }
         public string ApplicationCode { get; set; }
         public string ApplicationDescription { get; set; }
-        public int ApplicationID { get; set; }
-        public int InvoiceHeaderID { get; set; }
-        public string ExpenseTypeCode { get; set; }
+        public string ApplicationID { get; set; }
+        public string InvoiceHeaderID { get; set; }
+     
         public string FormType { get; set; }
         public string DocumentTypeCode { get; set; }
         
@@ -71,6 +70,11 @@ namespace ErpMobile.Api.Models.Invoice
         public DateTime CreatedDate { get; set; }
         public string ModifiedBy { get; set; }
         public DateTime? ModifiedDate { get; set; }
+        
+        // Veritabanından gelen ek alanlar
+        public string CreatedUserName { get; set; }
+        public string LastUpdatedUserName { get; set; }
+        public DateTime? LastUpdatedDate { get; set; }
         
         // Fatura detayları
         public List<InvoiceDetailModel> Details { get; set; } = new List<InvoiceDetailModel>();

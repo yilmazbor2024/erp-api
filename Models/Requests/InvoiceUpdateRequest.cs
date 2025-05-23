@@ -11,7 +11,7 @@ namespace ErpMobile.Api.Models.Requests
         public int? CurrAccTypeCode { get; set; }
         public string DocCurrencyCode { get; set; }
         public string Notes { get; set; }
-        public string InvoiceTypeCode { get; set; }
+ 
         public bool? IsCompleted { get; set; }
         public bool? IsSuspended { get; set; }
     }

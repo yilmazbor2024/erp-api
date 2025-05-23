@@ -2,7 +2,7 @@
 -- Tüm faturaları ve ilişkili öznitelikleri (attributes) getiren sorgu
 
 SELECT        dbo.AllInvoices.InvoiceHeaderID, dbo.AllInvoices.TransTypeCode, dbo.AllInvoices.ProcessCode, dbo.AllInvoices.InvoiceNumber, dbo.AllInvoices.IsReturn, dbo.AllInvoices.InvoiceDate, dbo.AllInvoices.InvoiceTime, 
-                         dbo.AllInvoices.OperationDate, dbo.AllInvoices.OperationTime, dbo.AllInvoices.Series, dbo.AllInvoices.SeriesNumber, dbo.AllInvoices.InvoiceTypeCode, dbo.AllInvoices.ExpenseTypeCode, dbo.AllInvoices.IsEInvoice, 
+                         dbo.AllInvoices.OperationDate, dbo.AllInvoices.OperationTime, dbo.AllInvoices.Series, dbo.AllInvoices.SeriesNumber,  dbo.AllInvoices.IsEInvoice, 
                          dbo.AllInvoices.EInvoiceNumber, dbo.AllInvoices.EInvoiceStatusCode, dbo.AllInvoices.PaymentTerm, dbo.AllInvoices.AverageDueDate, dbo.AllInvoices.Description, dbo.AllInvoices.InternalDescription, 
                          dbo.AllInvoices.CurrAccTypeCode, dbo.AllInvoices.CurrAccCode, dbo.AllInvoices.SubCurrAccID, dbo.AllInvoices.ContactID, dbo.AllInvoices.EInvoiceAliasCode, dbo.AllInvoices.CompanyCreditCardCode, 
                          dbo.AllInvoices.ShipmentMethodCode, dbo.AllInvoices.ShippingPostalAddressID, dbo.AllInvoices.BillingPostalAddressID, dbo.AllInvoices.GuarantorContactID, dbo.AllInvoices.GuarantorContactID2, 

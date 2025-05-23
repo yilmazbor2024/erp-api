@@ -8,8 +8,29 @@ namespace ErpMobile.Api.Repositories.Invoice
 {
     public interface IInvoiceRepository
     {
+        // Fatura numarası oluşturmak için son fatura numarasını getiren metot
+        Task<string> GetLastInvoiceNumberByProcessCodeAsync(string processCode);
+        
         // Tüm fatura tiplerini getiren genel metot
         Task<(List<InvoiceHeaderModel> items, int totalCount)> GetAllInvoicesAsync(InvoiceListRequest request);
+        
+        // Sipariş bazlı faturalar
+        Task<(List<InvoiceHeaderModel> items, int totalCount)> GetOrderBasedInvoicesAsync(InvoiceListRequest request);
+        
+        // Sipariş bazlı alış faturaları
+        Task<(List<InvoiceHeaderModel> items, int totalCount)> GetOrderBasedPurchaseInvoicesAsync(InvoiceListRequest request);
+        
+        // İrsaliye bazlı faturalar
+        Task<(List<InvoiceHeaderModel> items, int totalCount)> GetShipmentBasedInvoicesAsync(InvoiceListRequest request);
+        
+        // İrsaliye bazlı alış faturaları
+        Task<(List<InvoiceHeaderModel> items, int totalCount)> GetShipmentBasedPurchaseInvoicesAsync(InvoiceListRequest request);
+        
+        // Direkt toptan alış faturaları
+        Task<(List<InvoiceHeaderModel> items, int totalCount)> GetDirectWholesalePurchaseInvoicesAsync(InvoiceListRequest request);
+        
+        // Direkt satış faturaları
+        Task<(List<InvoiceHeaderModel> items, int totalCount)> GetDirectSalesInvoicesAsync(InvoiceListRequest request);
         
         // Toptan satış faturaları
         Task<(List<InvoiceHeaderModel> items, int totalCount)> GetWholesaleInvoicesAsync(InvoiceListRequest request);
@@ -28,5 +49,8 @@ namespace ErpMobile.Api.Repositories.Invoice
         
         // Fatura detayları
         Task<List<InvoiceDetailModel>> GetInvoiceDetailsAsync(int invoiceHeaderId);
+        
+        // Fatura ödeme detayları
+        Task<List<InvoicePaymentDetailModel>> GetInvoicePaymentDetailsAsync(string invoiceHeaderId);
     }
 }

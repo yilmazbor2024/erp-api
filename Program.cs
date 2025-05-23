@@ -43,7 +43,11 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options => {
+        // Model doğrulama hatalarında otomatik BadRequest dönüşünü devre dışı bırak
+        options.SuppressModelStateInvalidFilter = true;
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 // Swagger/OpenAPI configuration
@@ -365,12 +369,14 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseHttpsRedirection();
+app.UseRouting();
+
+// CORS middleware'i UseRouting ve UseAuthentication arasında olmalı
 app.UseCors(builder =>
     builder.WithOrigins("http://localhost:3000", "http://192.168.1.113:3000")
            .AllowAnyHeader()
            .AllowAnyMethod()
            .AllowCredentials());
-app.UseRouting();
 
 // Eski API endpoint'lerini yeni endpoint'lere yönlendir
 // Middleware devre dışı bırakıldı

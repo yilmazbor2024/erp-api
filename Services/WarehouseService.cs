@@ -42,7 +42,7 @@ namespace ErpMobile.Api.Services
                             IsDefault,
                             IsBlocked
                         FROM Warehouse(N'TR')
-                        WHERE IsBlocked = 0
+                        WHERE IsBlocked = 0 AND WarehouseOwnerCode = 1
                         ORDER BY WarehouseDescription";
 
                     var warehouses = await connection.QueryAsync<WarehouseResponse>(sql);

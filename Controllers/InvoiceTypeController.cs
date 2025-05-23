@@ -69,7 +69,6 @@ namespace ErpMobile.Api.Controllers
         /// <param name="pageSize">Number of items per page</param>
         /// <param name="sortBy">Field to sort by</param>
         /// <param name="sortDirection">Sort direction (asc or desc)</param>
-        /// <param name="invoiceTypeCode">Filter by invoice type code (e.g. WS for wholesale, WP for wholesale purchase)</param>
         /// <param name="transTypeCode">Filter by transaction type code</param>
         /// <param name="customerCode">Filter by customer code</param>
         /// <param name="vendorCode">Filter by vendor code</param>
@@ -84,7 +83,6 @@ namespace ErpMobile.Api.Controllers
             [FromQuery] int pageSize = 10,
             [FromQuery] string sortBy = "invoiceDate",
             [FromQuery] string sortDirection = "desc",
-            [FromQuery] string invoiceTypeCode = null,
             [FromQuery] string transTypeCode = null,
             [FromQuery] string customerCode = null,
             [FromQuery] string vendorCode = null,

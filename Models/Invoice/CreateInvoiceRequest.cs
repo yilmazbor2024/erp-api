@@ -14,8 +14,7 @@ namespace ErpMobile.Api.Models.Invoice
         
         public bool IsEInvoice { get; set; }
         
-        [Required]
-        public string InvoiceTypeCode { get; set; }
+        
         
         [Required]
         public DateTime InvoiceDate { get; set; }
@@ -84,7 +83,7 @@ namespace ErpMobile.Api.Models.Invoice
         
         public int? ApplicationID { get; set; }
         
-        public string ExpenseTypeCode { get; set; }
+ 
         
         public string FormType { get; set; }
         

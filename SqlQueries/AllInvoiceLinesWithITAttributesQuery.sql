@@ -2,8 +2,8 @@
 -- Tüm fatura satırlarını ve ilişkili satır özniteliklerini (IT Attributes) getiren sorgu
 
 SELECT        dbo.AllInvoiceLines.InvoiceHeaderID, dbo.AllInvoiceLines.TransTypeCode, dbo.AllInvoiceLines.ProcessCode, dbo.AllInvoiceLines.InvoiceNumber, dbo.AllInvoiceLines.IsReturn, dbo.AllInvoiceLines.InvoiceDate, 
-                         dbo.AllInvoiceLines.InvoiceTime, dbo.AllInvoiceLines.OperationDate, dbo.AllInvoiceLines.OperationTime, dbo.AllInvoiceLines.Series, dbo.AllInvoiceLines.SeriesNumber, dbo.AllInvoiceLines.InvoiceTypeCode, 
-                         dbo.AllInvoiceLines.ExpenseTypeCode, dbo.AllInvoiceLines.IsEInvoice, dbo.AllInvoiceLines.EInvoiceNumber, dbo.AllInvoiceLines.EInvoiceStatusCode, dbo.AllInvoiceLines.PaymentTerm, dbo.AllInvoiceLines.AverageDueDate, 
+                         dbo.AllInvoiceLines.InvoiceTime, dbo.AllInvoiceLines.OperationDate, dbo.AllInvoiceLines.OperationTime, dbo.AllInvoiceLines.Series, dbo.AllInvoiceLines.SeriesNumber, 
+                         dbo.AllInvoiceLines.IsEInvoice, dbo.AllInvoiceLines.EInvoiceNumber, dbo.AllInvoiceLines.EInvoiceStatusCode, dbo.AllInvoiceLines.PaymentTerm, dbo.AllInvoiceLines.AverageDueDate, 
                          dbo.AllInvoiceLines.Description, dbo.AllInvoiceLines.InternalDescription, dbo.AllInvoiceLines.CurrAccTypeCode, dbo.AllInvoiceLines.CurrAccCode, dbo.AllInvoiceLines.SubCurrAccID, dbo.AllInvoiceLines.ContactID, 
                          dbo.AllInvoiceLines.EInvoiceAliasCode, dbo.AllInvoiceLines.CompanyCreditCardCode, dbo.AllInvoiceLines.ShipmentMethodCode, dbo.AllInvoiceLines.ShippingPostalAddressID, dbo.AllInvoiceLines.BillingPostalAddressID, 
                          dbo.AllInvoiceLines.GuarantorContactID, dbo.AllInvoiceLines.GuarantorContactID2, dbo.AllInvoiceLines.RoundsmanCode, dbo.AllInvoiceLines.DeliveryCompanyCode, dbo.AllInvoiceLines.DeliveryCompanyBarcode, 
