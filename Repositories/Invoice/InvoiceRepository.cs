@@ -2010,6 +2010,8 @@ namespace ErpMobile.Api.Repositories.Invoice
                     StoreCode = reader["StoreCode"].ToString(),
                     WarehouseCode = reader["WarehouseCode"].ToString(),
                     ProcessCode = processCode,
+                    InvoiceTypeCode = reader.HasColumn("InvoiceTypeCode") ? reader["InvoiceTypeCode"].ToString() : "",
+                    InvoiceTypeDescription = reader.HasColumn("InvoiceTypeDescription") ? reader["InvoiceTypeDescription"].ToString() : "",
                     IsCompleted = Convert.ToBoolean(reader["IsCompleted"]),
                     IsSuspended = Convert.ToBoolean(reader["IsSuspended"]),
                     IsLocked = Convert.ToBoolean(reader["IsLocked"]),

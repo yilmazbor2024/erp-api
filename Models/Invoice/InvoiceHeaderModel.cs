@@ -8,6 +8,7 @@ namespace ErpMobile.Api.Models.Invoice
         public string InvoiceNumber { get; set; }
         public bool IsReturn { get; set; }
         public bool IsEInvoice { get; set; } 
+        public string InvoiceTypeCode { get; set; }
         public string InvoiceTypeDescription { get; set; }
         
         public DateTime InvoiceDate { get; set; }
