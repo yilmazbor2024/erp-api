@@ -1528,6 +1528,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                     ItemTypeCode,
                     ItemCode,
                     ColorCode,
+                    ItemDim1Code,
+                    ItemDim2Code,
+                    ItemDim3Code,
                     Qty1,
                     Qty2,
                     VatCode,
@@ -1548,6 +1551,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                     @ItemTypeCode,
                     @ItemCode,
                     @ColorCode,
+                    @ItemDim1Code,
+                    @ItemDim2Code,
+                    @ItemDim3Code,
                     @Qty1,
                     @Qty2,
                     @VatCode,
@@ -1581,9 +1587,20 @@ namespace ErpMobile.Api.Repositories.Invoice
             
             // Ürün bilgileri - ItemTypeCode sayısal olmalı (1: Ürün, 2: Malzeme)
             command.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode.HasValue ? detail.ItemTypeCode.Value : (byte)1); // Varsayılan: 1 (Normal Ürün)
-            // Test amaçlı sabit bir ürün kodu kullanıyoruz - veritabanında var olan bir ürün kodu olmalı
-            command.Parameters.AddWithValue("@ItemCode", "TEST001"); // ProductCode yerine ItemCode kullanılıyor
+            // Ürün kodu kontrolü - NULL olamaz
+            if (string.IsNullOrEmpty(detail.ItemCode))
+            {
+                throw new ArgumentException("ItemCode alanı boş olamaz. Lütfen geçerli bir ürün kodu girin.");
+            }
+            
+            // Ürün bilgileri
+            command.Parameters.AddWithValue("@ItemCode", detail.ItemCode); // Frontend'den gelen ürün kodu
             command.Parameters.AddWithValue("@ColorCode", "STD"); // Standart renk kodu olarak "STD" kullanıyoruz
+            
+            // Boyut kodları - NULL olamaz
+            command.Parameters.AddWithValue("@ItemDim1Code", "STD"); // Standart boyut kodu
+            command.Parameters.AddWithValue("@ItemDim2Code", "STD"); // Standart boyut kodu
+            command.Parameters.AddWithValue("@ItemDim3Code", "STD"); // Standart boyut kodu
             
             // Miktar bilgileri
             command.Parameters.AddWithValue("@Qty1", detail.Qty); // Qty yerine Qty1 kullanılıyor
