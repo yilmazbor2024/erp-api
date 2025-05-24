@@ -177,48 +177,59 @@ namespace ErpMobile.Api.Repositories.Product
                     return result;
                 }
 
-                // SQL sorgusu - ürün koduna göre fiyat listesi getirme
+                // Ürün koduna göre fiyat listesi getirme için SQL sorgusu
+                _logger.LogInformation($"Fiyat listesi için SQL sorgusu çalıştırılıyor. Ürün Kodu: {productCode}");
                 var query = @"
-                SELECT PriceListNumber        = trPriceListHeader.PriceListNumber
-                     , PriceGroupCode            = trPriceListHeader.PriceGroupCode
-                     , PriceGroupDescription    = ISNULL(cdPriceGroupDesc.PriceGroupDescription , SPACE(0))
-                     , PriceListTypeCode        = trPriceListHeader.PriceListTypeCode
-                     , PriceListTypeDescription = ISNULL(cdPriceListTypeDesc.PriceListTypeDescription , SPACE(0))
-                     , PriceListDate            = trPriceListHeader.PriceListDate
-                     , ValidDate                = trPriceListHeader.ValidDate 
-                     , ValidTime                = trPriceListHeader.ValidTime 
-                     , CompanyCode                = trPriceListHeader.CompanyCode
-                     , IsConfirmed                = trPriceListHeader.IsConfirmed
-                     , IsCompleted                = trPriceListHeader.IsCompleted
-                     , IsLocked                    = trPriceListHeader.IsLocked             
-                     , ApplicationCode            = trPriceListHeader.ApplicationCode
-                     , ApplicationDescription    = ISNULL(bsApplicationDesc.ApplicationDescription ,SPACE(0))
-                     , CreatedUserName            = trPriceListHeader.CreatedUserName
-                     , LastUpdatedUserName        = trPriceListHeader.LastUpdatedUserName
-                     , trPriceListHeader.PriceListHeaderID
-                     , trPriceListHeader.ApplicationID
-                     , Price                     = ISNULL(trPriceListDetail.Price, 0)
-                     , VatRate                   = ISNULL(cdItem.VatRate, 18)
-                     , ProductCode               = @productCode
-                FROM trPriceListHeader WITH (NOLOCK)
-                    LEFT OUTER JOIN cdPriceGroupDesc WITH(NOLOCK)
-                        ON    cdPriceGroupDesc.PriceGroupCode        = trPriceListHeader.PriceGroupCode
-                        AND cdPriceGroupDesc.LangCode            = @LangCode
-                    LEFT OUTER JOIN bsApplicationDesc WITH(NOLOCK)
-                        ON    bsApplicationDesc.ApplicationCode    = trPriceListHeader.ApplicationCode
-                        AND bsApplicationDesc.LangCode            = @LangCode
-                    LEFT OUTER JOIN cdPriceListTypeDesc WITH(NOLOCK)
-                        ON    cdPriceListTypeDesc.PriceListTypeCode    = trPriceListHeader.PriceListTypeCode
-                        AND cdPriceListTypeDesc.LangCode            = @LangCode
-                    LEFT OUTER JOIN trPriceListDetail WITH(NOLOCK)
-                        ON    trPriceListDetail.PriceListHeaderID = trPriceListHeader.PriceListHeaderID
-                        AND trPriceListDetail.ItemCode = @productCode
-                    LEFT OUTER JOIN cdItem WITH(NOLOCK)
-                        ON    cdItem.ItemCode = @productCode
-                WHERE trPriceListHeader.IsConfirmed = 1
-                  AND trPriceListHeader.IsCompleted = 1
-                  AND trPriceListHeader.ValidDate >= GETDATE()
-                ORDER BY trPriceListHeader.ValidDate DESC
+                SELECT Lines.* FROM (
+                SELECT    SortOrder				= trPriceListLine.SortOrder
+                        , ItemTypeCode			= trPriceListLine.ItemTypeCode
+                        , BirimFiyat					= trPriceListLine.Price
+                        , ItemTypeDescription	= ISNULL((SELECT ItemTypeDescription FROM bsItemTypeDesc WITH(NOLOCK) WHERE bsItemTypeDesc.ItemTypeCode = trPriceListLine.ItemTypeCode AND bsItemTypeDesc.LangCode = @LangCode), SPACE(0))
+                        , ItemCode				= trPriceListLine.ItemCode
+                        , ItemDescription		= ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) WHERE cdItemDesc.ItemTypeCode = trPriceListLine.ItemTypeCode AND cdItemDesc.ItemCode = trPriceListLine.ItemCode AND cdItemDesc.LangCode = @LangCode), SPACE(0))	
+                        , ColorCode				= trPriceListLine.ColorCode
+                        , ColorDescription		= ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) WHERE cdColorDesc.ColorCode =trPriceListLine.ColorCode  AND cdColorDesc.LangCode = @LangCode), SPACE(0))
+                        , ItemDim1Code			= trPriceListLine.ItemDim1Code
+                        , ItemDim2Code			= trPriceListLine.ItemDim2Code
+                        , ItemDim3Code			= trPriceListLine.ItemDim3Code
+                        , UnitOfMeasureCode		= trPriceListLine.UnitOfMeasureCode
+                        , PaymentPlanCode		= trPriceListLine.PaymentPlanCode
+                        , LineDescription		= trPriceListLine.LineDescription
+                        , DocCurrencyCode		= trPriceListLine.DocCurrencyCode
+                        , IsDisabled			= trPriceListLine.IsDisabled
+                        , DisableDate			= trPriceListLine.DisableDate
+                        , HeaderID				= trPriceListLine.PriceListHeaderID
+                FROM trPriceListLine WITH(NOLOCK)
+                    INNER JOIN cdItem WITH(NOLOCK)
+                        ON cdItem.ItemTypeCode = trPriceListLine.ItemTypeCode
+                        AND cdItem.ItemCode = trPriceListLine.ItemCode
+                    LEFT OUTER JOIN ProductAttributesFilter
+                        ON ProductAttributesFilter.ItemTypeCode = 1
+                        AND ProductAttributesFilter.ItemCode = cdItem.ItemCode
+                    LEFT OUTER JOIN ProductHierarchy(@LangCode)
+                        ON ProductHierarchy.ProductHierarchyID = cdItem.ProductHierarchyID
+                    LEFT OUTER JOIN ProductCollection(@LangCode)
+                        ON ProductCollection.ProductCollectionGrCode = cdItem.ProductCollectionGrCode
+                ) Lines
+                WHERE EXISTS (
+                SELECT * FROM (
+                SELECT * FROM (
+                SELECT    PriceListNumber
+                        , PriceListDate
+                        , PriceListTime
+                        , PriceListTypeCode
+                        , PriceListTypeDescription		= ISNULL((SELECT PriceListTypeDescription FROM cdPriceListTypeDesc WITH(NOLOCK) WHERE cdPriceListTypeDesc.PriceListTypeCode = trPriceListHeader.PriceListTypeCode AND cdPriceListTypeDesc.LangCode = @LangCode), SPACE(0))
+                        , PriceGroupCode
+                        , PriceGroupDescription			= ISNULL((SELECT PriceGroupDescription FROM cdPriceGroupDesc WITH(NOLOCK) WHERE cdPriceGroupDesc.PriceGroupCode = trPriceListHeader.PriceGroupCode AND cdPriceGroupDesc.LangCode = @LangCode), SPACE(0))
+                        , DocCurrencyCode
+                        , CompanyCode
+                        , trPriceListHeader.PriceListHeaderID
+                FROM trPriceListHeader WITH(NOLOCK) 
+                WHERE PriceListDate BETWEEN CAST(CONVERT(VARCHAR(8), GETDATE(), 112) AS DATETIME) AND CAST(CONVERT(VARCHAR(8), GETDATE(), 112) AS DATETIME)
+                ) Query WHERE CompanyCode = 1
+                ) ReportTable 
+                WHERE ReportTable.PriceListHeaderID = Lines.HeaderID )
+                AND Lines.ItemCode = @productCode
                 ";
 
                 using (var connection = new SqlConnection(_connectionString))
@@ -242,21 +253,21 @@ namespace ErpMobile.Api.Repositories.Product
                                     PriceListTypeCode = reader["PriceListTypeCode"]?.ToString(),
                                     PriceListTypeDescription = reader["PriceListTypeDescription"]?.ToString(),
                                     PriceListDate = reader["PriceListDate"] != DBNull.Value ? Convert.ToDateTime(reader["PriceListDate"]) : null,
-                                    ValidDate = reader["ValidDate"] != DBNull.Value ? Convert.ToDateTime(reader["ValidDate"]) : null,
-                                    ValidTime = reader["ValidTime"] != DBNull.Value ? (TimeSpan?)reader["ValidTime"] : null,
+                                    ValidDate = reader["PriceListDate"] != DBNull.Value ? Convert.ToDateTime(reader["PriceListDate"]) : null, // PriceListDate kullanıyoruz
+                                    ValidTime = null, // Yeni sorguda bu alan yok
                                     CompanyCode = reader["CompanyCode"]?.ToString(),
-                                    IsConfirmed = Convert.ToBoolean(reader["IsConfirmed"]),
-                                    IsCompleted = Convert.ToBoolean(reader["IsCompleted"]),
-                                    IsLocked = Convert.ToBoolean(reader["IsLocked"]),
-                                    ApplicationCode = reader["ApplicationCode"]?.ToString(),
-                                    ApplicationDescription = reader["ApplicationDescription"]?.ToString(),
-                                    CreatedUserName = reader["CreatedUserName"]?.ToString(),
-                                    LastUpdatedUserName = reader["LastUpdatedUserName"]?.ToString(),
-                                    PriceListHeaderID = Convert.ToInt32(reader["PriceListHeaderID"]),
-                                    ApplicationID = reader["ApplicationID"] != DBNull.Value ? Convert.ToInt32(reader["ApplicationID"]) : 0,
-                                    Price = reader["Price"] != DBNull.Value ? Convert.ToDecimal(reader["Price"]) : 0,
-                                    VatRate = reader["VatRate"] != DBNull.Value ? Convert.ToDecimal(reader["VatRate"]) : null,
-                                    ProductCode = reader["ProductCode"]?.ToString()
+                                    IsConfirmed = true, // Yeni sorguda bu alan yok, varsayılan olarak true
+                                    IsCompleted = true, // Yeni sorguda bu alan yok, varsayılan olarak true
+                                    IsLocked = false, // Yeni sorguda bu alan yok, varsayılan olarak false
+                                    ApplicationCode = "", // Yeni sorguda bu alan yok
+                                    ApplicationDescription = "", // Yeni sorguda bu alan yok
+                                    CreatedUserName = "", // Yeni sorguda bu alan yok
+                                    LastUpdatedUserName = "", // Yeni sorguda bu alan yok
+                                    PriceListHeaderID = Convert.ToInt32(reader["HeaderID"]),
+                                    ApplicationID = 0, // Yeni sorguda bu alan yok
+                                    Price = reader["BirimFiyat"] != DBNull.Value ? Convert.ToDecimal(reader["BirimFiyat"]) : 0, // BirimFiyat alanını kullanıyoruz
+                                    VatRate = 18, // Varsayılan KDV oranı
+                                    ProductCode = reader["ItemCode"]?.ToString() // ItemCode alanını kullanıyoruz
                                 };
 
                                 result.Add(priceList);
@@ -270,7 +281,15 @@ namespace ErpMobile.Api.Repositories.Product
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Ürün koduna göre fiyat listesi aranırken hata oluştu. Ürün Kodu: {productCode}");
-                throw;
+                _logger.LogError($"Hata detayı: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+                _logger.LogError($"Stack trace: {ex.StackTrace}");
+                
+                // Boş liste döndür
+                return new List<ProductPriceListModel>();
             }
         }
     }
