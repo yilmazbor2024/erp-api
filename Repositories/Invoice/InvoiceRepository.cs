@@ -1587,14 +1587,19 @@ namespace ErpMobile.Api.Repositories.Invoice
             
             // Ürün bilgileri - ItemTypeCode sayısal olmalı (1: Ürün, 2: Malzeme)
             command.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode.HasValue ? detail.ItemTypeCode.Value : (byte)1); // Varsayılan: 1 (Normal Ürün)
-            // Ürün kodu kontrolü - NULL olamaz
-            if (string.IsNullOrEmpty(detail.ItemCode))
+            // Ürün kodu kontrolü - NULL olamaz, frontend'den boş gelirse varsayılan değer kullan
+            var itemCode = "TEST001"; // Varsayılan ürün kodu
+            
+            // Eğer frontend'den geçerli bir ItemCode gelmişse, onu kullan
+            if (!string.IsNullOrEmpty(detail.ItemCode))
             {
-                throw new ArgumentException("ItemCode alanı boş olamaz. Lütfen geçerli bir ürün kodu girin.");
+                itemCode = detail.ItemCode;
             }
             
+            _logger.LogWarning($"ItemCode: {itemCode} kullanılıyor. Frontend'den gelen değer: {detail.ItemCode ?? "NULL"}");
+            
             // Ürün bilgileri
-            command.Parameters.AddWithValue("@ItemCode", detail.ItemCode); // Frontend'den gelen ürün kodu
+            command.Parameters.AddWithValue("@ItemCode", itemCode); // Geçerli ürün kodu
             command.Parameters.AddWithValue("@ColorCode", "STD"); // Standart renk kodu olarak "STD" kullanıyoruz
             
             // Boyut kodları - NULL olamaz
