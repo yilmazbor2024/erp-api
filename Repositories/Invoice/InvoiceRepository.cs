@@ -1467,22 +1467,22 @@ namespace ErpMobile.Api.Repositories.Invoice
                 command.Parameters.AddWithValue("@WarehouseCode", 1); // Varsayılan değer
             }
             
-            // ApplicationCode için sayısal değer kullan
-            int applicationCode = 1; // Varsayılan değer
+            // ApplicationCode için string değer kullan - bsApplication tablosundaki değerlerden biri olmalı
+            string applicationCode = "Invoi"; // Varsayılan değer - Fatura için
             
             // ProcessCode'a göre ApplicationCode değerini belirle
             if (!string.IsNullOrEmpty(processCode))
             {
                 switch (processCode)
                 {
-                    case "WS": // Toptan Satış
-                        applicationCode = 18;
+                    case "WS": // Toptan Satış - Invoi kullanıyoruz çünkü WS değeri bsApplication tablosunda yok
+                        applicationCode = "Invoi";
                         break;
                     case "EXP": // Masraf
-                        applicationCode = 6;
+                        applicationCode = "Invoi";
                         break;
                     default:
-                        applicationCode = 1; // Varsayılan olarak Fatura kodu
+                        applicationCode = "Invoi"; // Varsayılan olarak Fatura kodu
                         break;
                 }
             }
