@@ -303,5 +303,36 @@ namespace ErpMobile.Api.Controllers
                 return StatusCode(500, new ApiResponse<List<ProductVariantModel>>(null, false, "Ürün varyantları getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
+
+        /// <summary>
+        /// Ürün koduna göre fiyat listesini getirir
+        /// </summary>
+        /// <param name="productCode">Ürün kodu</param>
+        /// <returns>Ürün fiyat listesi</returns>
+        [HttpGet("price-list/{productCode}")]
+        public async Task<ActionResult<ApiResponse<List<ProductPriceListModel>>>> GetProductPriceList(string productCode)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(productCode))
+                {
+                    return BadRequest(new ApiResponse<List<ProductPriceListModel>>(null, false, "Ürün kodu boş olamaz", "BadRequest"));
+                }
+
+                var priceList = await _productRepository.GetProductPriceListAsync(productCode);
+
+                if (priceList == null || priceList.Count == 0)
+                {
+                    return NotFound(new ApiResponse<List<ProductPriceListModel>>(null, false, $"{productCode} kodlu ürün için fiyat listesi bulunamadı", "NotFound"));
+                }
+
+                return Ok(new ApiResponse<List<ProductPriceListModel>>(priceList, true, "Ürün fiyat listesi başarıyla getirildi"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ürün koduna göre fiyat listesi aranırken hata oluştu. Ürün Kodu: {ProductCode}", productCode);
+                return StatusCode(500, new ApiResponse<List<ProductPriceListModel>>(null, false, "Ürün fiyat listesi getirilirken bir hata oluştu.", "InternalServerError"));
+            }
+        }
     }
 }
