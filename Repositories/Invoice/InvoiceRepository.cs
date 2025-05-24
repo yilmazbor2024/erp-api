@@ -1467,38 +1467,35 @@ namespace ErpMobile.Api.Repositories.Invoice
                 command.Parameters.AddWithValue("@WarehouseCode", 1); // Varsayılan değer
             }
             
-            // Belge tipine göre uygun ApplicationCode değerini belirle
-            string documentType = "INVOICE"; // Varsayılan olarak fatura
-            if (request.DocumentType != null)
+            // ApplicationCode için sayısal değer kullan
+            int applicationCode = 1; // Varsayılan değer
+            
+            // ProcessCode'a göre ApplicationCode değerini belirle
+            if (!string.IsNullOrEmpty(processCode))
             {
-                documentType = request.DocumentType;
-            }
-            else if (!string.IsNullOrEmpty(processCode))
-            {
-                // ProcessCode'a göre belge tipini belirle
                 switch (processCode)
                 {
-                    case "WS":
-                        documentType = "WHOLESALE";
+                    case "WS": // Toptan Satış
+                        applicationCode = 18;
                         break;
-                    case "EXP":
-                        documentType = "EXPENSE";
+                    case "EXP": // Masraf
+                        applicationCode = 6;
                         break;
                     default:
-                        documentType = "INVOICE";
+                        applicationCode = 1; // Varsayılan olarak Fatura kodu
                         break;
                 }
             }
             
-            // GetApplicationCodeByDocumentType metodunu kullanarak ApplicationCode'u belirle
-            string applicationCode = GetApplicationCodeByDocumentType(documentType);
+            // Veritabanında geçerli değerleri bulmak için log
+            _logger.LogInformation($"ApplicationCode: {applicationCode} kullanılıyor (ProcessCode: {processCode})");
+            _logger.LogWarning($"Veritabanında geçerli ApplicationCode değerlerini kontrol edin. Şu anda {applicationCode} kullanılıyor.");
             
             // ApplicationCode parametresini ekle
-            _logger.LogInformation($"ApplicationCode: {applicationCode} kullanılıyor (DocumentType: {documentType}, ProcessCode: {processCode})");
             command.Parameters.AddWithValue("@ApplicationCode", applicationCode);
             
-            // ApplicationID için sabit bir değer kullanıyoruz
-            command.Parameters.AddWithValue("@ApplicationID", invoiceHeaderId);
+            // ApplicationID için InvoiceHeaderID'yi kullanıyoruz
+            command.Parameters.AddWithValue("@ApplicationID", invoiceHeaderId); // InvoiceHeaderID'yi ApplicationID olarak kullan
             
             // Oluşturma ve güncelleme bilgileri
             command.Parameters.AddWithValue("@CreatedUserName", "API");
