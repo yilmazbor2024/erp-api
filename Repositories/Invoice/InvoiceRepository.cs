@@ -1275,22 +1275,30 @@ namespace ErpMobile.Api.Repositories.Invoice
             {
                 case "INVOICE":
                 case "FATURA":
-                    return "Invoi"; // Fatura için ApplicationCode
+                    return "INV"; // Fatura için ApplicationCode
                 
                 case "ORDER":
                 case "SIPARIS":
-                    return "Order"; // Sipariş için ApplicationCode
+                    return "ORD"; // Sipariş için ApplicationCode
                 
                 case "SHIPMENT":
                 case "IRSALIYE":
-                    return "Shipm"; // İrsaliye için ApplicationCode
+                    return "SHP"; // İrsaliye için ApplicationCode
                 
                 case "PAYMENT":
                 case "ODEME":
-                    return "Payme"; // Ödeme için ApplicationCode
+                    return "PAY"; // Ödeme için ApplicationCode
+                
+                case "WHOLESALE":
+                case "TOPTAN":
+                    return "WS"; // Toptan satış için ApplicationCode
+                
+                case "EXPENSE":
+                case "MASRAF":
+                    return "EXP"; // Masraf için ApplicationCode
                 
                 default:
-                    return "Invoi"; // Varsayılan olarak Fatura kodu
+                    return "INV"; // Varsayılan olarak Fatura kodu
             }
         }
 
@@ -1465,10 +1473,29 @@ namespace ErpMobile.Api.Repositories.Invoice
             {
                 documentType = request.DocumentType;
             }
+            else if (!string.IsNullOrEmpty(processCode))
+            {
+                // ProcessCode'a göre belge tipini belirle
+                switch (processCode)
+                {
+                    case "WS":
+                        documentType = "WHOLESALE";
+                        break;
+                    case "EXP":
+                        documentType = "EXPENSE";
+                        break;
+                    default:
+                        documentType = "INVOICE";
+                        break;
+                }
+            }
             
-            // ApplicationCode sabit bir değer olarak ayarlanıyor
-            // Belgelere göre, "WS" (Toptan Satış) işlem kodu için ApplicationCode = "18" olmalı
-            command.Parameters.AddWithValue("@ApplicationCode", "18");
+            // GetApplicationCodeByDocumentType metodunu kullanarak ApplicationCode'u belirle
+            string applicationCode = GetApplicationCodeByDocumentType(documentType);
+            
+            // ApplicationCode parametresini ekle
+            _logger.LogInformation($"ApplicationCode: {applicationCode} kullanılıyor (DocumentType: {documentType}, ProcessCode: {processCode})");
+            command.Parameters.AddWithValue("@ApplicationCode", applicationCode);
             
             // ApplicationID için sabit bir değer kullanıyoruz
             command.Parameters.AddWithValue("@ApplicationID", invoiceHeaderId);
