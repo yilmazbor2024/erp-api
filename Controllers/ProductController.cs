@@ -40,7 +40,7 @@ namespace ErpMobile.Api.Controllers
         /// <param name="isBlocked">Filter by blocked status</param>
         /// <returns>List of products</returns>
         [HttpGet]
-        public ActionResult<ApiResponse<object>> GetProducts(
+        public async Task<ActionResult<ApiResponse<List<ProductVariantModel>>>> GetProducts(
             [FromQuery] int pageSize = 10,
             [FromQuery] int pageNumber = 1,
             [FromQuery] string sortBy = "productCode",
@@ -52,70 +52,98 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                // Mock response for demonstration purposes
-                var items = new List<object>
+                if (pageNumber < 1)
                 {
-                    new
+                    return BadRequest(new ApiResponse<List<ProductVariantModel>>(null, false, "Sayfa numarası 1'den küçük olamaz", "BadRequest"));
+                }
+
+                if (pageSize < 1 || pageSize > 1000)
+                {
+                    return BadRequest(new ApiResponse<List<ProductVariantModel>>(null, false, "Sayfa boyutu 1 ile 1000 arasında olmalıdır", "BadRequest"));
+                }
+
+                // Not: Şu anda repository'de tüm ürünleri getiren bir metot yok.
+                // Geçici olarak, barkod bazlı arama metodunu kullanacağız.
+                // İlerleyen aşamalarda, tüm ürünleri getiren ve filtreleme yapan bir repository metodu eklenmelidir.
+                
+                // Örnek bir barkod kullanarak ürünleri getiriyoruz (bu ideal değil)
+                var products = await _productRepository.GetProductVariantsByBarcodeAsync(productCode ?? "*");
+                
+                // Filtreleme işlemleri
+                if (!string.IsNullOrEmpty(productCode))
+                {
+                    products = products.Where(p => p.ProductCode.Contains(productCode, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                
+                if (!string.IsNullOrEmpty(productDescription))
+                {
+                    products = products.Where(p => p.ProductDescription != null && p.ProductDescription.Contains(productDescription, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                
+                if (!string.IsNullOrEmpty(productTypeCode))
+                {
+                    products = products.Where(p => p.ProductTypeCode == productTypeCode).ToList();
+                }
+                
+                if (isBlocked.HasValue)
+                {
+                    products = products.Where(p => p.IsBlocked == isBlocked.Value).ToList();
+                }
+                
+                // Sıralama işlemleri
+                if (!string.IsNullOrEmpty(sortBy))
+                {
+                    // Sıralama alanına göre sıralama yap
+                    switch (sortBy.ToLower())
                     {
-                        productCode = "P001",
-                        productDescription = "Sample Product 1",
-                        productTypeCode = "PT001",
-                        productTypeDescription = "Sample Type 1",
-                        itemDimTypeCode = "DT001",
-                        itemDimTypeDescription = "Dimension Type 1",
-                        unitOfMeasureCode1 = "UOM1",
-                        unitOfMeasureCode2 = "UOM2",
-                        companyBrandCode = "CB001",
-                        usePOS = true,
-                        useStore = true,
-                        useRoll = false,
-                        useBatch = true,
-                        generateSerialNumber = false,
-                        useSerialNumber = true,
-                        isUTSDeclaratedItem = false,
-                        createdDate = DateTime.Now.AddDays(-30),
-                        lastUpdatedDate = DateTime.Now.AddDays(-5),
-                        isBlocked = false
-                    },
-                    new
-                    {
-                        productCode = "P002",
-                        productDescription = "Sample Product 2",
-                        productTypeCode = "PT002",
-                        productTypeDescription = "Sample Type 2",
-                        itemDimTypeCode = "DT002",
-                        itemDimTypeDescription = "Dimension Type 2",
-                        unitOfMeasureCode1 = "UOM3",
-                        unitOfMeasureCode2 = "UOM4",
-                        companyBrandCode = "CB002",
-                        usePOS = false,
-                        useStore = true,
-                        useRoll = true,
-                        useBatch = false,
-                        generateSerialNumber = true,
-                        useSerialNumber = true,
-                        isUTSDeclaratedItem = true,
-                        createdDate = DateTime.Now.AddDays(-20),
-                        lastUpdatedDate = DateTime.Now.AddDays(-2),
-                        isBlocked = false
+                        case "productcode":
+                            products = sortDirection.ToLower() == "desc" ? 
+                                products.OrderByDescending(p => p.ProductCode).ToList() : 
+                                products.OrderBy(p => p.ProductCode).ToList();
+                            break;
+                        case "productdescription":
+                            products = sortDirection.ToLower() == "desc" ? 
+                                products.OrderByDescending(p => p.ProductDescription).ToList() : 
+                                products.OrderBy(p => p.ProductDescription).ToList();
+                            break;
+                        case "producttypecode":
+                            products = sortDirection.ToLower() == "desc" ? 
+                                products.OrderByDescending(p => p.ProductTypeCode).ToList() : 
+                                products.OrderBy(p => p.ProductTypeCode).ToList();
+                            break;
+                        default:
+                            products = products.OrderBy(p => p.ProductCode).ToList();
+                            break;
                     }
-                };
-
-                var response = new
+                }
+                
+                // Sayfalama işlemleri
+                var totalCount = products.Count;
+                var pageCount = (int)Math.Ceiling(totalCount / (double)pageSize);
+                var pagedProducts = products
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+                
+                if (pagedProducts.Count == 0)
                 {
-                    items = items,
-                    totalCount = 2,
-                    pageCount = 1,
-                    currentPage = pageNumber,
-                    pageSize = pageSize
+                    return NotFound(new ApiResponse<List<ProductVariantModel>>(null, false, "Belirtilen kriterlere uygun ürün bulunamadı", "NotFound"));
+                }
+                
+                // Yanıt oluştur
+                var response = new ApiResponse<List<ProductVariantModel>>
+                {
+                    Data = pagedProducts,
+                    Success = true,
+                    Message = $"Toplam {totalCount} üründen {pagedProducts.Count} tanesi başarıyla getirildi. Sayfa: {pageNumber}/{pageCount}"
                 };
-
-                return Ok(new ApiResponse<object>(response, true, "Products retrieved successfully"));
+                
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting products");
-                return StatusCode(500, new ApiResponse<object>(null, false, "An error occurred while retrieving products.", "InternalServerError"));
+                _logger.LogError(ex, "Ürünler getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<List<ProductVariantModel>>(null, false, "Ürünler getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
 
@@ -125,40 +153,31 @@ namespace ErpMobile.Api.Controllers
         /// <param name="productCode">The product code</param>
         /// <returns>The product details</returns>
         [HttpGet("{productCode}")]
-        public ActionResult<ApiResponse<object>> GetProductByCode(string productCode)
+        public async Task<ActionResult<ApiResponse<List<ProductVariantModel>>>> GetProductByCode(string productCode)
         {
             try
             {
-                // Mock response for demonstration purposes
-                var product = new
+                if (string.IsNullOrEmpty(productCode))
                 {
-                    productCode = productCode,
-                    productDescription = "Sample Product",
-                    productTypeCode = "PT001",
-                    productTypeDescription = "Sample Type",
-                    itemDimTypeCode = "DT001",
-                    itemDimTypeDescription = "Dimension Type",
-                    unitOfMeasureCode1 = "UOM1",
-                    unitOfMeasureCode2 = "UOM2",
-                    companyBrandCode = "CB001",
-                    usePOS = true,
-                    useStore = true,
-                    useRoll = false,
-                    useBatch = true,
-                    generateSerialNumber = false,
-                    useSerialNumber = true,
-                    isUTSDeclaratedItem = false,
-                    createdDate = DateTime.Now.AddDays(-30),
-                    lastUpdatedDate = DateTime.Now.AddDays(-5),
-                    isBlocked = false
-                };
+                    return BadRequest(new ApiResponse<List<ProductVariantModel>>(null, false, "Ürün kodu boş olamaz", "BadRequest"));
+                }
 
-                return Ok(new ApiResponse<object>(product, true, "Product retrieved successfully"));
+                // Ürün varyantlarını getirmek için repository metodunu çağır
+                // Not: Burada barkod yerine ürün kodu kullanıyoruz, bu nedenle repository'de yeni bir metot eklenmesi gerekebilir
+                // Şimdilik mevcut metodu kullanacağız
+                var variants = await _productRepository.GetProductVariantsByBarcodeAsync(productCode);
+
+                if (variants == null || variants.Count == 0)
+                {
+                    return NotFound(new ApiResponse<List<ProductVariantModel>>(null, false, $"{productCode} kodlu ürün bulunamadı", "NotFound"));
+                }
+
+                return Ok(new ApiResponse<List<ProductVariantModel>>(variants, true, "Ürün başarıyla getirildi"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting product with code {ProductCode}", productCode);
-                return StatusCode(500, new ApiResponse<object>(null, false, $"An error occurred while retrieving product with code {productCode}.", "InternalServerError"));
+                _logger.LogError(ex, "Ürün kodu ile ürün aranırken hata oluştu. Ürün Kodu: {ProductCode}", productCode);
+                return StatusCode(500, new ApiResponse<List<ProductVariantModel>>(null, false, "Ürün getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
 
@@ -222,55 +241,54 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
-        /// Gets a list of product types
+        /// Ürün tiplerini getirir
         /// </summary>
-        /// <returns>List of product types</returns>
+        /// <returns>Ürün tipleri listesi</returns>
         [HttpGet("types")]
-        public ActionResult<ApiResponse<object>> GetProductTypes()
+        public async Task<ActionResult<ApiResponse<List<ProductTypeModel>>>> GetProductTypes()
         {
             try
             {
-                // Mock response for demonstration purposes
-                var types = new List<object>
-                {
-                    new { code = "PT001", description = "Sample Type 1" },
-                    new { code = "PT002", description = "Sample Type 2" },
-                    new { code = "PT003", description = "Sample Type 3" }
-                };
+                // Repository'den ürün tiplerini getir
+                var types = await _productRepository.GetProductTypesAsync();
 
-                return Ok(new ApiResponse<object>(types, true, "Product types retrieved successfully"));
+                if (types == null || types.Count == 0)
+                {
+                    return NotFound(new ApiResponse<List<ProductTypeModel>>(null, false, "Ürün tipi bulunamadı", "NotFound"));
+                }
+
+                return Ok(new ApiResponse<List<ProductTypeModel>>(types, true, "Ürün tipleri başarıyla getirildi"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting product types");
-                return StatusCode(500, new ApiResponse<object>(null, false, "An error occurred while retrieving product types.", "InternalServerError"));
+                _logger.LogError(ex, "Ürün tipleri getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<List<ProductTypeModel>>(null, false, "Ürün tipleri getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
 
         /// <summary>
-        /// Gets a list of units of measure
+        /// Ölçü birimlerini getirir
         /// </summary>
-        /// <returns>List of units of measure</returns>
+        /// <returns>Ölçü birimleri listesi</returns>
         [HttpGet("units-of-measure")]
-        public ActionResult<ApiResponse<object>> GetUnitsOfMeasure()
+        public async Task<ActionResult<ApiResponse<List<UnitOfMeasureModel>>>> GetUnitsOfMeasure()
         {
             try
             {
-                // Mock response for demonstration purposes
-                var units = new List<object>
-                {
-                    new { code = "UOM1", description = "Piece" },
-                    new { code = "UOM2", description = "Kilogram" },
-                    new { code = "UOM3", description = "Meter" },
-                    new { code = "UOM4", description = "Liter" }
-                };
+                // Repository'den ölçü birimlerini getir
+                var units = await _productRepository.GetUnitsOfMeasureAsync();
 
-                return Ok(new ApiResponse<object>(units, true, "Units of measure retrieved successfully"));
+                if (units == null || units.Count == 0)
+                {
+                    return NotFound(new ApiResponse<List<UnitOfMeasureModel>>(null, false, "Ölçü birimi bulunamadı", "NotFound"));
+                }
+
+                return Ok(new ApiResponse<List<UnitOfMeasureModel>>(units, true, "Ölçü birimleri başarıyla getirildi"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting units of measure");
-                return StatusCode(500, new ApiResponse<object>(null, false, "An error occurred while retrieving units of measure.", "InternalServerError"));
+                _logger.LogError(ex, "Ölçü birimleri getirilirken hata oluştu");
+                return StatusCode(500, new ApiResponse<List<UnitOfMeasureModel>>(null, false, "Ölçü birimleri getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
         /// <summary>
@@ -310,7 +328,7 @@ namespace ErpMobile.Api.Controllers
         /// <param name="productCode">Ürün kodu</param>
         /// <returns>Ürün fiyat listesi</returns>
         [HttpGet("price-list/{productCode}")]
-        public async Task<ActionResult<ApiResponse<List<ProductPriceListModel>>>> GetProductPriceList(string productCode)
+        public async Task<ActionResult<ApiResponse<List<ProductPriceListModel>>>> Get(string productCode)
         {
             try
             {
@@ -332,6 +350,84 @@ namespace ErpMobile.Api.Controllers
             {
                 _logger.LogError(ex, "Ürün koduna göre fiyat listesi aranırken hata oluştu. Ürün Kodu: {ProductCode}", productCode);
                 return StatusCode(500, new ApiResponse<List<ProductPriceListModel>>(null, false, "Ürün fiyat listesi getirilirken bir hata oluştu.", "InternalServerError"));
+            }
+        }
+
+        /// <summary>
+        /// Tüm ürün fiyat listesini getirir
+        /// </summary>
+        /// <param name="page">Sayfa numarası</param>
+        /// <param name="pageSize">Sayfa başına kayıt sayısı</param>
+        /// <param name="startDate">Başlangıç tarihi (yyyy-MM-dd formatında)</param>
+        /// <param name="endDate">Bitiş tarihi (yyyy-MM-dd formatında)</param>
+        /// <param name="companyCode">Şirket kodu</param>
+        /// <returns>Ürün fiyat listesi detayları</returns>
+        [HttpGet("all-price-lists")]
+        public async Task<ActionResult<ApiResponse<List<ProductPriceListDetailModel>>>> GetAllPriceList(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            [FromQuery] string startDate = null,
+            [FromQuery] string endDate = null,
+            [FromQuery] int companyCode = 1)
+        {
+            try
+            {
+                if (page < 1)
+                {
+                    return BadRequest(new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Sayfa numarası 1'den küçük olamaz", "BadRequest"));
+                }
+
+                if (pageSize < 1 || pageSize > 1000)
+                {
+                    return BadRequest(new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Sayfa boyutu 1 ile 1000 arasında olmalıdır", "BadRequest"));
+                }
+
+                // Tarih parametrelerini işleme
+                DateTime? parsedStartDate = null;
+                DateTime? parsedEndDate = null;
+
+                if (!string.IsNullOrEmpty(startDate))
+                {
+                    if (DateTime.TryParse(startDate, out DateTime startDateValue))
+                    {
+                        parsedStartDate = startDateValue;
+                    }
+                    else
+                    {
+                        return BadRequest(new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Başlangıç tarihi geçerli bir tarih formatında olmalıdır (yyyy-MM-dd)", "BadRequest"));
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(endDate))
+                {
+                    if (DateTime.TryParse(endDate, out DateTime endDateValue))
+                    {
+                        parsedEndDate = endDateValue;
+                    }
+                    else
+                    {
+                        return BadRequest(new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Bitiş tarihi geçerli bir tarih formatında olmalıdır (yyyy-MM-dd)", "BadRequest"));
+                    }
+                }
+
+                _logger.LogInformation("Fiyat listesi getiriliyor. Sayfa: {Page}, Sayfa Boyutu: {PageSize}, Başlangıç Tarihi: {StartDate}, Bitiş Tarihi: {EndDate}, Şirket Kodu: {CompanyCode}", 
+                    page, pageSize, parsedStartDate, parsedEndDate, companyCode);
+                
+                var priceList = await _productRepository.GetAllProductPriceListAsync(page, pageSize, parsedStartDate, parsedEndDate, companyCode);
+
+                if (priceList == null || priceList.Count == 0)
+                {
+                    _logger.LogWarning("Belirtilen kriterlere uygun fiyat listesi bulunamadı. Sayfa: {Page}, Sayfa Boyutu: {PageSize}, Başlangıç Tarihi: {StartDate}, Bitiş Tarihi: {EndDate}, Şirket Kodu: {CompanyCode}", 
+                        page, pageSize, parsedStartDate, parsedEndDate, companyCode);
+                    return NotFound(new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Belirtilen kriterlere uygun fiyat listesi bulunamadı", "NotFound"));
+                }
+
+                return Ok(new ApiResponse<List<ProductPriceListDetailModel>>(priceList, true, $"Toplam {priceList.Count} adet fiyat listesi kaydı başarıyla getirildi"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Tüm ürün fiyat listesi getirilirken hata oluştu. Sayfa: {Page}, Sayfa Boyutu: {PageSize}", page, pageSize);
+                return StatusCode(500, new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Ürün fiyat listesi getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
     }

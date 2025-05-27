@@ -292,5 +292,267 @@ namespace ErpMobile.Api.Repositories.Product
                 return new List<ProductPriceListModel>();
             }
         }
+
+        public async Task<List<ProductPriceListDetailModel>> GetAllProductPriceListAsync(
+            int page = 1, 
+            int pageSize = 50, 
+            DateTime? startDate = null, 
+            DateTime? endDate = null, 
+            int companyCode = 1)
+        {
+            try
+            {
+                var result = new List<ProductPriceListDetailModel>();
+                
+                // Varsayılan tarih aralığı: Geçerli ayın başından bugüne
+                if (!startDate.HasValue)
+                {
+                    startDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+                }
+                
+                if (!endDate.HasValue)
+                {
+                    endDate = DateTime.Now;
+                }
+                
+                _logger.LogInformation($"Tüm ürün fiyat listesi getiriliyor. Sayfa: {page}, Sayfa Boyutu: {pageSize}, Tarih Aralığı: {startDate:yyyy-MM-dd} - {endDate:yyyy-MM-dd}, Şirket Kodu: {companyCode}");
+
+                // Sayfalama için offset hesapla
+                int offset = (page - 1) * pageSize;
+                
+                // Tamamen yeniden yazılmış basit SQL sorgusu
+                var query = @"
+                SELECT 
+                    l.SortOrder AS SortOrder,
+                    l.ItemTypeCode AS ItemTypeCode,
+                    l.Price AS BirimFiyat,
+                    ISNULL((SELECT ItemTypeDescription FROM bsItemTypeDesc WITH(NOLOCK) 
+                           WHERE bsItemTypeDesc.ItemTypeCode = l.ItemTypeCode 
+                           AND bsItemTypeDesc.LangCode = @LangCode), SPACE(0)) AS ItemTypeDescription,
+                    l.ItemCode AS ItemCode,
+                    ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) 
+                           WHERE cdItemDesc.ItemTypeCode = l.ItemTypeCode 
+                           AND cdItemDesc.ItemCode = l.ItemCode 
+                           AND cdItemDesc.LangCode = @LangCode), SPACE(0)) AS ItemDescription,
+                    l.ColorCode AS ColorCode,
+                    ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) 
+                           WHERE cdColorDesc.ColorCode = l.ColorCode 
+                           AND cdColorDesc.LangCode = @LangCode), SPACE(0)) AS ColorDescription,
+                    l.ItemDim1Code AS ItemDim1Code,
+                    l.ItemDim2Code AS ItemDim2Code,
+                    l.ItemDim3Code AS ItemDim3Code,
+                    l.UnitOfMeasureCode AS UnitOfMeasureCode,
+                    l.PaymentPlanCode AS PaymentPlanCode,
+                    l.LineDescription AS LineDescription,
+                    l.DocCurrencyCode AS DocCurrencyCode,
+                    l.IsDisabled AS IsDisabled,
+                    l.DisableDate AS DisableDate,
+                    l.PriceListHeaderID AS HeaderID
+                FROM trPriceListLine l WITH(NOLOCK)
+                INNER JOIN trPriceListHeader h WITH(NOLOCK) 
+                    ON l.PriceListHeaderID = h.PriceListHeaderID
+                WHERE h.PriceListDate BETWEEN @StartDate AND @EndDate
+                AND h.CompanyCode = @CompanyCode
+                ORDER BY l.ItemCode, l.ColorCode, l.ItemDim1Code
+                OFFSET @Offset ROWS
+                FETCH NEXT @PageSize ROWS ONLY";
+
+                try
+                {
+                    _logger.LogInformation("SQL sorgusu: {Query}", query);
+                    _logger.LogInformation("Parametreler: LangCode=TR, PageSize={PageSize}, Offset={Offset}, StartDate={StartDate}, EndDate={EndDate}, CompanyCode={CompanyCode}", 
+                        pageSize, offset, startDate?.ToString("yyyy-MM-dd") ?? "null", endDate?.ToString("yyyy-MM-dd") ?? "null", companyCode);
+                    
+                    using (var connection = new SqlConnection(_connectionString))
+                    {
+                        await connection.OpenAsync();
+                        _logger.LogInformation("Veritabanı bağlantısı başarıyla açıldı: {ConnectionString}", _connectionString);
+
+                        using (var command = new SqlCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@LangCode", "TR");
+                            command.Parameters.AddWithValue("@PageSize", pageSize);
+                            command.Parameters.AddWithValue("@Offset", offset);
+                            
+                            // Tarih parametrelerini SQL Server formatında gönder
+                            var formattedStartDate = startDate.HasValue ? startDate.Value.ToString("yyyyMMdd") : "19000101";
+                            var formattedEndDate = endDate.HasValue ? endDate.Value.ToString("yyyyMMdd") : "99991231";
+                            
+                            command.Parameters.AddWithValue("@StartDate", formattedStartDate);
+                            command.Parameters.AddWithValue("@EndDate", formattedEndDate);
+                            command.Parameters.AddWithValue("@CompanyCode", companyCode);
+                            
+                            _logger.LogInformation("Tarih parametreleri: StartDate={StartDate}, EndDate={EndDate}", formattedStartDate, formattedEndDate);
+                            _logger.LogInformation($"SQL sorgusu çalıştırılıyor. Sayfa: {page}, Offset: {offset}");
+
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                _logger.LogInformation("SQL sorgusu başarıyla çalıştırıldı");
+                                
+                                int rowCount = 0;
+                                while (await reader.ReadAsync())
+                                {
+                                    rowCount++;
+                                    var priceListDetail = new ProductPriceListDetailModel
+                                    {
+                                        SortOrder = reader["SortOrder"] != DBNull.Value ? Convert.ToInt32(reader["SortOrder"]) : 0,
+                                        ItemTypeCode = reader["ItemTypeCode"]?.ToString(),
+                                        ItemTypeDescription = reader["ItemTypeDescription"]?.ToString(),
+                                        ItemCode = reader["ItemCode"]?.ToString(),
+                                        ItemDescription = reader["ItemDescription"]?.ToString(),
+                                        ColorCode = reader["ColorCode"]?.ToString(),
+                                        ColorDescription = reader["ColorDescription"]?.ToString(),
+                                        ItemDim1Code = reader["ItemDim1Code"]?.ToString(),
+                                        ItemDim2Code = reader["ItemDim2Code"]?.ToString(),
+                                        ItemDim3Code = reader["ItemDim3Code"]?.ToString(),
+                                        UnitOfMeasureCode = reader["UnitOfMeasureCode"]?.ToString(),
+                                        PaymentPlanCode = reader["PaymentPlanCode"]?.ToString(),
+                                        LineDescription = reader["LineDescription"]?.ToString(),
+                                        BirimFiyat = reader["BirimFiyat"] != DBNull.Value ? Convert.ToDecimal(reader["BirimFiyat"]) : 0,
+                                        DocCurrencyCode = reader["DocCurrencyCode"]?.ToString(),
+                                        IsDisabled = reader["IsDisabled"] != DBNull.Value && Convert.ToBoolean(reader["IsDisabled"]),
+                                        DisableDate = reader["DisableDate"] != DBNull.Value ? Convert.ToDateTime(reader["DisableDate"]) : null,
+                                        HeaderID = reader["HeaderID"]?.ToString()
+                                    };
+
+                                    result.Add(priceListDetail);
+                                }
+                                
+                                _logger.LogInformation($"Toplam {rowCount} adet fiyat listesi kaydı bulundu");
+                            }
+                        }
+                    }
+                }
+                catch (SqlException sqlEx)
+                {
+                    _logger.LogError(sqlEx, $"SQL hatası oluştu: {sqlEx.Message}");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Veritabanı işlemi sırasında hata oluştu: {ex.Message}");
+                    throw;
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Tüm ürün fiyat listesi getirilirken hata oluştu. Sayfa: {page}, Sayfa Boyutu: {pageSize}");
+                _logger.LogError($"Hata detayı: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+                _logger.LogError($"Stack trace: {ex.StackTrace}");
+                
+                // Boş liste döndür
+                return new List<ProductPriceListDetailModel>();
+            }
+        }
+
+        /// <summary>
+        /// Ürün tiplerini getirir
+        /// </summary>
+        /// <returns>Ürün tipleri listesi</returns>
+        public async Task<List<ProductTypeModel>> GetProductTypesAsync()
+        {
+            try
+            {
+                var productTypes = new List<ProductTypeModel>();
+
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+
+                    string query = @"
+                        SELECT 
+                            pt.ProductTypeCode AS Code, 
+                            ptd.ProductTypeDescription AS Description
+                        FROM 
+                            dbo.bsProductType pt
+                        LEFT JOIN 
+                            dbo.bsProductTypeDesc ptd ON pt.ProductTypeCode = ptd.ProductTypeCode AND ptd.LangCode = N'TR'
+                        ORDER BY 
+                            pt.ProductTypeCode";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var productType = new ProductTypeModel
+                                {
+                                    Code = reader["Code"]?.ToString(),
+                                    Description = reader["Description"]?.ToString()
+                                };
+
+                                productTypes.Add(productType);
+                            }
+                        }
+                    }
+                }
+
+                return productTypes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ürün tipleri getirilirken hata oluştu");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Ölçü birimlerini getirir
+        /// </summary>
+        /// <returns>Ölçü birimleri listesi</returns>
+        public async Task<List<UnitOfMeasureModel>> GetUnitsOfMeasureAsync()
+        {
+            try
+            {
+                var unitsOfMeasure = new List<UnitOfMeasureModel>();
+
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+
+                    string query = @"
+                        SELECT 
+                            uom.UnitOfMeasureCode AS Code, 
+                            uomd.UnitOfMeasureDescription AS Description
+                        FROM 
+                            dbo.bsUnitOfMeasure uom
+                        LEFT JOIN 
+                            dbo.bsUnitOfMeasureDesc uomd ON uom.UnitOfMeasureCode = uomd.UnitOfMeasureCode AND uomd.LangCode = N'TR'
+                        ORDER BY 
+                            uom.UnitOfMeasureCode";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var unitOfMeasure = new UnitOfMeasureModel
+                                {
+                                    Code = reader["Code"]?.ToString(),
+                                    Description = reader["Description"]?.ToString()
+                                };
+
+                                unitsOfMeasure.Add(unitOfMeasure);
+                            }
+                        }
+                    }
+                }
+
+                return unitsOfMeasure;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ölçü birimleri getirilirken hata oluştu");
+                throw;
+            }
+        }
     }
 }
