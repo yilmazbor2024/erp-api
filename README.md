@@ -18,6 +18,11 @@ ERP sistemine entegre çalışan, müşteri yönetimi, fatura oluşturma ve diğ
 - **Fatura Listeleme:** Faturaları listeleme ve filtreleme
 - **Fatura Detayları:** Fatura detay bilgilerini görüntüleme
 
+### Ürün Modülü
+- **Ürün Listeleme:** Tüm ürünleri listeleme ve filtreleme
+- **Ürün Detayları:** Ürün detay bilgilerini görüntüleme
+- **Ürün Fiyat Listesi:** Satış fiyat listelerini görüntüleme ve filtreleme
+
 ### Diğer Özellikler
 - **Para Birimi Yönetimi:** Para birimi bilgilerini listeleme
 - **Ödeme Planı Yönetimi:** Ödeme planlarını listeleme ve yönetme
@@ -31,6 +36,13 @@ ERP sistemine entegre çalışan, müşteri yönetimi, fatura oluşturma ve diğ
 - Swagger API Documentation
 
 ## Son Güncellemeler
+
+### v1.2.0 (27 Mayıs 2025)
+- **Ürün Fiyat Listesi API'si:** Ürün fiyat listelerini görüntüleme ve filtreleme özelliği eklendi
+  - Tarih aralığına göre filtreleme
+  - Ürün kodu/açıklamasına göre arama
+  - Sayfalama özelliği
+  - Fiyat listesi başlık ve satır bilgilerini birleştirme
 
 ### v1.1.0 (30 Nisan 2025)
 - **Müşteri Güncelleme API'si:** Trace ve SP uyumlu müşteri güncelleme API'si eklendi
@@ -83,6 +95,16 @@ GET /api/v1/customer/{customerCode}/addresses
 ### Müşteri Kişi Bilgileri
 ```http
 GET /api/v1/customer/{customerCode}/contacts
+```
+
+### Ürün Fiyat Listesi
+```http
+GET /api/v1/Product/all-price-lists
+```
+
+### Ürün Detayları
+```http
+GET /api/v1/Product/{productCode}
 ```
 
 ## Kurulum
