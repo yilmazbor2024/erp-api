@@ -1,8 +1,7 @@
 -- GetShipmentTransactionLines Stored Procedure
 -- Sevkiyat işlem satırlarını getiren stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_GetShipmentTransactionLines]    Script Date: 5/9/2025 2:11:51 AM ******/
 SET ANSI_NULLS ON
 GO

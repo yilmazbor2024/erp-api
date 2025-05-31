@@ -1,8 +1,7 @@
 -- CurrAccContact Function
 -- Müşteri/Tedarikçi kontak bilgilerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[CurrAccContact]    Script Date: 5/9/2025 2:03:46 AM ******/
 SET ANSI_NULLS ON
 GO

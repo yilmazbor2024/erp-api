@@ -1,0 +1,749 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using ErpMobile.Api.Models.Inventory;
+
+namespace ErpMobile.Api.Repositories.Inventory
+{
+    public class InventoryRepository : IInventoryRepository
+    {
+        private readonly ILogger<InventoryRepository> _logger;
+        private readonly IConfiguration _configuration;
+        private readonly string _connectionString;
+
+        public InventoryRepository(
+            ILogger<InventoryRepository> logger,
+            IConfiguration configuration)
+        {
+            _logger = logger;
+            _configuration = configuration;
+            _connectionString = _configuration.GetConnectionString("ErpConnection");
+        }
+
+        public async Task<List<InventoryStockModel>> GetInventoryStockByBarcodeAsync(string barcode)
+        {
+            try
+            {
+                var result = new List<InventoryStockModel>();
+                
+                if (string.IsNullOrEmpty(barcode))
+                {
+                    return result;
+                }
+                
+                _logger.LogInformation($"Barkod ile envanter/stok bilgisi aranıyor: {barcode}");
+
+                // Stored procedure kullan
+                _logger.LogInformation($"qry_GetItemInfoFromBarcode stored procedure çalıştırılıyor. Barkod: {barcode}");
+                
+                try
+                {
+                    using (var connection = new SqlConnection(_connectionString))
+                    {
+                        await connection.OpenAsync();
+                        _logger.LogInformation("Veritabanı bağlantısı başarıyla açıldı");
+
+                        using (var command = new SqlCommand("qry_GetItemInfoFromBarcode", connection))
+                        {
+                            command.CommandType = System.Data.CommandType.StoredProcedure;
+                            command.Parameters.AddWithValue("@p0", barcode);
+                            command.Parameters.AddWithValue("@p1", "TR");
+                            _logger.LogInformation($"Stored procedure çalıştırılıyor. Barkod: {barcode}");
+
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                _logger.LogInformation("Stored procedure başarıyla çalıştırıldı");
+                                
+                                int rowCount = 0;
+                                while (await reader.ReadAsync())
+                                {
+                                    rowCount++;
+                                    var inventoryStock = new InventoryStockModel
+                                    {
+                                        ItemTypeCode = reader["ItemTypeCode"]?.ToString(),
+                                        ItemCode = reader["ItemCode"]?.ToString(),
+                                        UsedBarcode = reader["Barcode"]?.ToString(),
+                                        ItemDescription = reader["ItemDescription"]?.ToString(),
+                                        ColorDescription = reader["ColorDescription"]?.ToString(),
+                                        BinCode = reader["BinCode"]?.ToString(),
+                                        UnitOfMeasureCode = reader["UnitOfMeasureCode"]?.ToString(),
+                                        BarcodeTypeCode = reader["BarcodeTypeCode"]?.ToString(),
+                                        ColorCode = reader["ColorCode"]?.ToString(),
+                                        ItemDim1Code = reader["ItemDim1Code"]?.ToString(),
+                                        ItemDim2TypeCode = reader["ItemDim2TypeCode"]?.ToString(),
+                                        ItemDim2Code = reader["ItemDim2Code"]?.ToString(),
+                                        ItemDim3Code = reader["ItemDim3Code"]?.ToString(),
+                                        Qty = reader["Qty"] != DBNull.Value ? Convert.ToDecimal(reader["Qty"]) : 0,
+                                        VariantIsBlocked = reader["IsBlocked"] != DBNull.Value ? Convert.ToBoolean(reader["IsBlocked"]) : false,
+                                        IsNotExist = reader["IsNotExist"] != DBNull.Value ? Convert.ToBoolean(reader["IsNotExist"]) : false
+                                    };
+
+                                    result.Add(inventoryStock);
+                                }
+                                
+                                _logger.LogInformation($"Toplam {rowCount} adet stok kaydı bulundu");
+                            }
+                        }
+                    }
+                }
+                catch (SqlException sqlEx)
+                {
+                    _logger.LogError(sqlEx, $"SQL hatası oluştu: {sqlEx.Message}");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Veritabanı işlemi sırasında hata oluştu: {ex.Message}");
+                    throw;
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Barkod ile envanter/stok bilgisi aranırken hata oluştu. Barkod: {barcode}");
+                _logger.LogError($"Hata detayı: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+                _logger.LogError($"Stack trace: {ex.StackTrace}");
+                
+                // Boş liste döndür
+                return new List<InventoryStockModel>();
+            }
+        }
+
+        public async Task<List<InventoryStockModel>> GetInventoryStockByProductCodeOrDescriptionAsync(string searchText)
+        {
+            try
+            {
+                var result = new List<InventoryStockModel>();
+                
+                if (string.IsNullOrEmpty(searchText))
+                {
+                    return result;
+                }
+                
+                _logger.LogInformation($"Ürün kodu veya açıklaması ile envanter/stok bilgisi aranıyor: {searchText}");
+
+                // Dinamik SQL sorgusu kullan
+                _logger.LogInformation($"Dinamik SQL sorgusu hazırlanıyor. Arama metni: {searchText}");
+                
+                // qry_GetItemInfoFromBarcode stored procedure'unu temel alan bir sorgu oluştur
+                // Ancak barkod yerine ürün kodu veya açıklamasına göre arama yap
+                var query = @"
+                DECLARE @ItemCode nvarchar(30)
+                DECLARE @ItemDescription nvarchar(100)
+                SET @ItemCode = @SearchText
+                SET @ItemDescription = @SearchText
+
+                SELECT 
+                    ItemTypeCode = iv.ItemTypeCode,
+                    ItemCode = iv.ItemCode,
+                    Barcode = ISNULL(pb.Barcode, ''),
+                    ItemDescription = ISNULL(id.ItemDescription, ''),
+                    ColorDescription = ISNULL(cd.ColorDescription, ''),
+                    BinCode = ISNULL(ti.BinCode, ''),
+                    UnitOfMeasureCode = ISNULL(iv.UnitOfMeasureCode1, ''),
+                    BarcodeTypeCode = ISNULL(pb.BarcodeTypeCode, ''),
+                    ColorCode = iv.ColorCode,
+                    ItemDim1Code = iv.ItemDim1Code,
+                    ItemDim2TypeCode = iv.ItemDim2TypeCode,
+                    ItemDim2Code = iv.ItemDim2Code,
+                    ItemDim3Code = iv.ItemDim3Code,
+                    Qty = ISNULL(ti.Qty, 0),
+                    IsBlocked = CAST(ISNULL(iv.IsBlocked, 0) AS bit),
+                    IsNotExist = CAST(0 AS bit)
+                FROM prItemVariant iv WITH(NOLOCK)
+                INNER JOIN cdItem i WITH(NOLOCK) ON i.ItemTypeCode = iv.ItemTypeCode AND i.ItemCode = iv.ItemCode
+                LEFT JOIN cdItemDesc id WITH(NOLOCK) ON id.ItemTypeCode = iv.ItemTypeCode AND id.ItemCode = iv.ItemCode AND id.LangCode = @LangCode
+                LEFT JOIN cdColorDesc cd WITH(NOLOCK) ON cd.ColorCode = iv.ColorCode AND cd.LangCode = @LangCode
+                LEFT JOIN prItemBarcode pb WITH(NOLOCK) ON 
+                    pb.ItemTypeCode = iv.ItemTypeCode AND 
+                    pb.ItemCode = iv.ItemCode AND 
+                    pb.ColorCode = iv.ColorCode AND 
+                    pb.ItemDim1Code = iv.ItemDim1Code AND 
+                    pb.ItemDim2Code = iv.ItemDim2Code AND 
+                    pb.ItemDim3Code = iv.ItemDim3Code
+                LEFT JOIN trInventoryItem ti WITH(NOLOCK) ON 
+                    ti.ItemTypeCode = iv.ItemTypeCode AND 
+                    ti.ItemCode = iv.ItemCode AND 
+                    ti.ColorCode = iv.ColorCode AND 
+                    ti.ItemDim1Code = iv.ItemDim1Code AND 
+                    ti.ItemDim2Code = iv.ItemDim2Code AND 
+                    ti.ItemDim3Code = iv.ItemDim3Code
+                WHERE 
+                    (iv.ItemCode LIKE '%' + @ItemCode + '%' OR id.ItemDescription LIKE '%' + @ItemDescription + '%')
+                ORDER BY iv.ItemCode, iv.ColorCode, iv.ItemDim1Code
+                ";
+
+                _logger.LogInformation($"Veritabanı bağlantısı açılıyor. ConnectionString: {_connectionString.Substring(0, Math.Min(20, _connectionString.Length))}...");
+                
+                try
+                {
+                    using (var connection = new SqlConnection(_connectionString))
+                    {
+                        await connection.OpenAsync();
+                        _logger.LogInformation("Veritabanı bağlantısı başarıyla açıldı");
+
+                        using (var command = new SqlCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@SearchText", searchText);
+                            command.Parameters.AddWithValue("@LangCode", "TR");
+                            _logger.LogInformation($"SQL sorgusu çalıştırılıyor. Arama metni: {searchText}");
+
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                _logger.LogInformation("SQL sorgusu başarıyla çalıştırıldı");
+                                
+                                int rowCount = 0;
+                                while (await reader.ReadAsync())
+                                {
+                                    rowCount++;
+                                    var inventoryStock = new InventoryStockModel
+                                    {
+                                        ItemTypeCode = reader["ItemTypeCode"]?.ToString(),
+                                        ItemCode = reader["ItemCode"]?.ToString(),
+                                        UsedBarcode = reader["Barcode"]?.ToString(),
+                                        ItemDescription = reader["ItemDescription"]?.ToString(),
+                                        ColorDescription = reader["ColorDescription"]?.ToString(),
+                                        BinCode = reader["BinCode"]?.ToString(),
+                                        UnitOfMeasureCode = reader["UnitOfMeasureCode"]?.ToString(),
+                                        BarcodeTypeCode = reader["BarcodeTypeCode"]?.ToString(),
+                                        ColorCode = reader["ColorCode"]?.ToString(),
+                                        ItemDim1Code = reader["ItemDim1Code"]?.ToString(),
+                                        ItemDim2TypeCode = reader["ItemDim2TypeCode"]?.ToString(),
+                                        ItemDim2Code = reader["ItemDim2Code"]?.ToString(),
+                                        ItemDim3Code = reader["ItemDim3Code"]?.ToString(),
+                                        Qty = reader["Qty"] != DBNull.Value ? Convert.ToDecimal(reader["Qty"]) : 0,
+                                        VariantIsBlocked = reader["IsBlocked"] != DBNull.Value ? Convert.ToBoolean(reader["IsBlocked"]) : false,
+                                        IsNotExist = reader["IsNotExist"] != DBNull.Value ? Convert.ToBoolean(reader["IsNotExist"]) : false
+                                    };
+
+                                    result.Add(inventoryStock);
+                                }
+                                
+                                _logger.LogInformation($"Toplam {rowCount} adet stok kaydı bulundu");
+                            }
+                        }
+                    }
+                }
+                catch (SqlException sqlEx)
+                {
+                    _logger.LogError(sqlEx, $"SQL hatası oluştu: {sqlEx.Message}");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Veritabanı işlemi sırasında hata oluştu: {ex.Message}");
+                    throw;
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ürün kodu veya açıklaması ile envanter/stok bilgisi aranırken hata oluştu. Arama metni: {searchText}");
+                _logger.LogError($"Hata detayı: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+                _logger.LogError($"Stack trace: {ex.StackTrace}");
+                
+                // Boş liste döndür
+                return new List<InventoryStockModel>();
+            }
+        }
+
+        public async Task<List<InventoryStockModel>> GetInventoryStockMultiPurposeAsync(string barcode = null, string productCode = null, string productDescription = null, string colorCode = null, string itemDim1Code = null, string warehouseCode = null, bool showOnlyPositiveStock = false)
+        {
+            try
+            {
+                var result = new List<InventoryStockModel>();
+                
+                _logger.LogInformation($"Çok amaçlı envanter/stok sorgusu yapılıyor. Barkod: {barcode}, Ürün Kodu: {productCode}, Ürün Açıklaması: {productDescription}, Renk Kodu: {colorCode}, Beden Kodu: {itemDim1Code}, Depo Kodu: {warehouseCode}, Sadece Pozitif Stok: {showOnlyPositiveStock}");
+
+                _logger.LogInformation("Veritabanı bağlantısı açılıyor.");
+                
+                try
+                {
+                    using (var connection = new SqlConnection(_connectionString))
+                    {
+                        await connection.OpenAsync();
+                        _logger.LogInformation("Veritabanı bağlantısı başarıyla açıldı");
+
+                        // Çok basit bir SQL sorgusu
+                        var query = @"
+                        SELECT 
+                            i.ItemTypeCode,
+                            i.ItemCode,
+                            b.Barcode AS UsedBarcode,
+                            id.ItemDescription,
+                            cd.ColorDescription,
+                            '' AS BinCode,
+                            i.UnitOfMeasureCode1 AS UnitOfMeasureCode,
+                            '' AS BarcodeTypeCode,
+                            v.ColorCode,
+                            v.ItemDim1Code,
+                            '' AS ItemDim2TypeCode,
+                            '' AS ItemDim2Code,
+                            '' AS ItemDim3Code,
+                            ISNULL(s.Qty, 0) AS Qty,
+                            w.WarehouseCode,
+                            w.WarehouseDescription AS WarehouseName,
+                            0 AS VariantIsBlocked,
+                            0 AS IsNotExist
+                    WHERE cdItem.IsBlocked = 0
+
+                    UNION ALL
+
+                    SELECT
+                        prItemBatchBarcode.ItemTypeCode,
+                        prItemBatchBarcode.ItemCode,
+                        prItemBatchBarcode.ColorCode,
+                        prItemBatchBarcode.ItemDim1Code,
+                        prItemBatchBarcode.ItemDim2Code,
+                        prItemBatchBarcode.ItemDim3Code,
+                        UsedBarcode = prItemBatchBarcode.BatchBarcode, -- This was already correctly aliased
+                        SortOrder = 2
+                    FROM prItemBatchBarcode WITH (NOLOCK)
+                    INNER JOIN cdItem WITH (NOLOCK) -- Join cdItem to access IsBlocked
+                        ON prItemBatchBarcode.ItemTypeCode = cdItem.ItemTypeCode
+                        AND prItemBatchBarcode.ItemCode = cdItem.ItemCode
+                    WHERE cdItem.IsBlocked = 0
+
+                    UNION ALL
+
+                    SELECT
+                        ItemTypeCode = cdRoll.ItemTypeCode, -- cdRoll'de ItemTypeCode direkt olmayabilir, cdItem'dan alınmalı
+                        ItemCode = cdRoll.ItemCode,
+                        cdRoll.ColorCode,
+                        cdRoll.ItemDim1Code,
+                        cdRoll.ItemDim2Code,
+                        cdRoll.ItemDim3Code,
+                        UsedBarcode = cdRoll.RollNumber, -- Ensure RollNumber is aliased as UsedBarcode
+                        SortOrder = 3
+                    FROM cdRoll WITH (NOLOCK)
+                    INNER JOIN cdItem WITH (NOLOCK)
+                        ON cdRoll.ItemCode = cdItem.ItemCode
+                        AND cdRoll.ItemTypeCode = cdItem.ItemTypeCode
+                    WHERE cdItem.IsBlocked = 0 -- Apply IsBlocked filter here for rolls as well
+                ),
+                GroupedBarcodes AS (
+                    -- Her varyant için tüm barkodları virgülle ayrılmış bir string olarak birleştiriyoruz
+                    SELECT
+                        ItemTypeCode,
+                        ItemCode,
+                        ColorCode,
+                        ItemDim1Code,
+                        ItemDim2Code,
+                        ItemDim3Code,
+                        AllUsedBarcodes = STUFF((SELECT ', ' + UsedBarcode
+                                             FROM AllBarcodes
+                                             WHERE ItemTypeCode = AB.ItemTypeCode
+                                               AND ItemCode = AB.ItemCode
+                                               AND ColorCode = AB.ColorCode
+                                               AND ItemDim1Code = AB.ItemDim1Code
+                                               AND ItemDim2Code = AB.ItemDim2Code
+                                               AND ItemDim3Code = AB.ItemDim3Code
+                                             ORDER BY SortOrder, UsedBarcode
+                                             FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '')
+                    FROM AllBarcodes AB
+                    GROUP BY ItemTypeCode, ItemCode, ColorCode, ItemDim1Code, ItemDim2Code, ItemDim3Code
+                )
+                SELECT
+                      ItemTypeCode = prItemVariant.ItemTypeCode
+                    , ItemCode = prItemVariant.ItemCode
+                    , UsedBarcode = ISNULL(GroupedBarcodes.AllUsedBarcodes, '')
+                    , ItemDescription = ISNULL(cdItemDesc.ItemDescription, '')
+                    , ColorDescription = ISNULL(cdColorDesc.ColorDescription, '')
+                    , BinCode = ''
+                    , UnitOfMeasureCode = cdItem.UnitOfMeasureCode1
+                    , BarcodeTypeCode = ''
+                    , ColorCode = prItemVariant.ColorCode
+                    , ItemDim1Code = prItemVariant.ItemDim1Code
+                    //, ItemDim2TypeCode = prItemVariant.ItemDim2TypeCode // Bu sütun veritabanında mevcut değil
+                    , ItemDim2Code = prItemVariant.ItemDim2Code
+                    , ItemDim3Code = prItemVariant.ItemDim3Code
+                    , Qty = ISNULL(Inventory.EnvanterMiktar, 0)
+                    , VariantIsBlocked = CAST(ISNULL(prItemVariant.IsBlocked, 0) AS bit)
+                    , IsNotExist = CAST(0 AS bit)
+                    , WarehouseCode = ISNULL(Inventory.WarehouseCode, '')
+                    , WarehouseName = ISNULL(Inventory.WareHouseDescription, '')
+                FROM
+                    cdItem WITH (NOLOCK)
+                INNER JOIN
+                    prItemVariant WITH (NOLOCK) ON cdItem.ItemTypeCode = prItemVariant.ItemTypeCode
+                                                AND cdItem.ItemCode = prItemVariant.ItemCode
+                LEFT JOIN
+                    cdItemDesc WITH (NOLOCK) ON prItemVariant.ItemTypeCode = cdItemDesc.ItemTypeCode
+                                            AND prItemVariant.ItemCode = cdItemDesc.ItemCode
+                                            AND cdItemDesc.LangCode = @LangCode
+                LEFT JOIN
+                    cdColorDesc WITH (NOLOCK) ON prItemVariant.ColorCode = cdColorDesc.ColorCode
+                                             AND cdColorDesc.LangCode = @LangCode
+                LEFT JOIN (
+                    -- Stok bilgilerini getiren alt sorgu
+                    SELECT
+                          CompanyCode           = 1
+                        , OfficeCode            = ISNULL(Inventory.OfficeCode, 'N/A')
+                        , OfficeDescription     = ISNULL(cdOfficeDesc.OfficeDescription, '')
+                        , WarehouseCode         = ISNULL(Inventory.WarehouseCode, 'N/A')
+                        , WareHouseDescription  = ISNULL(cdWareHouseDesc.WareHouseDescription, '')
+                        , ProductCode           = prItemVariant.ItemCode
+                        , ColorCode             = prItemVariant.ColorCode
+                        , ItemDim1Code          = prItemVariant.ItemDim1Code
+                        , EnvanterMiktar        = ISNULL(Inventory.InventoryQty1 + Inventory.TransferNotApprovedQty1, 0)
+                    FROM
+                        prItemVariant WITH (NOLOCK)
+                    LEFT JOIN (
+                        -- Stok miktarını hesaplayan alt sorgu
+                        SELECT
+                            CompanyCode         = trStock.CompanyCode
+                          , OfficeCode          = CASE WHEN 1 = 1 THEN trStock.OfficeCode ELSE '' END
+                          , StoreCode           = CASE WHEN 1 = 1 THEN trStock.StoreCode ELSE '' END
+                          , WarehouseCode       = CASE WHEN 1 = 1 THEN trStock.WarehouseCode ELSE '' END
+                          , ProductCode         = trStock.ProductCode
+                          , ColorCode           = trStock.ColorCode
+                          , ItemDim1Code        = trStock.ItemDim1Code
+                          , InventoryQty1       = SUM(trStock.InventoryQty1)
+                          , TransferNotApprovedQty1 = SUM(trStock.TransferNotApprovedQty1)
+                        FROM (
+                            -- Stok hareketlerini getiren alt sorgu
+                            SELECT
+                                CompanyCode             = trStock.CompanyCode
+                              , OfficeCode              = trStock.OfficeCode
+                              , StoreCode               = trStock.StoreCode
+                              , WarehouseCode           = trStock.WarehouseCode
+                              , ProductCode             = trStock.ProductCode
+                              , ColorCode               = trStock.ColorCode
+                              , ItemDim1Code            = trStock.ItemDim1Code
+                              , InventoryQty1           = SUM(TRY_CAST(trStock.In_Qty1 AS FLOAT) - TRY_CAST(trStock.Out_Qty1 AS FLOAT))
+                              , TransferNotApprovedQty1 = 0
+                            FROM (SELECT *, ProductCode = ItemCode FROM trStock WITH (NOLOCK)) AS trStock
+                            WHERE
+                                trStock.ItemTypeCode = 1
+                                AND trStock.OperationDate <= CAST(GETDATE() AS DATETIME)
+                            GROUP BY
+                                trStock.CompanyCode
+                              , trStock.OfficeCode
+                              , trStock.StoreCode
+                              , trStock.WarehouseCode
+                              , trStock.ProductCode
+                              , trStock.ColorCode
+                              , trStock.ItemDim1Code
+                        ) AS trStock
+                        GROUP BY
+                            trStock.CompanyCode
+                          , CASE WHEN 1 = 1 THEN trStock.OfficeCode ELSE '' END
+                          , CASE WHEN 1 = 1 THEN trStock.StoreCode ELSE '' END
+                          , CASE WHEN 1 = 1 THEN trStock.WarehouseCode ELSE '' END
+                          , trStock.ProductCode
+                          , trStock.ColorCode
+                          , trStock.ItemDim1Code
+                    ) AS Inventory ON prItemVariant.ItemCode = Inventory.ProductCode
+                                   AND prItemVariant.ColorCode = Inventory.ColorCode
+                                   AND prItemVariant.ItemDim1Code = Inventory.ItemDim1Code
+                    LEFT JOIN
+                        cdOfficeDesc WITH (NOLOCK) ON Inventory.OfficeCode = cdOfficeDesc.OfficeCode
+                                                  AND cdOfficeDesc.LangCode = @LangCode
+                    LEFT JOIN
+                        cdWareHouseDesc WITH (NOLOCK) ON Inventory.WarehouseCode = cdWareHouseDesc.WarehouseCode
+                                                     AND cdWareHouseDesc.LangCode = @LangCode
+                ) AS Inventory ON prItemVariant.ItemCode = Inventory.ProductCode
+                               AND prItemVariant.ColorCode = Inventory.ColorCode
+                               AND prItemVariant.ItemDim1Code = Inventory.ItemDim1Code
+                LEFT JOIN GroupedBarcodes
+                    ON prItemVariant.ItemTypeCode = GroupedBarcodes.ItemTypeCode
+                   AND prItemVariant.ItemCode = GroupedBarcodes.ItemCode
+                   AND prItemVariant.ColorCode = GroupedBarcodes.ColorCode
+                   AND prItemVariant.ItemDim1Code = GroupedBarcodes.ItemDim1Code
+                   AND prItemVariant.ItemDim2Code = GroupedBarcodes.ItemDim2Code
+                   AND prItemVariant.ItemDim3Code = GroupedBarcodes.ItemDim3Code
+                WHERE 1=1
+                ";
+
+                // Filtreleri ekle
+                if (!string.IsNullOrEmpty(barcode))
+                {
+                    query += " AND GroupedBarcodes.AllUsedBarcodes LIKE '%' + @Barcode + '%'";
+                }
+
+                if (!string.IsNullOrEmpty(productCode))
+                {
+                    query += " AND prItemVariant.ItemCode LIKE '%' + @ProductCode + '%'";
+                }
+
+                if (!string.IsNullOrEmpty(productDescription))
+                {
+                    query += " AND cdItemDesc.ItemDescription LIKE '%' + @ProductDescription + '%'";
+                }
+
+                if (!string.IsNullOrEmpty(colorCode))
+                {
+                    query += " AND prItemVariant.ColorCode = @ColorCode";
+                }
+
+                if (!string.IsNullOrEmpty(itemDim1Code))
+                {
+                    query += " AND prItemVariant.ItemDim1Code = @ItemDim1Code";
+                }
+
+                if (!string.IsNullOrEmpty(warehouseCode))
+                {
+                    query += " AND Inventory.WarehouseCode = @WarehouseCode";
+                }
+
+                if (showOnlyPositiveStock)
+                {
+                    query += " AND ISNULL(Inventory.EnvanterMiktar, 0) > 0";
+                }
+
+                query += " ORDER BY prItemVariant.ItemCode, prItemVariant.ColorCode, prItemVariant.ItemDim1Code";
+
+                _logger.LogInformation($"Veritabanı bağlantısı açılıyor.");
+                
+                try
+                {
+                    using (var connection = new SqlConnection(_connectionString))
+                    {
+                        await connection.OpenAsync();
+                        _logger.LogInformation("Veritabanı bağlantısı başarıyla açıldı");
+
+                        using (var command = new SqlCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@LangCode", "TR");
+                            
+                            if (!string.IsNullOrEmpty(barcode))
+                            {
+                                command.Parameters.AddWithValue("@Barcode", barcode);
+                            }
+                            
+                            if (!string.IsNullOrEmpty(productCode))
+                            {
+                                command.Parameters.AddWithValue("@ProductCode", productCode);
+                            }
+                            
+                            if (!string.IsNullOrEmpty(productDescription))
+                            {
+                                command.Parameters.AddWithValue("@ProductDescription", productDescription);
+                            }
+                            
+                            if (!string.IsNullOrEmpty(colorCode))
+                            {
+                                command.Parameters.AddWithValue("@ColorCode", colorCode);
+                            }
+                            
+                            if (!string.IsNullOrEmpty(itemDim1Code))
+                            {
+                                command.Parameters.AddWithValue("@ItemDim1Code", itemDim1Code);
+                            }
+                            
+                            if (!string.IsNullOrEmpty(warehouseCode))
+                            {
+                                command.Parameters.AddWithValue("@WarehouseCode", warehouseCode);
+                            }
+
+                            _logger.LogInformation($"SQL sorgusu çalıştırılıyor.");
+
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                _logger.LogInformation("SQL sorgusu başarıyla çalıştırıldı");
+                                
+                                int rowCount = 0;
+                                while (await reader.ReadAsync())
+                                {
+                                    rowCount++;
+                                    var inventoryStock = new InventoryStockModel
+                                    {
+                                        ItemTypeCode = reader["ItemTypeCode"]?.ToString(),
+                                        ItemCode = reader["ItemCode"]?.ToString(),
+                                        UsedBarcode = reader["Barcode"]?.ToString(),
+                                        ItemDescription = reader["ItemDescription"]?.ToString(),
+                                        ColorDescription = reader["ColorDescription"]?.ToString(),
+                                        BinCode = reader["BinCode"]?.ToString(),
+                                        UnitOfMeasureCode = reader["UnitOfMeasureCode"]?.ToString(),
+                                        BarcodeTypeCode = reader["BarcodeTypeCode"]?.ToString(),
+                                        ColorCode = reader["ColorCode"]?.ToString(),
+                                        ItemDim1Code = reader["ItemDim1Code"]?.ToString(),
+                                        ItemDim2TypeCode = reader["ItemDim2TypeCode"]?.ToString(),
+                                        ItemDim2Code = reader["ItemDim2Code"]?.ToString(),
+                                        ItemDim3Code = reader["ItemDim3Code"]?.ToString(),
+                                        Qty = reader["Qty"] != DBNull.Value ? Convert.ToDecimal(reader["Qty"]) : 0,
+                                        VariantIsBlocked = reader["IsBlocked"] != DBNull.Value ? Convert.ToBoolean(reader["IsBlocked"]) : false,
+                                        IsNotExist = reader["IsNotExist"] != DBNull.Value ? Convert.ToBoolean(reader["IsNotExist"]) : false,
+                                        WarehouseCode = reader["WarehouseCode"]?.ToString(),
+                                        WarehouseName = reader["WarehouseName"]?.ToString()
+                                    };
+
+                                    result.Add(inventoryStock);
+                                }
+                                
+                                _logger.LogInformation($"Toplam {rowCount} adet stok kaydı bulundu");
+                            }
+                        }
+                    }
+                }
+                catch (SqlException sqlEx)
+                {
+                    _logger.LogError(sqlEx, $"SQL hatası oluştu: {sqlEx.Message}");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Veritabanı işlemi sırasında hata oluştu: {ex.Message}");
+                    throw;
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Çok amaçlı envanter/stok sorgusu yapılırken hata oluştu.");
+                _logger.LogError($"Hata detayı: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+                _logger.LogError($"Stack trace: {ex.StackTrace}");
+                
+                // Boş liste döndür
+                return new List<InventoryStockModel>();
+            }
+        }
+
+        public async Task<List<InventoryStockModel>> GetAllInventoryStockAsync(int page = 1, int pageSize = 50)
+        {
+            try
+            {
+                var result = new List<InventoryStockModel>();
+                
+                _logger.LogInformation($"Tüm envanter/stok bilgileri getiriliyor. Sayfa: {page}, Sayfa Boyutu: {pageSize}");
+
+                // Sayfalama için offset hesapla
+                int offset = (page - 1) * pageSize;
+                
+                // Tüm envanter kayıtlarını getiren SQL sorgusu
+                var query = @"
+                SELECT TOP (@PageSize)
+                       ItemTypeCode          = cdItem.ItemTypeCode
+                     , UsedBarcode           = prItemBarcode.Barcode
+                     , ItemDescription       = ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) WHERE cdItemDesc.ItemTypeCode = prItemVariant.ItemTypeCode AND cdItemDesc.ItemCode = prItemVariant.ItemCode AND cdItemDesc.LangCode = @LangCode), SPACE(0))
+                     , ColorDescription      = ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) WHERE cdColorDesc.ColorCode = prItemVariant.ColorCode AND cdColorDesc.LangCode = @LangCode), SPACE(0))
+                     , BinCode               = ISNULL(trInventoryItem.BinCode, SPACE(0))
+                     , UnitOfMeasureCode     = prItemBarcode.UnitOfMeasureCode
+                     , BarcodeTypeCode       = prItemBarcode.BarcodeTypeCode
+                     , ColorCode             = prItemVariant.ColorCode
+                     , ItemDim1Code          = prItemVariant.ItemDim1Code
+                     , ItemDim2TypeCode      = prItemVariant.ItemDim2TypeCode
+                     , ItemDim2Code          = prItemVariant.ItemDim2Code
+                     , ItemDim3Code          = prItemVariant.ItemDim3Code
+                     , Qty                   = ISNULL(trInventoryItem.Qty, 0)
+                     , VariantIsBlocked      = CAST(ISNULL(prItemVariant.IsBlocked, 0) AS bit)
+                     , IsNotExist            = CAST(0 AS bit)
+                FROM prItemBarcode WITH(NOLOCK)
+                    INNER JOIN prItemVariant WITH(NOLOCK)
+                        ON prItemVariant.ItemTypeCode = prItemBarcode.ItemTypeCode
+                        AND prItemVariant.ItemCode = prItemBarcode.ItemCode
+                        AND prItemVariant.ColorCode = prItemBarcode.ColorCode
+                        AND prItemVariant.ItemDim1Code = prItemBarcode.ItemDim1Code
+                        AND prItemVariant.ItemDim2Code = prItemBarcode.ItemDim2Code
+                        AND prItemVariant.ItemDim3Code = prItemBarcode.ItemDim3Code
+                    INNER JOIN cdItem WITH(NOLOCK)
+                        ON cdItem.ItemTypeCode = prItemVariant.ItemTypeCode
+                        AND cdItem.ItemCode = prItemVariant.ItemCode
+                    LEFT OUTER JOIN trInventoryItem WITH(NOLOCK)
+                        ON trInventoryItem.ItemTypeCode = prItemVariant.ItemTypeCode
+                        AND trInventoryItem.ItemCode = prItemVariant.ItemCode
+                        AND trInventoryItem.ColorCode = prItemVariant.ColorCode
+                        AND trInventoryItem.ItemDim1Code = prItemVariant.ItemDim1Code
+                        AND trInventoryItem.ItemDim2Code = prItemVariant.ItemDim2Code
+                        AND trInventoryItem.ItemDim3Code = prItemVariant.ItemDim3Code
+                        AND trInventoryItem.BarcodeTypeCode = prItemBarcode.BarcodeTypeCode
+                ORDER BY cdItem.ItemCode, prItemVariant.ColorCode, prItemVariant.ItemDim1Code
+                OFFSET @Offset ROWS";
+
+                try
+                {
+                    using (var connection = new SqlConnection(_connectionString))
+                    {
+                        await connection.OpenAsync();
+                        _logger.LogInformation("Veritabanı bağlantısı başarıyla açıldı");
+
+                        using (var command = new SqlCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@LangCode", "TR");
+                            command.Parameters.AddWithValue("@PageSize", pageSize);
+                            command.Parameters.AddWithValue("@Offset", offset);
+                            _logger.LogInformation($"SQL sorgusu çalıştırılıyor. Sayfa: {page}, Offset: {offset}");
+
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                _logger.LogInformation("SQL sorgusu başarıyla çalıştırıldı");
+                                
+                                int rowCount = 0;
+                                while (await reader.ReadAsync())
+                                {
+                                    rowCount++;
+                                    var inventoryStock = new InventoryStockModel
+                                    {
+                                        ItemTypeCode = reader["ItemTypeCode"]?.ToString(),
+                                        UsedBarcode = reader["UsedBarcode"]?.ToString(),
+                                        ItemDescription = reader["ItemDescription"]?.ToString(),
+                                        ColorDescription = reader["ColorDescription"]?.ToString(),
+                                        BinCode = reader["BinCode"]?.ToString(),
+                                        UnitOfMeasureCode = reader["UnitOfMeasureCode"]?.ToString(),
+                                        BarcodeTypeCode = reader["BarcodeTypeCode"]?.ToString(),
+                                        ColorCode = reader["ColorCode"]?.ToString(),
+                                        ItemDim1Code = reader["ItemDim1Code"]?.ToString(),
+                                        ItemDim2TypeCode = reader["ItemDim2TypeCode"]?.ToString(),
+                                        ItemDim2Code = reader["ItemDim2Code"]?.ToString(),
+                                        ItemDim3Code = reader["ItemDim3Code"]?.ToString(),
+                                        Qty = reader["Qty"] != DBNull.Value ? Convert.ToDecimal(reader["Qty"]) : 0,
+                                        VariantIsBlocked = Convert.ToBoolean(reader["VariantIsBlocked"]),
+                                        IsNotExist = Convert.ToBoolean(reader["IsNotExist"])
+                                    };
+
+                                    result.Add(inventoryStock);
+                                }
+                                
+                                _logger.LogInformation($"Toplam {rowCount} adet stok kaydı bulundu");
+                            }
+                        }
+                    }
+                }
+                catch (SqlException sqlEx)
+                {
+                    _logger.LogError(sqlEx, $"SQL hatası oluştu: {sqlEx.Message}");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Veritabanı işlemi sırasında hata oluştu: {ex.Message}");
+                    throw;
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Tüm envanter/stok bilgileri getirilirken hata oluştu. Sayfa: {page}, Sayfa Boyutu: {pageSize}");
+                _logger.LogError($"Hata detayı: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+                _logger.LogError($"Stack trace: {ex.StackTrace}");
+                
+                // Boş liste döndür
+                return new List<InventoryStockModel>();
+            }
+        }
+    }
+}

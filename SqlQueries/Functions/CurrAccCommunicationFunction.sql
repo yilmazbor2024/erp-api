@@ -1,8 +1,7 @@
 -- CurrAccCommunication Function
 -- Müşteri/Tedarikçi iletişim bilgilerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[CurrAccCommunication]    Script Date: 5/9/2025 2:03:31 AM ******/
 SET ANSI_NULLS ON
 GO

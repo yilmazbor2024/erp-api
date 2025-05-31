@@ -28,34 +28,63 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
-        /// Barkod ile envanter/stok bilgisini getirir
+        /// Çok amaçlı envanter/stok sorgulama endpoint'i
         /// </summary>
-        /// <param name="barcode">Ürün barkodu</param>
-        /// <returns>Envanter/stok bilgisi</returns>
-        [HttpGet("stock/by-barcode/{barcode}")]
-        public async Task<ActionResult<ApiResponse<List<InventoryStockModel>>>> GetInventoryStockByBarcode(string barcode)
+        /// <param name="barcode">Barkod (opsiyonel)</param>
+        /// <param name="productCode">Ürün kodu (opsiyonel)</param>
+        /// <param name="productDescription">Ürün açıklaması (opsiyonel)</param>
+        /// <param name="colorCode">Renk kodu (opsiyonel)</param>
+        /// <param name="itemDim1Code">Beden kodu (opsiyonel)</param>
+        /// <param name="warehouseCode">Depo kodu (opsiyonel)</param>
+        /// <param name="showOnlyPositiveStock">Sadece stok miktarı sıfırdan büyük olanları göster (opsiyonel, varsayılan: false)</param>
+        /// <returns>Envanter/stok bilgileri listesi</returns>
+        [HttpGet("stock/multi-purpose")]
+        public async Task<ActionResult<ApiResponse<List<InventoryStockModel>>>> GetInventoryStockMultiPurpose(
+            [FromQuery] string barcode = null,
+            [FromQuery] string productCode = null,
+            [FromQuery] string productDescription = null,
+            [FromQuery] string colorCode = null,
+            [FromQuery] string itemDim1Code = null,
+            [FromQuery] string warehouseCode = null,
+            [FromQuery] bool showOnlyPositiveStock = false)
         {
             try
             {
-                if (string.IsNullOrEmpty(barcode))
+                // En az bir parametre belirtilmiş olmalı
+                if (string.IsNullOrEmpty(barcode) && 
+                    string.IsNullOrEmpty(productCode) && 
+                    string.IsNullOrEmpty(productDescription) && 
+                    string.IsNullOrEmpty(colorCode) && 
+                    string.IsNullOrEmpty(itemDim1Code) && 
+                    string.IsNullOrEmpty(warehouseCode) && 
+                    !showOnlyPositiveStock)
                 {
-                    return BadRequest(new ApiResponse<List<InventoryStockModel>>(null, false, "Barkod boş olamaz", "BadRequest"));
+                    return BadRequest(new ApiResponse<List<InventoryStockModel>>(null, false, "En az bir arama kriteri belirtilmelidir", "BadRequest"));
                 }
 
-                var inventoryStock = await _inventoryRepository.GetInventoryStockByBarcodeAsync(barcode);
+                var inventoryStock = await _inventoryRepository.GetInventoryStockMultiPurposeAsync(
+                    barcode, 
+                    productCode, 
+                    productDescription, 
+                    colorCode, 
+                    itemDim1Code, 
+                    warehouseCode, 
+                    showOnlyPositiveStock);
 
                 if (inventoryStock == null || inventoryStock.Count == 0)
                 {
-                    return NotFound(new ApiResponse<List<InventoryStockModel>>(null, false, $"{barcode} barkoduna sahip envanter/stok bilgisi bulunamadı", "NotFound"));
+                    return NotFound(new ApiResponse<List<InventoryStockModel>>(null, false, "Belirtilen kriterlere uygun envanter/stok bilgisi bulunamadı", "NotFound"));
                 }
 
                 return Ok(new ApiResponse<List<InventoryStockModel>>(inventoryStock, true, "Envanter/stok bilgisi başarıyla getirildi"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Barkod ile envanter/stok bilgisi aranırken hata oluştu. Barkod: {Barcode}", barcode);
+                _logger.LogError(ex, "Çok amaçlı envanter/stok sorgusu yapılırken hata oluştu.");
                 return StatusCode(500, new ApiResponse<List<InventoryStockModel>>(null, false, "Envanter/stok bilgisi getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }
+
+
     }
 }

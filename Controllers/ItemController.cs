@@ -622,8 +622,8 @@ namespace ErpMobile.Api.Controllers
             {
                 var query = @"
                     SELECT 
-                        UnitOfMeasureCode,
-                        UnitOfMeasureDescription
+                    cdUnitOfMeasure.UnitOfMeasureCode,
+                    cdUnitOfMeasureDesc.UnitOfMeasureDescription 
                     FROM cdUnitOfMeasure
                     LEFT JOIN cdUnitOfMeasureDesc ON cdUnitOfMeasure.UnitOfMeasureCode = cdUnitOfMeasureDesc.UnitOfMeasureCode
                     WHERE cdUnitOfMeasureDesc.LangCode = @LangCode

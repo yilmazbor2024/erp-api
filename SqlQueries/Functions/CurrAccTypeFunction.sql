@@ -1,8 +1,7 @@
 -- CurrAccType Function
 -- Müşteri/Tedarikçi tiplerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[CurrAccType]    Script Date: 5/9/2025 2:05:34 AM ******/
 SET ANSI_NULLS ON
 GO

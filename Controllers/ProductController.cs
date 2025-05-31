@@ -323,6 +323,37 @@ namespace ErpMobile.Api.Controllers
         }
 
         /// <summary>
+        /// Ürün kodu veya açıklaması ile ürün varyantlarını arar
+        /// </summary>
+        /// <param name="searchText">Ürün kodu veya açıklaması</param>
+        /// <returns>Ürün varyant listesi</returns>
+        [HttpGet("variants/by-product-code-or-description")]
+        public async Task<ActionResult<ApiResponse<List<ProductVariantModel>>>> GetProductVariantsByProductCodeOrDescription([FromQuery] string searchText)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(searchText))
+                {
+                    return BadRequest(new ApiResponse<List<ProductVariantModel>>(null, false, "Arama metni boş olamaz", "BadRequest"));
+                }
+
+                var variants = await _productRepository.GetProductVariantsByProductCodeOrDescriptionAsync(searchText);
+
+                if (variants == null || variants.Count == 0)
+                {
+                    return NotFound(new ApiResponse<List<ProductVariantModel>>(null, false, $"{searchText} ile eşleşen ürün bulunamadı", "NotFound"));
+                }
+
+                return Ok(new ApiResponse<List<ProductVariantModel>>(variants, true, "Ürün varyantları başarıyla getirildi"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ürün kodu veya açıklaması ile ürün varyantları aranırken hata oluştu. Arama metni: {SearchText}", searchText);
+                return StatusCode(500, new ApiResponse<List<ProductVariantModel>>(null, false, "Ürün varyantları getirilirken bir hata oluştu.", "InternalServerError"));
+            }
+        }
+        
+        /// <summary>
         /// Ürün koduna göre fiyat listesini getirir
         /// </summary>
         /// <param name="productCode">Ürün kodu</param>

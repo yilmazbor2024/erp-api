@@ -1,8 +1,7 @@
 -- DTSendShipmentLineSum Stored Procedure
 -- Sevkiyat satır toplamlarını veri transferi için hazırlayan stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_DTSendShipmentLineSum]    Script Date: 5/9/2025 2:19:25 AM ******/
 SET ANSI_NULLS ON
 GO

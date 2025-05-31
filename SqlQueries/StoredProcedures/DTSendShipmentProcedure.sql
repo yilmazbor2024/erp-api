@@ -1,8 +1,7 @@
 -- DTSendShipment Stored Procedure
 -- Sevkiyat verilerini veri transferi için hazırlayan stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_DTSendShipment]    Script Date: 5/9/2025 2:20:21 AM ******/
 SET ANSI_NULLS ON
 GO

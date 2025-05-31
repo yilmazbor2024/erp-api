@@ -1,8 +1,7 @@
 -- OrderType Function
 -- Sipariş tiplerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[OrderType]    Script Date: 5/9/2025 2:26:20 AM ******/
 SET ANSI_NULLS ON
 GO

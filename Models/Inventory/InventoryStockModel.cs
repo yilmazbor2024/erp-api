@@ -4,6 +4,7 @@ namespace ErpMobile.Api.Models.Inventory
 {
     public class InventoryStockModel
     {
+        public string ItemCode { get; set; }
         public string ItemTypeCode { get; set; }
         public string UsedBarcode { get; set; }
         public string ItemDescription { get; set; }
@@ -16,6 +17,8 @@ namespace ErpMobile.Api.Models.Inventory
         public string ItemDim2TypeCode { get; set; }
         public string ItemDim2Code { get; set; }
         public string ItemDim3Code { get; set; }
+        public string WarehouseCode { get; set; }
+        public string WarehouseName { get; set; }
         public decimal Qty { get; set; } // Stok miktarı
         public bool VariantIsBlocked { get; set; }
         public bool IsNotExist { get; set; }

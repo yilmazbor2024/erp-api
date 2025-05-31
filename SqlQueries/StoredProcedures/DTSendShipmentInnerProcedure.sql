@@ -1,7 +1,7 @@
 -- DTSendShipmentInner Stored Procedure
 -- İç sevkiyat verilerini veri transferi için hazırlayan stored procedure
 
-USE [DENEME]
+ 
 GO
 /****** Object:  StoredProcedure [dbo].[qry_DTSendShipmentInner]    Script Date: 5/9/2025 2:22:32 AM ******/
 SET ANSI_NULLS ON

@@ -1,8 +1,7 @@
 -- DTSendOrderLine Stored Procedure
 -- Sipariş satırlarını veri transferi için hazırlayan stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_DTSendOrderLine]    Script Date: 5/9/2025 2:33:28 AM ******/
 SET ANSI_NULLS ON
 GO

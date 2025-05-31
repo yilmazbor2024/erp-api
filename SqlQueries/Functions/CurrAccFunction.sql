@@ -1,8 +1,6 @@
 -- CurrAcc Function
 -- Müşteri/Tedarikçi bilgilerini getiren fonksiyon
-
-USE [DENEME]
-GO
+ 
 
 /****** Object:  UserDefinedFunction [dbo].[CurrAcc]    Script Date: 5/9/2025 1:53:41 AM ******/
 SET ANSI_NULLS ON

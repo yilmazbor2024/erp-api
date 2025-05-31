@@ -1,8 +1,7 @@
 -- CurrAccBooks Function
 -- Müşteri/Tedarikçi borç alacak hareketlerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[CurrAccBooks]    Script Date: 5/9/2025 2:01:39 AM ******/
 SET ANSI_NULLS ON
 GO

@@ -8,6 +8,14 @@ namespace ErpMobile.Api.Repositories.Product
     public interface IProductRepository
     {
         Task<List<ProductVariantModel>> GetProductVariantsByBarcodeAsync(string barcode);
+        
+        /// <summary>
+        /// Ürün kodu veya açıklaması ile ürün varyantlarını arar
+        /// </summary>
+        /// <param name="searchText">Ürün kodu veya açıklaması</param>
+        /// <returns>Ürün varyant listesi</returns>
+        Task<List<ProductVariantModel>> GetProductVariantsByProductCodeOrDescriptionAsync(string searchText);
+        
         Task<List<ProductPriceListModel>> GetProductPriceListAsync(string productCode);
         
         /// <summary>

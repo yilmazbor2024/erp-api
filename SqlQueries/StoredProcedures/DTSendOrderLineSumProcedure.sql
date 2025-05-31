@@ -1,8 +1,7 @@
 -- DTSendOrderLineSum Stored Procedure
 -- Sipariş satır toplamlarını veri transferi için hazırlayan stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_DTSendOrderLineSum]    Script Date: 5/9/2025 2:35:39 AM ******/
 SET ANSI_NULLS ON
 GO

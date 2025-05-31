@@ -1,8 +1,7 @@
 -- CurrAccPostalAddress Function
 -- Müşteri/Tedarikçi adres bilgilerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[CurrAccPostalAddress]    Script Date: 5/9/2025 2:05:21 AM ******/
 SET ANSI_NULLS ON
 GO

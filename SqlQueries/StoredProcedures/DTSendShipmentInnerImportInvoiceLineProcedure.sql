@@ -1,8 +1,7 @@
 -- DTSendShipmentInnerImportInvoiceLine Stored Procedure
 -- İç sevkiyat ithalat fatura satırlarını veri transferi için hazırlayan stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_DTSendShipmentInnerImportInvoiceLine]    Script Date: 5/9/2025 2:24:02 AM ******/
 SET ANSI_NULLS ON
 GO

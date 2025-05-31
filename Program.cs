@@ -20,6 +20,8 @@ using ErpMobile.Api.Services.Invoice;
 using ErpMobile.Api.Extensions;
 using ErpMobile.Api.Repositories.Product;
 using ErpMobile.Api.Models.Product;
+using ErpMobile.Api.Repositories.Inventory;
+using ErpMobile.Api.Models.Inventory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,17 +36,26 @@ builder.Logging.AddDebug();
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 // Add services to the container.
+// CORS yapılandırması - Production ortamı için güncellendi
+var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>() ?? 
+    new[] { 
+        "http://localhost:3000", 
+        "http://edikravat.tr", 
+        "https://edikravat.tr",
+        "http://b2b.edikravat.tr", 
+        "https://b2b.edikravat.tr" 
+    };
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:3001", "http://192.168.1.113:3000", "http://192.168.1.113:3001")
+        policy.WithOrigins(corsOrigins) 
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials(); 
     });
 });
-
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options => {
         // Model doğrulama hatalarında otomatik BadRequest dönüşünü devre dışı bırak
@@ -238,6 +249,9 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 // Ürün servisleri
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
+// Envanter servisleri
+builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
+
 var app = builder.Build();
 
 try
@@ -305,83 +319,38 @@ catch (Exception ex)
 }
 
 // Configure the HTTP request pipeline.
+app.UseCors();
+
+// OPTIONS isteklerini işleyen middleware
+app.Use(async (context, next) =>
+{
+    if (context.Request.Method == "OPTIONS")
+    {
+        context.Response.StatusCode = 200;
+        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+        context.Response.Headers.Add("Access-Control-Allow-Headers", "*");
+        context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        context.Response.Headers.Add("Access-Control-Max-Age", "86400");
+        await context.Response.CompleteAsync();
+        return;
+    }
+    await next.Invoke();
+});
+
+// Swagger her zaman kullanılabilir olsun (sadece Development ortamında değil)
 app.UseSwagger(c => {
     c.RouteTemplate = "swagger/{documentName}/swagger.json";
-    // Swagger JSON'ın boş olması durumunu engelle
-    c.PreSerializeFilters.Add((swaggerDoc, httpReq) => {
-        if (!swaggerDoc.Paths.Any())
-        {
-            // OpenApiPaths oluştur (Dictionary değil)
-            var paths = new Microsoft.OpenApi.Models.OpenApiPaths();
-            
-            // Customer path ekle
-            paths.Add("/api/v1/Customer/customers", new Microsoft.OpenApi.Models.OpenApiPathItem
-            {
-                Operations = new Dictionary<Microsoft.OpenApi.Models.OperationType, Microsoft.OpenApi.Models.OpenApiOperation>
-                {
-                    {
-                        Microsoft.OpenApi.Models.OperationType.Get,
-                        new Microsoft.OpenApi.Models.OpenApiOperation
-                        {
-                            Tags = new List<Microsoft.OpenApi.Models.OpenApiTag> { new Microsoft.OpenApi.Models.OpenApiTag { Name = "Customer" } },
-                            Summary = "Get customers",
-                            Description = "Returns a list of customers",
-                            Responses = new Microsoft.OpenApi.Models.OpenApiResponses()
-                        }
-                    }
-                }
-            });
-            
-            // Path'i swaggerDoc'a ata
-            swaggerDoc.Paths = paths;
-        }
-    });
+});
+app.UseSwaggerUI(c => {
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ErpMobile API V1");
+    c.RoutePrefix = "swagger";
 });
 
 // Statik dosyaları etkinleştir
 app.UseStaticFiles();
 
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Mobile API v1");
-    c.RoutePrefix = "swagger";
-    c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
-    c.DefaultModelsExpandDepth(-1); // Modelleri gizle
-    c.DisplayRequestDuration(); // İstek süresini göster
-    
-    // Swagger UI'ın hata durumunda da çalışmasını sağla
-    c.ConfigObject.AdditionalItems["syntaxHighlight"] = false;
-    c.ConfigObject.AdditionalItems["tryItOutEnabled"] = true;
-    c.ConfigObject.AdditionalItems["persistAuthorization"] = true;
-    c.ConfigObject.AdditionalItems["filter"] = "";
-    c.InjectStylesheet("/swagger-ui/custom.css");
-    
-    // Özel indeks sayfası kullan
-    var customIndexHtmlPath = Path.Combine(builder.Environment.WebRootPath, "swagger-ui", "index.html");
-    if (File.Exists(customIndexHtmlPath))
-    {
-        c.IndexStream = () => File.OpenRead(customIndexHtmlPath);
-    }
-    else 
-    {
-        c.IndexStream = () => {
-            var type = typeof(Program).Assembly.GetType("Swashbuckle.AspNetCore.SwaggerUI.SwaggerUIMiddleware");
-            var assembly = type!.Assembly;
-            var resourceStream = assembly.GetManifestResourceStream("Swashbuckle.AspNetCore.SwaggerUI.index.html");
-            return resourceStream!;
-        };
-    }
-});
-
-app.UseHttpsRedirection();
-app.UseRouting();
-
-// CORS middleware'i UseRouting ve UseAuthentication arasında olmalı
-app.UseCors(builder =>
-    builder.WithOrigins("http://localhost:3000", "http://192.168.1.113:3000")
-           .AllowAnyHeader()
-           .AllowAnyMethod()
-           .AllowCredentials());
+// HTTPS yönlendirmesini tamamen devre dışı bırak
+// app.UseHttpsRedirection();
 
 // Eski API endpoint'lerini yeni endpoint'lere yönlendir
 // Middleware devre dışı bırakıldı
@@ -389,7 +358,6 @@ app.UseCors(builder =>
 
 // Development ortamında token doğrulamasını atlayan middleware'i ekle
 app.UseDevelopmentAuthentication();
-
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

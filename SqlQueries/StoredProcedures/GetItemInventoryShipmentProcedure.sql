@@ -1,8 +1,7 @@
 -- GetItemInventory_Shipment Stored Procedure
 -- Ürün stok miktarını ve kullanılabilir stok miktarını hesaplayan stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_GetItemInventory_Shipment]    Script Date: 5/9/2025 2:09:45 AM ******/
 SET ANSI_NULLS ON
 GO

@@ -1,0 +1,128 @@
+/* ERP Mobile Swagger UI Özel Stilleri */
+.swagger-ui .topbar {
+    background-color: #005b9f;
+}
+
+.swagger-ui .info .title {
+    color: #005b9f;
+}
+
+.swagger-ui .opblock-tag {
+    font-size: 18px;
+    margin: 10px 0 5px 0;
+}
+
+.swagger-ui .opblock-tag:hover {
+    background-color: rgba(0, 91, 159, 0.1);
+}
+
+.swagger-ui .opblock .opblock-summary-operation-id, 
+.swagger-ui .opblock .opblock-summary-path,
+.swagger-ui .opblock .opblock-summary-description {
+    font-size: 14px;
+}
+
+.swagger-ui .opblock.opblock-get {
+    border-color: #61affe;
+    background: rgba(97, 175, 254, 0.1);
+}
+
+.swagger-ui .opblock.opblock-post {
+    border-color: #49cc90;
+    background: rgba(73, 204, 144, 0.1);
+}
+
+.swagger-ui .opblock.opblock-put {
+    border-color: #fca130;
+    background: rgba(252, 161, 48, 0.1);
+}
+
+.swagger-ui .opblock.opblock-delete {
+    border-color: #f93e3e;
+    background: rgba(249, 62, 62, 0.1);
+}
+
+.swagger-ui .opblock.opblock-patch {
+    border-color: #50e3c2;
+    background: rgba(80, 227, 194, 0.1);
+}
+
+.swagger-ui .btn.execute {
+    background-color: #005b9f;
+    color: white;
+    border-color: #005b9f;
+}
+
+.swagger-ui .btn.execute:hover {
+    background-color: #004880;
+}
+
+/* Swagger-UI yüklenirken gösterilecek stil */
+#swagger-ui-loading {
+    display: none;
+    text-align: center;
+    padding: 50px 0;
+}
+
+#swagger-ui-loading.visible {
+    display: block;
+}
+
+/* Hata durumunda gösterilecek mesaj */
+.swagger-ui-error {
+    background-color: #ffdddd;
+    color: #CC0000;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 4px;
+    border-left: 5px solid #CC0000;
+}
+
+/* Swagger-UI yüklenemediğinde gösterilecek stil */
+.swagger-ui-fallback {
+    text-align: center;
+    padding: 50px 20px;
+    font-family: sans-serif;
+}
+
+.swagger-ui-fallback h1 {
+    color: #005b9f;
+    margin-bottom: 20px;
+}
+
+.swagger-ui-fallback p {
+    margin: 10px 0;
+    line-height: 1.5;
+}
+
+.swagger-ui-fallback pre {
+    background-color: #f5f5f5;
+    padding: 15px;
+    border-radius: 4px;
+    text-align: left;
+    overflow: auto;
+    max-width: 800px;
+    margin: 20px auto;
+}
+
+/* Response kodu renklendirilmesi */
+.swagger-ui .responses-table .response-col_status {
+    font-weight: bold;
+}
+
+.swagger-ui .response-col_status .response-undocumented {
+    color: #909090;
+}
+
+/* Diğer özelleştirmeler */
+.swagger-ui section.models {
+    border: 1px solid #ddd;
+}
+
+.swagger-ui section.models.is-open h4 {
+    border-bottom: 1px solid #ddd;
+}
+
+.swagger-ui .model-container {
+    background-color: #f9f9f9;
+} 

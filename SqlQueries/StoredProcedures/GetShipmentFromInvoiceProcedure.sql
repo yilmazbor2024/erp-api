@@ -1,8 +1,7 @@
 -- GetShipmentFromInvoice Stored Procedure
 -- Fatura ID'sine göre sevkiyat ID'lerini getiren stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_GetShipmentFromInvoice]    Script Date: 5/9/2025 2:11:04 AM ******/
 SET ANSI_NULLS ON
 GO

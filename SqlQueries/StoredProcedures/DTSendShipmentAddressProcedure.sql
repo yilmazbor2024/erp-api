@@ -1,8 +1,6 @@
 -- DTSendShipmentAddress Stored Procedure
 -- Sevkiyat adres bilgilerini veri transferi için hazırlayan stored procedure
-
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_DTSendShipmentAddress]    Script Date: 5/9/2025 2:20:34 AM ******/
 SET ANSI_NULLS ON
 GO

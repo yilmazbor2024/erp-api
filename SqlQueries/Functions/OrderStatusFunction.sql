@@ -1,8 +1,7 @@
 -- OrderStatus Function
 -- Sipariş durumlarını ve kalan miktarları getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[OrderStatus]    Script Date: 5/9/2025 2:28:03 AM ******/
 SET ANSI_NULLS ON
 GO

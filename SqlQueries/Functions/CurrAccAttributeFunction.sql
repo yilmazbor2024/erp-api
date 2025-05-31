@@ -1,8 +1,7 @@
 -- CurrAccAttribute Function
 -- Müşteri/Tedarikçi özelliklerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 
 /****** Object:  UserDefinedFunction [dbo].[CurrAccAttribute]    Script Date: 5/9/2025 1:54:43 AM ******/
 SET ANSI_NULLS ON

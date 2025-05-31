@@ -1,5 +1,4 @@
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[sp_MS_InsertShipmentHeader]    Script Date: 5/9/2025 2:53:15 AM ******/
 SET ANSI_NULLS ON
 GO

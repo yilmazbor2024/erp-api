@@ -1,8 +1,7 @@
 -- GetOrderState Stored Procedure
 -- Sipariş durumlarını getiren stored procedure
 
-USE [DENEME]
-GO
+ 
 /****** Object:  StoredProcedure [dbo].[qry_GetOrderState]    Script Date: 5/9/2025 2:28:32 AM ******/
 SET ANSI_NULLS ON
 GO

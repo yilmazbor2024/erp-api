@@ -1,8 +1,7 @@
 -- Currency Function
 -- Para birimi bilgilerini getiren fonksiyon
 
-USE [DENEME]
-GO
+ 
 /****** Object:  UserDefinedFunction [dbo].[Currency]    Script Date: 5/9/2025 2:06:28 AM ******/
 SET ANSI_NULLS ON
 GO
