@@ -283,10 +283,11 @@ namespace ErpMobile.Api.Services
                     string query = @"
                         SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 5 THEN Rate ELSE 0 END) AS BanknoteBuyingRate
                         FROM AllExchangeRates 
-                        WHERE Date = @date 
+                        WHERE Date <= @date 
                         AND CurrencyCode = @currencyCode 
                         AND RelationCurrencyCode = 'TRY'
-                        GROUP BY Date, CurrencyCode, RelationCurrencyCode";
+                        GROUP BY Date, CurrencyCode, RelationCurrencyCode
+                        ORDER BY Date DESC";
                     
                     var parameters = new SqlParameter[]
                     {
@@ -310,10 +311,11 @@ namespace ErpMobile.Api.Services
                     string query = @"
                         SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 6 THEN Rate ELSE 0 END) AS BanknoteSellingRate
                         FROM AllExchangeRates 
-                        WHERE Date = @date 
+                        WHERE Date <= @date 
                         AND CurrencyCode = @currencyCode 
                         AND RelationCurrencyCode = 'TRY'
-                        GROUP BY Date, CurrencyCode, RelationCurrencyCode";
+                        GROUP BY Date, CurrencyCode, RelationCurrencyCode
+                        ORDER BY Date DESC";
                     
                     var parameters = new SqlParameter[]
                     {
@@ -336,10 +338,11 @@ namespace ErpMobile.Api.Services
                 string fromRateQuery = @"
                     SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 6 THEN Rate ELSE 0 END) AS BanknoteSellingRate
                     FROM AllExchangeRates 
-                    WHERE Date = @date 
+                    WHERE Date <= @date 
                     AND CurrencyCode = @currencyCode 
                     AND RelationCurrencyCode = 'TRY'
-                    GROUP BY Date, CurrencyCode, RelationCurrencyCode";
+                    GROUP BY Date, CurrencyCode, RelationCurrencyCode
+                    ORDER BY Date DESC";
                 
                 var fromRateParameters = new SqlParameter[]
                 {
@@ -362,10 +365,11 @@ namespace ErpMobile.Api.Services
                 string toRateQuery = @"
                     SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 5 THEN Rate ELSE 0 END) AS BanknoteBuyingRate
                     FROM AllExchangeRates 
-                    WHERE Date = @date 
+                    WHERE Date <= @date 
                     AND CurrencyCode = @currencyCode 
                     AND RelationCurrencyCode = 'TRY'
-                    GROUP BY Date, CurrencyCode, RelationCurrencyCode";
+                    GROUP BY Date, CurrencyCode, RelationCurrencyCode
+                    ORDER BY Date DESC";
                 
                 var toRateParameters = new SqlParameter[]
                 {
