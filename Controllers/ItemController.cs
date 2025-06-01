@@ -1171,6 +1171,7 @@ namespace ErpMobile.Api.Controllers
         /// </summary>
         /// <param name="langCode">Dil kodu (varsayılan: TR)</param>
         /// <returns>KDV oranları listesi</returns>
+        /// BU DOĞRU TEST ETTİM
         [HttpGet("vat-rates")]
         public async Task<ActionResult<ApiResponse<List<VatModel>>>> GetVatRates(
             [FromQuery] string langCode = "TR")
@@ -1226,121 +1227,6 @@ namespace ErpMobile.Api.Controllers
                     Success = false,
                     Message = "An error occurred while getting VAT rates",
                     Data = null
-                });
-            }
-        }
-
-        /// <summary>
-        /// Ürün fiyat listesini getirir
-        /// </summary>
-        /// <param name="itemCode">Ürün kodu</param>
-        /// <param name="priceListCode">Fiyat listesi kodu (boş ise tüm fiyat listeleri getirilir)</param>
-        /// <param name="currencyCode">Para birimi kodu (boş ise tüm para birimleri getirilir)</param>
-        /// <param name="langCode">Dil kodu (varsayılan: TR)</param>
-        /// <returns>Ürün fiyat listesi</returns>
-        [HttpGet("price-list")]
-        public async Task<ActionResult<ApiResponse<List<ItemPriceModel>>>> GetItemPrices(
-            [FromQuery] string itemCode,
-            [FromQuery] string priceListCode = null,
-            [FromQuery] string currencyCode = null,
-            [FromQuery] string langCode = "TR")
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(itemCode))
-                {
-                    return BadRequest(new ApiResponse<object>
-                    {
-                        Success = false,
-                        Message = "Ürün kodu gereklidir",
-                        Data = null
-                    });
-                }
-
-                var whereClause = "WHERE prItemBasePrice.ItemCode = @ItemCode AND prItemBasePrice.IsBlocked = 0";
-                
-                if (!string.IsNullOrEmpty(priceListCode))
-                {
-                    whereClause += " AND prItemBasePrice.PriceListCode = @PriceListCode";
-                }
-                
-                if (!string.IsNullOrEmpty(currencyCode))
-                {
-                    whereClause += " AND prItemBasePrice.CurrencyCode = @CurrencyCode";
-                }
-                
-                var query = $@"
-                    SELECT 
-                        ItemCode = RTRIM(LTRIM(prItemBasePrice.ItemCode)),
-                        PriceListCode = RTRIM(LTRIM(prItemBasePrice.PriceListCode)),
-                        PriceListDescription = RTRIM(LTRIM(ISNULL(trPriceListHeaderDesc.PriceListDescription, ''))),
-                        CurrencyCode = RTRIM(LTRIM(prItemBasePrice.CurrencyCode)),
-                        Price = prItemBasePrice.Price,
-                        EffectiveDate = prItemBasePrice.EffectiveDate,
-                        ExpirationDate = prItemBasePrice.ExpirationDate,
-                        IsVatIncluded = prItemBasePrice.IsVatIncluded,
-                        IsBlocked = prItemBasePrice.IsBlocked
-                    FROM prItemBasePrice WITH (NOLOCK)
-                    LEFT JOIN trPriceListHeader WITH (NOLOCK) 
-                        ON prItemBasePrice.PriceListCode = trPriceListHeader.PriceListCode
-                    LEFT JOIN trPriceListHeaderDesc WITH (NOLOCK) 
-                        ON trPriceListHeader.PriceListCode = trPriceListHeaderDesc.PriceListCode 
-                        AND trPriceListHeaderDesc.LangCode = @LangCode
-                    {whereClause}
-                    ORDER BY prItemBasePrice.EffectiveDate DESC";
-
-                var parameters = new List<SqlParameter>
-                {
-                    new SqlParameter("@ItemCode", itemCode),
-                    new SqlParameter("@LangCode", langCode)
-                };
-
-                if (!string.IsNullOrEmpty(priceListCode))
-                {
-                    parameters.Add(new SqlParameter("@PriceListCode", priceListCode));
-                }
-                
-                if (!string.IsNullOrEmpty(currencyCode))
-                {
-                    parameters.Add(new SqlParameter("@CurrencyCode", currencyCode));
-                }
-
-                var prices = new List<ItemPriceModel>();
-                
-                using (var reader = await _context.ExecuteReaderAsync(query, parameters.ToArray()))
-                {
-                    while (await reader.ReadAsync())
-                    {
-                        prices.Add(new ItemPriceModel
-                        {
-                            ItemCode = reader["ItemCode"]?.ToString() ?? string.Empty,
-                            PriceListCode = reader["PriceListCode"]?.ToString() ?? string.Empty,
-                            PriceListDescription = reader["PriceListDescription"]?.ToString() ?? string.Empty,
-                            CurrencyCode = reader["CurrencyCode"]?.ToString() ?? string.Empty,
-                            Price = Convert.ToDecimal(reader["Price"]),
-                            EffectiveDate = Convert.ToDateTime(reader["EffectiveDate"]),
-                            ExpirationDate = reader["ExpirationDate"] != DBNull.Value ? Convert.ToDateTime(reader["ExpirationDate"]) : (DateTime?)null,
-                            IsVatIncluded = Convert.ToBoolean(reader["IsVatIncluded"]),
-                            IsBlocked = Convert.ToBoolean(reader["IsBlocked"])
-                        });
-                    }
-                }
-                
-                return Ok(new ApiResponse<List<ItemPriceModel>>
-                {
-                    Success = true,
-                    Message = "Ürün fiyat listesi başarıyla getirildi",
-                    Data = prices
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ürün fiyat listesi getirilirken hata oluştu. Ürün Kodu: {ItemCode}", itemCode);
-                return StatusCode(500, new ApiResponse<List<ItemPriceModel>>
-                {
-                    Success = false,
-                    Message = "Ürün fiyat listesi getirilirken bir hata oluştu",
-                    Data = new List<ItemPriceModel>()
                 });
             }
         }
