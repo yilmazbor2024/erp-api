@@ -1374,7 +1374,6 @@ namespace ErpMobile.Api.Controllers
                         ItemDescription = RTRIM(LTRIM(ISNULL(id.ItemDescription, ''))),
                         i.ItemTypeCode,
                         i.UnitCode,
-                        i.VatCode,
                         v.VatRate,
                         i.IsBlocked
                     FROM cdItem i WITH (NOLOCK)
@@ -1382,7 +1381,7 @@ namespace ErpMobile.Api.Controllers
                         ON i.ItemCode = id.ItemCode 
                         AND id.LangCode = @LangCode
                     LEFT JOIN cdVat v WITH (NOLOCK)
-                        ON i.VatCode = v.VatCode
+                        ON i.ItemTypeCode = v.ItemTypeCode
                     INNER JOIN cdItemBarcode b WITH (NOLOCK)
                         ON i.ItemCode = b.ItemCode
                     WHERE b.Barcode = @Barcode
@@ -1404,8 +1403,8 @@ namespace ErpMobile.Api.Controllers
                             ItemDescription = reader["ItemDescription"].ToString() ?? string.Empty,
                             ItemTypeCode = Convert.ToInt32(reader["ItemTypeCode"]),
                             UnitCode = reader["UnitCode"].ToString() ?? string.Empty,
-                            VatCode = reader["VatCode"].ToString() ?? string.Empty,
-                            VatRate = Convert.ToDecimal(reader["VatRate"]),
+                            VatCode = "", // VatCode sütunu veritabanında olmadığı için boş string kullanıyoruz
+                            VatRate = reader["VatRate"] != DBNull.Value ? Convert.ToDecimal(reader["VatRate"]) : 0,
                             IsBlocked = Convert.ToBoolean(reader["IsBlocked"])
                         };
                         
