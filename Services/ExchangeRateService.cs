@@ -99,8 +99,12 @@ namespace ErpMobile.Api.Services
                 // Verileri çek
                 var dataTable = await _erpDbContext.ExecuteQueryAsync(query, parameters);
                 
-                // Toplam kayıt sayısını al
-                var totalCountObj = await _erpDbContext.ExecuteScalarAsync(countQuery, parameters);
+                // Toplam kayıt sayısını al için yeni parametreler oluştur (aynı parametreleri tekrar kullanmak hata veriyor)
+                var countParameters = new SqlParameter[2];
+                countParameters[0] = new SqlParameter("@startDate", startDate);
+                countParameters[1] = new SqlParameter("@endDate", endDate);
+                
+                var totalCountObj = await _erpDbContext.ExecuteScalarAsync(countQuery, countParameters);
                 int totalCount = totalCountObj != null ? Convert.ToInt32(totalCountObj) : 0;
                 
                 if (dataTable.Rows.Count == 0)
