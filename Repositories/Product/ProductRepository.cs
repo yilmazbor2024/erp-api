@@ -327,56 +327,36 @@ namespace ErpMobile.Api.Repositories.Product
                 // Ürün koduna göre fiyat listesi getirme için SQL sorgusu
                 _logger.LogInformation($"Fiyat listesi için SQL sorgusu çalıştırılıyor. Ürün Kodu: {productCode}");
                 var query = @"
-                SELECT Lines.* FROM (
-                SELECT    SortOrder				= trPriceListLine.SortOrder
-                        , ItemTypeCode			= trPriceListLine.ItemTypeCode
-                        , BirimFiyat					= trPriceListLine.Price
-                        , ItemTypeDescription	= ISNULL((SELECT ItemTypeDescription FROM bsItemTypeDesc WITH(NOLOCK) WHERE bsItemTypeDesc.ItemTypeCode = trPriceListLine.ItemTypeCode AND bsItemTypeDesc.LangCode = @LangCode), SPACE(0))
-                        , ItemCode				= trPriceListLine.ItemCode
-                        , ItemDescription		= ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) WHERE cdItemDesc.ItemTypeCode = trPriceListLine.ItemTypeCode AND cdItemDesc.ItemCode = trPriceListLine.ItemCode AND cdItemDesc.LangCode = @LangCode), SPACE(0))	
-                        , ColorCode				= trPriceListLine.ColorCode
-                        , ColorDescription		= ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) WHERE cdColorDesc.ColorCode =trPriceListLine.ColorCode  AND cdColorDesc.LangCode = @LangCode), SPACE(0))
-                        , ItemDim1Code			= trPriceListLine.ItemDim1Code
-                        , ItemDim2Code			= trPriceListLine.ItemDim2Code
-                        , ItemDim3Code			= trPriceListLine.ItemDim3Code
-                        , UnitOfMeasureCode		= trPriceListLine.UnitOfMeasureCode
-                        , PaymentPlanCode		= trPriceListLine.PaymentPlanCode
-                        , LineDescription		= trPriceListLine.LineDescription
-                        , DocCurrencyCode		= trPriceListLine.DocCurrencyCode
-                        , IsDisabled			= trPriceListLine.IsDisabled
-                        , DisableDate			= trPriceListLine.DisableDate
-                        , HeaderID				= trPriceListLine.PriceListHeaderID
-                FROM trPriceListLine WITH(NOLOCK)
-                    INNER JOIN cdItem WITH(NOLOCK)
-                        ON cdItem.ItemTypeCode = trPriceListLine.ItemTypeCode
-                        AND cdItem.ItemCode = trPriceListLine.ItemCode
-                    LEFT OUTER JOIN ProductAttributesFilter
-                        ON ProductAttributesFilter.ItemTypeCode = 1
-                        AND ProductAttributesFilter.ItemCode = cdItem.ItemCode
-                    LEFT OUTER JOIN ProductHierarchy(@LangCode)
-                        ON ProductHierarchy.ProductHierarchyID = cdItem.ProductHierarchyID
-                    LEFT OUTER JOIN ProductCollection(@LangCode)
-                        ON ProductCollection.ProductCollectionGrCode = cdItem.ProductCollectionGrCode
-                ) Lines
-                WHERE EXISTS (
-                SELECT * FROM (
-                SELECT * FROM (
-                SELECT    PriceListNumber
-                        , PriceListDate
-                        , PriceListTime
-                        , PriceListTypeCode
-                        , PriceListTypeDescription		= ISNULL((SELECT PriceListTypeDescription FROM cdPriceListTypeDesc WITH(NOLOCK) WHERE cdPriceListTypeDesc.PriceListTypeCode = trPriceListHeader.PriceListTypeCode AND cdPriceListTypeDesc.LangCode = @LangCode), SPACE(0))
-                        , PriceGroupCode
-                        , PriceGroupDescription			= ISNULL((SELECT PriceGroupDescription FROM cdPriceGroupDesc WITH(NOLOCK) WHERE cdPriceGroupDesc.PriceGroupCode = trPriceListHeader.PriceGroupCode AND cdPriceGroupDesc.LangCode = @LangCode), SPACE(0))
-                        , DocCurrencyCode
-                        , CompanyCode
-                        , trPriceListHeader.PriceListHeaderID
-                FROM trPriceListHeader WITH(NOLOCK) 
-                WHERE PriceListDate BETWEEN CAST(CONVERT(VARCHAR(8), GETDATE(), 112) AS DATETIME) AND CAST(CONVERT(VARCHAR(8), GETDATE(), 112) AS DATETIME)
-                ) Query WHERE CompanyCode = 1
-                ) ReportTable 
-                WHERE ReportTable.PriceListHeaderID = Lines.HeaderID )
-                AND Lines.ItemCode = @productCode
+                  SELECT 
+                    l.SortOrder AS SortOrder,
+                    l.ItemTypeCode AS ItemTypeCode,
+                    l.Price AS BirimFiyat,
+                    ISNULL((SELECT ItemTypeDescription FROM bsItemTypeDesc WITH(NOLOCK) 
+                           WHERE bsItemTypeDesc.ItemTypeCode = l.ItemTypeCode 
+                           AND bsItemTypeDesc.LangCode = 'tr'), SPACE(0)) AS ItemTypeDescription,
+                    l.ItemCode AS ItemCode,
+                    ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) 
+                           WHERE cdItemDesc.ItemTypeCode = l.ItemTypeCode 
+                           AND cdItemDesc.ItemCode = l.ItemCode 
+                           AND cdItemDesc.LangCode = 'tr'), SPACE(0)) AS ItemDescription,
+                    l.ColorCode AS ColorCode,
+                    ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) 
+                           WHERE cdColorDesc.ColorCode = l.ColorCode 
+                           AND cdColorDesc.LangCode = 'tr'), SPACE(0)) AS ColorDescription,
+                    l.ItemDim1Code AS ItemDim1Code,
+                    l.ItemDim2Code AS ItemDim2Code,
+                    l.ItemDim3Code AS ItemDim3Code,
+                    l.UnitOfMeasureCode AS UnitOfMeasureCode,
+                    l.PaymentPlanCode AS PaymentPlanCode,
+                    l.LineDescription AS LineDescription,
+                    l.DocCurrencyCode AS DocCurrencyCode,
+                    l.IsDisabled AS IsDisabled,
+                    l.DisableDate AS DisableDate,
+                    l.PriceListHeaderID AS HeaderID
+                FROM trPriceListLine l WITH(NOLOCK)
+                INNER JOIN trPriceListHeader h WITH(NOLOCK) 
+                    ON l.PriceListHeaderID = h.PriceListHeaderID
+					WHERE ItemCode = @productCode
                 ";
 
                 using (var connection = new SqlConnection(_connectionString))
