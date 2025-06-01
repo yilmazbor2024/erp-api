@@ -37,6 +37,21 @@ ERP sistemine entegre çalışan, müşteri yönetimi, fatura oluşturma ve diğ
 
 ## Son Güncellemeler
 
+### v1.3.0 (1 Haziran 2025)
+- **Döviz Kuru API'si İyileştirmeleri:**
+  - Merkez Bankası (TCMB) ve Serbest Piyasa (SPYS) döviz kurlarını getirme
+  - Belirli bir tarihe göre döviz kuru sorgulama
+  - Döviz kuru kaynağı seçimi (TCMB/SPYS)
+  - TL karşılığı hesaplama için optimize edilmiş API
+  - Hata durumlarına karşı dayanıklılık ve doğrulama kontrolleri
+
+- **Barkod Tarama ve Ürün Arama API'si:**
+  - Barkod veya ürün koduna göre ürün varyantlarını arama
+  - Renk, beden ve diğer ürün özelliklerine göre filtreleme
+  - Stok bilgisi entegrasyonu
+  - Fiyat listesi entegrasyonu
+  - Toplu ürün ekleme desteği
+
 ### v1.2.0 (27 Mayıs 2025)
 - **Ürün Fiyat Listesi API'si:** Ürün fiyat listelerini görüntüleme ve filtreleme özelliği eklendi
   - Tarih aralığına göre filtreleme
@@ -105,6 +120,31 @@ GET /api/v1/Product/all-price-lists
 ### Ürün Detayları
 ```http
 GET /api/v1/Product/{productCode}
+```
+
+### Barkod ile Ürün Arama
+```http
+GET /api/v1/Product/search-by-barcode?barcode={barcode}
+```
+
+### Ürün Varyantlarını Arama
+```http
+GET /api/v1/Product/search-variants?query={query}
+```
+
+### Döviz Kurlarını Getirme
+```http
+GET /api/v1/ExchangeRate/latest?source={source}
+```
+
+### Belirli Tarihteki Döviz Kurları
+```http
+GET /api/v1/ExchangeRate/by-date?date={date}&source={source}
+```
+
+### TL Karşılığı Hesaplama
+```http
+GET /api/v1/ExchangeRate/calculate?currencyCode={currencyCode}&date={date}&source={source}
 ```
 
 ## Kurulum
