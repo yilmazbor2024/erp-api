@@ -26,13 +26,15 @@ namespace ErpMobile.Api.Repositories.Product
         /// <param name="startDate">Başlangıç tarihi</param>
         /// <param name="endDate">Bitiş tarihi</param>
         /// <param name="companyCode">Şirket kodu</param>
+        /// <param name="itemCode">Ürün kodu (opsiyonel)</param>
         /// <returns>Ürün fiyat listesi detayları</returns>
         Task<List<ProductPriceListDetailModel>> GetAllProductPriceListAsync(
             int page = 1, 
             int pageSize = 50, 
             DateTime? startDate = null, 
             DateTime? endDate = null, 
-            int companyCode = 1);
+            int companyCode = 1,
+            string itemCode = null);
             
         /// <summary>
         /// Ürün tiplerini getirir

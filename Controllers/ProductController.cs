@@ -420,6 +420,7 @@ namespace ErpMobile.Api.Controllers
         /// </summary>
         /// <param name="page">Sayfa numarası</param>
         /// <param name="pageSize">Sayfa başına kayıt sayısı</param>
+        /// <param name="itemCode">Ürün kodu (opsiyonel)</param>
         /// <param name="startDate">Başlangıç tarihi (yyyy-MM-dd formatında)</param>
         /// <param name="endDate">Bitiş tarihi (yyyy-MM-dd formatında)</param>
         /// <param name="companyCode">Şirket kodu</param>
@@ -428,6 +429,7 @@ namespace ErpMobile.Api.Controllers
         public async Task<ActionResult<ApiResponse<List<ProductPriceListDetailModel>>>> GetAllPriceList(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50,
+            [FromQuery] string itemCode = null,
             [FromQuery] string startDate = null,
             [FromQuery] string endDate = null,
             [FromQuery] int companyCode = 1)
@@ -472,23 +474,29 @@ namespace ErpMobile.Api.Controllers
                     }
                 }
 
-                _logger.LogInformation("Fiyat listesi getiriliyor. Sayfa: {Page}, Sayfa Boyutu: {PageSize}, Başlangıç Tarihi: {StartDate}, Bitiş Tarihi: {EndDate}, Şirket Kodu: {CompanyCode}", 
-                    page, pageSize, parsedStartDate, parsedEndDate, companyCode);
+                _logger.LogInformation("Fiyat listesi getiriliyor. Sayfa: {Page}, Sayfa Boyutu: {PageSize}, Ürün Kodu: {ItemCode}, Başlangıç Tarihi: {StartDate}, Bitiş Tarihi: {EndDate}, Şirket Kodu: {CompanyCode}", 
+                    page, pageSize, itemCode, parsedStartDate, parsedEndDate, companyCode);
                 
-                var priceList = await _productRepository.GetAllProductPriceListAsync(page, pageSize, parsedStartDate, parsedEndDate, companyCode);
+                var priceList = await _productRepository.GetAllProductPriceListAsync(page, pageSize, parsedStartDate, parsedEndDate, companyCode, itemCode);
 
-                if (priceList == null || priceList.Count == 0)
+                if (priceList == null)
                 {
-                    _logger.LogWarning("Belirtilen kriterlere uygun fiyat listesi bulunamadı. Sayfa: {Page}, Sayfa Boyutu: {PageSize}, Başlangıç Tarihi: {StartDate}, Bitiş Tarihi: {EndDate}, Şirket Kodu: {CompanyCode}", 
-                        page, pageSize, parsedStartDate, parsedEndDate, companyCode);
-                    return NotFound(new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Belirtilen kriterlere uygun fiyat listesi bulunamadı", "NotFound"));
+                    priceList = new List<ProductPriceListDetailModel>();
+                }
+                
+                if (priceList.Count == 0)
+                {
+                    _logger.LogWarning("Belirtilen kriterlere uygun fiyat listesi bulunamadı. Sayfa: {Page}, Sayfa Boyutu: {PageSize}, Ürün Kodu: {ItemCode}, Başlangıç Tarihi: {StartDate}, Bitiş Tarihi: {EndDate}, Şirket Kodu: {CompanyCode}", 
+                        page, pageSize, itemCode, parsedStartDate, parsedEndDate, companyCode);
+                    // NotFound yerine boş liste dönüyoruz
+                    return Ok(new ApiResponse<List<ProductPriceListDetailModel>>(priceList, true, "Belirtilen kriterlere uygun fiyat listesi bulunamadı"));
                 }
 
                 return Ok(new ApiResponse<List<ProductPriceListDetailModel>>(priceList, true, $"Toplam {priceList.Count} adet fiyat listesi kaydı başarıyla getirildi"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Tüm ürün fiyat listesi getirilirken hata oluştu. Sayfa: {Page}, Sayfa Boyutu: {PageSize}", page, pageSize);
+                _logger.LogError(ex, "Tüm ürün fiyat listesi getirilirken hata oluştu. Sayfa: {Page}, Sayfa Boyutu: {PageSize}, Ürün Kodu: {ItemCode}", page, pageSize, itemCode);
                 return StatusCode(500, new ApiResponse<List<ProductPriceListDetailModel>>(null, false, "Ürün fiyat listesi getirilirken bir hata oluştu.", "InternalServerError"));
             }
         }

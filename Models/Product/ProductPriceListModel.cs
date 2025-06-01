@@ -20,7 +20,7 @@ namespace ErpMobile.Api.Models.Product
         public string ApplicationDescription { get; set; }
         public string CreatedUserName { get; set; }
         public string LastUpdatedUserName { get; set; }
-        public int PriceListHeaderID { get; set; }
+        public string PriceListHeaderID { get; set; }
         public int ApplicationID { get; set; }
         
         // Fiyat bilgileri

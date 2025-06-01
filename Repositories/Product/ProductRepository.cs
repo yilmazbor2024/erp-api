@@ -328,21 +328,28 @@ namespace ErpMobile.Api.Repositories.Product
                 _logger.LogInformation($"Fiyat listesi için SQL sorgusu çalıştırılıyor. Ürün Kodu: {productCode}");
                 var query = @"
                   SELECT 
+                    h.PriceListNumber AS PriceListNumber,
+                    h.PriceGroupCode AS PriceGroupCode,
+                    '' AS PriceGroupDescription,
+                    h.PriceListTypeCode AS PriceListTypeCode,
+                    '' AS PriceListTypeDescription,
+                    h.PriceListDate AS PriceListDate,
+                    h.CompanyCode AS CompanyCode,
                     l.SortOrder AS SortOrder,
                     l.ItemTypeCode AS ItemTypeCode,
                     l.Price AS BirimFiyat,
                     ISNULL((SELECT ItemTypeDescription FROM bsItemTypeDesc WITH(NOLOCK) 
                            WHERE bsItemTypeDesc.ItemTypeCode = l.ItemTypeCode 
-                           AND bsItemTypeDesc.LangCode = 'tr'), SPACE(0)) AS ItemTypeDescription,
+                           AND bsItemTypeDesc.LangCode = @LangCode), SPACE(0)) AS ItemTypeDescription,
                     l.ItemCode AS ItemCode,
                     ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) 
                            WHERE cdItemDesc.ItemTypeCode = l.ItemTypeCode 
                            AND cdItemDesc.ItemCode = l.ItemCode 
-                           AND cdItemDesc.LangCode = 'tr'), SPACE(0)) AS ItemDescription,
+                           AND cdItemDesc.LangCode = @LangCode), SPACE(0)) AS ItemDescription,
                     l.ColorCode AS ColorCode,
                     ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) 
                            WHERE cdColorDesc.ColorCode = l.ColorCode 
-                           AND cdColorDesc.LangCode = 'tr'), SPACE(0)) AS ColorDescription,
+                           AND cdColorDesc.LangCode = @LangCode), SPACE(0)) AS ColorDescription,
                     l.ItemDim1Code AS ItemDim1Code,
                     l.ItemDim2Code AS ItemDim2Code,
                     l.ItemDim3Code AS ItemDim3Code,
@@ -356,7 +363,8 @@ namespace ErpMobile.Api.Repositories.Product
                 FROM trPriceListLine l WITH(NOLOCK)
                 INNER JOIN trPriceListHeader h WITH(NOLOCK) 
                     ON l.PriceListHeaderID = h.PriceListHeaderID
-					WHERE ItemCode = @productCode
+                WHERE l.ItemCode = @productCode
+                ORDER BY l.ValidDate DESC  
                 ";
 
                 using (var connection = new SqlConnection(_connectionString))
@@ -390,7 +398,7 @@ namespace ErpMobile.Api.Repositories.Product
                                     ApplicationDescription = "", // Yeni sorguda bu alan yok
                                     CreatedUserName = "", // Yeni sorguda bu alan yok
                                     LastUpdatedUserName = "", // Yeni sorguda bu alan yok
-                                    PriceListHeaderID = Convert.ToInt32(reader["HeaderID"]),
+                                    PriceListHeaderID = reader["HeaderID"] != DBNull.Value ? reader["HeaderID"].ToString() : null,
                                     ApplicationID = 0, // Yeni sorguda bu alan yok
                                     Price = reader["BirimFiyat"] != DBNull.Value ? Convert.ToDecimal(reader["BirimFiyat"]) : 0, // BirimFiyat alanını kullanıyoruz
                                     VatRate = 10, // Varsayılan KDV oranı
@@ -425,21 +433,22 @@ namespace ErpMobile.Api.Repositories.Product
             int pageSize = 50, 
             DateTime? startDate = null, 
             DateTime? endDate = null, 
-            int companyCode = 1)
+            int companyCode = 1,
+            string itemCode = null)
         {
             try
             {
                 var result = new List<ProductPriceListDetailModel>();
                 
-                // Varsayılan tarih aralığı: Geçerli ayın başından bugüne
+                // Varsayılan tarih aralığı: Çok geniş bir aralık (neredeyse tüm kayıtları kapsar)
                 if (!startDate.HasValue)
                 {
-                    startDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+                    startDate = new DateTime(2000, 1, 1); // Çok eski bir tarih
                 }
                 
                 if (!endDate.HasValue)
                 {
-                    endDate = DateTime.Now;
+                    endDate = new DateTime(2099, 12, 31); // Çok ileri bir tarih
                 }
                 
                 _logger.LogInformation($"Tüm ürün fiyat listesi getiriliyor. Sayfa: {page}, Sayfa Boyutu: {pageSize}, Tarih Aralığı: {startDate:yyyy-MM-dd} - {endDate:yyyy-MM-dd}, Şirket Kodu: {companyCode}");
@@ -449,7 +458,11 @@ namespace ErpMobile.Api.Repositories.Product
                 
                 // Tamamen yeniden yazılmış basit SQL sorgusu
                 var query = @"
-                SELECT 
+                  SELECT 
+                    h.PriceListNumber AS PriceListNumber,
+                    h.PriceGroupCode AS PriceGroupCode,
+                    h.PriceListDate AS PriceListDate,
+                    h.CompanyCode AS CompanyCode,
                     l.SortOrder AS SortOrder,
                     l.ItemTypeCode AS ItemTypeCode,
                     l.Price AS BirimFiyat,
@@ -478,8 +491,8 @@ namespace ErpMobile.Api.Repositories.Product
                 FROM trPriceListLine l WITH(NOLOCK)
                 INNER JOIN trPriceListHeader h WITH(NOLOCK) 
                     ON l.PriceListHeaderID = h.PriceListHeaderID
-                WHERE h.PriceListDate BETWEEN @StartDate AND @EndDate
-                AND h.CompanyCode = @CompanyCode
+                      WHERE (@ItemCode IS NULL OR l.ItemCode = @ItemCode)
+                      AND l.CompanyCode = @CompanyCode
                 ORDER BY l.ItemCode, l.ColorCode, l.ItemDim1Code
                 OFFSET @Offset ROWS
                 FETCH NEXT @PageSize ROWS ONLY";
@@ -508,6 +521,7 @@ namespace ErpMobile.Api.Repositories.Product
                             command.Parameters.AddWithValue("@StartDate", formattedStartDate);
                             command.Parameters.AddWithValue("@EndDate", formattedEndDate);
                             command.Parameters.AddWithValue("@CompanyCode", companyCode);
+                            command.Parameters.AddWithValue("@ItemCode", string.IsNullOrEmpty(itemCode) ? (object)DBNull.Value : itemCode); // ItemCode parametresi
                             
                             _logger.LogInformation("Tarih parametreleri: StartDate={StartDate}, EndDate={EndDate}", formattedStartDate, formattedEndDate);
                             _logger.LogInformation($"SQL sorgusu çalıştırılıyor. Sayfa: {page}, Offset: {offset}");
