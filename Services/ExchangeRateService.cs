@@ -463,7 +463,7 @@ namespace ErpMobile.Api.Services
                 }
 
                 // Çapraz kur hesaplama: (fromCurrency/TRY) / (toCurrency/TRY)
-                var crossRate = fromCurrencyRate.BanknoteSellingRate.GetValueOrDefault() / toCurrencyRate.BanknoteBuyingRate.GetValueOrDefault();
+                var crossRate = toCurrencyRate.BanknoteBuyingRate.GetValueOrDefault() / fromCurrencyRate.BanknoteSellingRate.GetValueOrDefault();
                 _logger?.LogInformation($"Çapraz kur hesaplandı (liste): {fromCurrency}/{toCurrency} = {crossRate}");
                 
                 return crossRate;
@@ -472,6 +472,150 @@ namespace ErpMobile.Api.Services
             {
                 _logger?.LogError(ex, $"Döviz kurları listesinden dönüşüm oranı hesaplanırken hata oluştu: {ex.Message}");
                 return 0;
+            }
+        }
+        
+        public async Task<IEnumerable<object>> GetCrossRatesAsync(string baseCurrency, DateTime date, string source = null)
+        {
+            try
+            {
+                // Belirtilen tarihteki tüm kurları getir
+                var exchangeRates = await GetExchangeRatesByDateAsync(date, source);
+                if (exchangeRates == null || !exchangeRates.Any())
+                {
+                    _logger?.LogWarning($"{date.ToString("yyyy-MM-dd")} tarihinde döviz kuru verisi bulunamadı");
+                    return new List<object>();
+                }
+                
+                // Baz para biriminin TRY karşısındaki kuru
+                var baseRate = exchangeRates.FirstOrDefault(r => r.CurrencyCode == baseCurrency && r.RelationCurrencyCode == "TRY");
+                if (baseRate == null)
+                {
+                    _logger?.LogWarning($"{baseCurrency} para birimi için kur bilgisi bulunamadı");
+                    return new List<object>();
+                }
+                
+                var result = new List<object>();
+                
+                // TRY'yi de listeye ekle
+                result.Add(new
+                {
+                    FromCurrency = baseCurrency,
+                    ToCurrency = "TRY",
+                    CurrencyDescription = "Türk Lirası",
+                    Rate = baseRate.BanknoteSellingRate.GetValueOrDefault(),
+                    InverseRate = 1 / baseRate.BanknoteBuyingRate.GetValueOrDefault(),
+                    Date = date.ToString("yyyy-MM-dd")
+                });
+                
+                // Diğer para birimleri için çapraz kurları hesapla
+                foreach (var rate in exchangeRates.Where(r => r.CurrencyCode != baseCurrency && r.RelationCurrencyCode == "TRY"))
+                {
+                    // Çapraz kur hesaplama: hedef para biriminin TRY karşılığı / baz para biriminin TRY karşılığı
+                    decimal crossRate = rate.BanknoteBuyingRate.GetValueOrDefault() / baseRate.BanknoteSellingRate.GetValueOrDefault();
+                    decimal inverseCrossRate = baseRate.BanknoteBuyingRate.GetValueOrDefault() / rate.BanknoteSellingRate.GetValueOrDefault();
+                    
+                    result.Add(new
+                    {
+                        FromCurrency = baseCurrency,
+                        ToCurrency = rate.CurrencyCode,
+                        CurrencyDescription = rate.CurrencyDescription,
+                        Rate = crossRate,
+                        InverseRate = inverseCrossRate,
+                        Date = date.ToString("yyyy-MM-dd")
+                    });
+                }
+                
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Çapraz kurlar hesaplanırken hata oluştu: {ex.Message}");
+                return new List<object>();
+            }
+        }
+        
+        public async Task<IEnumerable<ExchangeRateDto>> GetHistoricalRatesAsync(
+            string currency, 
+            string relationCurrency, 
+            DateTime startDate, 
+            DateTime endDate, 
+            string source = null)
+        {
+            try
+            {
+                string query = @"
+                    SELECT 
+                        Date,
+                        CurrencyCode,
+                        CurrencyDescription,
+                        RelationCurrencyCode,
+                        RelationCurrencyDescription,
+                        FreeMarketBuyingRate,
+                        FreeMarketSellingRate,
+                        CashBuyingRate,
+                        CashSellingRate,
+                        BanknoteBuyingRate,
+                        BanknoteSellingRate,
+                        BankForInformationPurposes,
+                        Source
+                    FROM AllExchangeRates
+                    WHERE Date BETWEEN @startDate AND @endDate
+                    AND CurrencyCode = @currencyCode
+                    AND RelationCurrencyCode = @relationCurrencyCode
+                    ORDER BY Date DESC";
+                
+                var parameters = new SqlParameter[4];
+                parameters[0] = new SqlParameter("@startDate", startDate);
+                parameters[1] = new SqlParameter("@endDate", endDate);
+                parameters[2] = new SqlParameter("@currencyCode", currency);
+                parameters[3] = new SqlParameter("@relationCurrencyCode", relationCurrency);
+                
+                // Kaynak parametresi ekle
+                if (!string.IsNullOrEmpty(source))
+                {
+                    Array.Resize(ref parameters, parameters.Length + 1);
+                    parameters[parameters.Length - 1] = new SqlParameter("@source", source);
+                    query += " AND Source = @source";
+                }
+                
+                var dataTable = await _erpDbContext.ExecuteQueryAsync(query, parameters);
+                
+                if (dataTable.Rows.Count == 0)
+                {
+                    _logger?.LogWarning($"{startDate.ToString("yyyy-MM-dd")} - {endDate.ToString("yyyy-MM-dd")} tarihleri arasında {currency}/{relationCurrency} için döviz kuru verisi bulunamadı");
+                    return new List<ExchangeRateDto>();
+                }
+                
+                // DataTable'ı DTO listesine dönüştür
+                var items = new List<ExchangeRateDto>();
+                
+                foreach (DataRow row in dataTable.Rows)
+                {
+                    items.Add(new ExchangeRateDto
+                    {
+                        Date = Convert.ToDateTime(row["Date"]),
+                        CurrencyCode = row["CurrencyCode"].ToString(),
+                        CurrencyDescription = row["CurrencyDescription"].ToString(),
+                        RelationCurrencyCode = row["RelationCurrencyCode"].ToString(),
+                        RelationCurrencyDescription = row["RelationCurrencyDescription"].ToString(),
+                        FreeMarketBuyingRate = row["FreeMarketBuyingRate"] != DBNull.Value ? Convert.ToDecimal(row["FreeMarketBuyingRate"]) : null,
+                        FreeMarketSellingRate = row["FreeMarketSellingRate"] != DBNull.Value ? Convert.ToDecimal(row["FreeMarketSellingRate"]) : null,
+                        CashBuyingRate = row["CashBuyingRate"] != DBNull.Value ? Convert.ToDecimal(row["CashBuyingRate"]) : null,
+                        CashSellingRate = row["CashSellingRate"] != DBNull.Value ? Convert.ToDecimal(row["CashSellingRate"]) : null,
+                        BanknoteBuyingRate = row["BanknoteBuyingRate"] != DBNull.Value ? Convert.ToDecimal(row["BanknoteBuyingRate"]) : null,
+                        BanknoteSellingRate = row["BanknoteSellingRate"] != DBNull.Value ? Convert.ToDecimal(row["BanknoteSellingRate"]) : null,
+                        BankForInformationPurposes = row["BankForInformationPurposes"] != DBNull.Value ? Convert.ToDecimal(row["BankForInformationPurposes"]) : null,
+                        Source = row["Source"]?.ToString()
+                    });
+                }
+                
+                return items;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Tarihsel döviz kurları getirilirken hata oluştu: {ex.Message}");
+                return new List<ExchangeRateDto>();
             }
         }
     }

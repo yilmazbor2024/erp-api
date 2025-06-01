@@ -24,5 +24,17 @@ namespace ErpMobile.Api.Interfaces
             string toCurrency, 
             DateTime date,
             string source = null);
+            
+        Task<IEnumerable<object>> GetCrossRatesAsync(
+            string baseCurrency,
+            DateTime date,
+            string source = null);
+            
+        Task<IEnumerable<ExchangeRateDto>> GetHistoricalRatesAsync(
+            string currency,
+            string relationCurrency,
+            DateTime startDate,
+            DateTime endDate,
+            string source = null);
     }
 }

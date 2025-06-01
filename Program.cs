@@ -135,6 +135,8 @@ try
     builder.Services.AddDbContext<NanoServiceDbContext>(options =>
         options.UseSqlServer(nanoServiceConnectionString));
 
+ 
+
     // Register ErpDbContext
     builder.Services.AddScoped<ErpDbContext>(provider => 
         new ErpDbContext(
@@ -153,6 +155,8 @@ catch (Exception ex)
     // Register SQL Server DbContext even if connection test fails
     builder.Services.AddDbContext<NanoServiceDbContext>(options => 
         options.UseSqlServer(nanoServiceConnectionString));
+        
+ 
         
     builder.Services.AddScoped<ErpDbContext>(provider => 
         new ErpDbContext(
@@ -241,6 +245,11 @@ builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 builder.Services.AddScoped<ICashService, CashService>();
 builder.Services.AddScoped<ICustomerDebtService, CustomerDebtService>();
 builder.Services.AddScoped<ICustomerCreditService, CustomerCreditService>();
+
+// Döviz kuru servisi
+builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
+// ExchangeRateFetchService kaldırıldı çünkü ERP veritabanına yazma işlemi yapmıyoruz
+builder.Services.AddHttpClient();
 
 // Fatura servisleri
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
