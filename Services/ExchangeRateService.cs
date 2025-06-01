@@ -281,11 +281,12 @@ namespace ErpMobile.Api.Services
                 {
                     // Alış kuru kullanarak TRY'den yabancı paraya çevirme
                     string query = @"
-                        SELECT TOP 1 BanknoteBuyingRate 
+                        SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 5 THEN Rate ELSE 0 END) AS BanknoteBuyingRate
                         FROM AllExchangeRates 
                         WHERE Date = @date 
                         AND CurrencyCode = @currencyCode 
-                        AND RelationCurrencyCode = 'TRY'";
+                        AND RelationCurrencyCode = 'TRY'
+                        GROUP BY Date, CurrencyCode, RelationCurrencyCode";
                     
                     var parameters = new SqlParameter[]
                     {
@@ -307,11 +308,12 @@ namespace ErpMobile.Api.Services
                 {
                     // Satış kuru kullanarak yabancı paradan TRY'ye çevirme
                     string query = @"
-                        SELECT TOP 1 BanknoteSellingRate 
+                        SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 6 THEN Rate ELSE 0 END) AS BanknoteSellingRate
                         FROM AllExchangeRates 
                         WHERE Date = @date 
                         AND CurrencyCode = @currencyCode 
-                        AND RelationCurrencyCode = 'TRY'";
+                        AND RelationCurrencyCode = 'TRY'
+                        GROUP BY Date, CurrencyCode, RelationCurrencyCode";
                     
                     var parameters = new SqlParameter[]
                     {
@@ -332,11 +334,12 @@ namespace ErpMobile.Api.Services
                 
                 // İlk para biriminden TRY'ye dönüşüm (satış kuru)
                 string fromRateQuery = @"
-                    SELECT TOP 1 BanknoteSellingRate 
+                    SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 6 THEN Rate ELSE 0 END) AS BanknoteSellingRate
                     FROM AllExchangeRates 
                     WHERE Date = @date 
                     AND CurrencyCode = @currencyCode 
-                    AND RelationCurrencyCode = 'TRY'";
+                    AND RelationCurrencyCode = 'TRY'
+                    GROUP BY Date, CurrencyCode, RelationCurrencyCode";
                 
                 var fromRateParameters = new SqlParameter[]
                 {
@@ -357,11 +360,12 @@ namespace ErpMobile.Api.Services
                 
                 // TRY'den ikinci para birimine dönüşüm (alış kuru)
                 string toRateQuery = @"
-                    SELECT TOP 1 BanknoteBuyingRate 
+                    SELECT TOP 1 MAX(CASE WHEN ExchangeTypeCode = 5 THEN Rate ELSE 0 END) AS BanknoteBuyingRate
                     FROM AllExchangeRates 
                     WHERE Date = @date 
                     AND CurrencyCode = @currencyCode 
-                    AND RelationCurrencyCode = 'TRY'";
+                    AND RelationCurrencyCode = 'TRY'
+                    GROUP BY Date, CurrencyCode, RelationCurrencyCode";
                 
                 var toRateParameters = new SqlParameter[]
                 {
