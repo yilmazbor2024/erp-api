@@ -29,9 +29,22 @@ namespace ErpMobile.Api.Repositories.Inventory
 {
     try
     {
-        var result = new List<InventoryStockModel>();
+var result = new List<InventoryStockModel>();
 
-        _logger.LogInformation($"Çok amaçlı envanter/stok sorgusu yapılıyor. Barkod: {barcode}, Ürün Kodu: {productCode}, Ürün Açıklaması: {productDescription}, Renk Kodu: {colorCode}, Beden Kodu: {itemDim1Code}, Depo Kodu: {warehouseCode}, Sadece Pozitif Stok: {showOnlyPositiveStock}");
+// Renkli konsol logları ekleyelim
+Console.ForegroundColor = ConsoleColor.Magenta;
+Console.WriteLine("\n==================== REPOSITORY STOK SORGULAMA PARAMETRELERİ ====================");
+Console.WriteLine($"Barkod: {barcode ?? "null"}");
+Console.WriteLine($"Ürün Kodu: {productCode ?? "null"}");
+Console.WriteLine($"Ürün Açıklaması: {productDescription ?? "null"}");
+Console.WriteLine($"Renk Kodu: {colorCode ?? "null"}");
+Console.WriteLine($"Beden Kodu: {itemDim1Code ?? "null"}");
+Console.WriteLine($"Depo Kodu: {warehouseCode ?? "null"}");
+Console.WriteLine($"Sadece Pozitif Stok: {showOnlyPositiveStock}");
+Console.WriteLine("===================================================================\n");
+Console.ResetColor();
+
+_logger.LogInformation($"Çok amaçlı envanter/stok sorgusu yapılıyor. Barkod: {barcode}, Ürün Kodu: {productCode}, Ürün Açıklaması: {productDescription}, Renk Kodu: {colorCode}, Beden Kodu: {itemDim1Code}, Depo Kodu: {warehouseCode}, Sadece Pozitif Stok: {showOnlyPositiveStock}");
 
         var query = new StringBuilder();
         query.AppendLine(@"
@@ -348,6 +361,13 @@ namespace ErpMobile.Api.Repositories.Inventory
 
 
         query.AppendLine(" ORDER BY piv.ItemCode, piv.ColorCode, piv.ItemDim1Code");
+
+        // SQL sorgusu ve parametreleri renkli olarak yazdıran loglar
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("\n==================== SQL SORGUSU ====================");
+        Console.WriteLine(query.ToString());
+        Console.WriteLine("===================================================================\n");
+        Console.ResetColor();
 
         _logger.LogInformation("Veritabanı bağlantısı açılıyor.");
 

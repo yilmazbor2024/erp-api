@@ -50,6 +50,21 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
+                // Renkli konsol logları ekleyelim
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("\n==================== STOK SORGULAMA PARAMETRELERİ ====================");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine($"Barkod: {barcode ?? "null"}");
+                Console.WriteLine($"Ürün Kodu: {productCode ?? "null"}");
+                Console.WriteLine($"Ürün Açıklaması: {productDescription ?? "null"}");
+                Console.WriteLine($"Renk Kodu: {colorCode ?? "null"}");
+                Console.WriteLine($"Beden Kodu: {itemDim1Code ?? "null"}");
+                Console.WriteLine($"Depo Kodu: {warehouseCode ?? "null"}");
+                Console.WriteLine($"Sadece Pozitif Stok: {showOnlyPositiveStock}");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("===================================================================\n");
+                Console.ResetColor();
+
                 // En az bir parametre belirtilmiş olmalı
                 if (string.IsNullOrEmpty(barcode) && 
                     string.IsNullOrEmpty(productCode) && 
@@ -62,24 +77,38 @@ namespace ErpMobile.Api.Controllers
                     return BadRequest(new ApiResponse<List<InventoryStockModel>>(null, false, "En az bir arama kriteri belirtilmelidir", "BadRequest"));
                 }
 
-                var inventoryStock = await _inventoryRepository.GetInventoryStockMultiPurposeAsync(
-                    barcode, 
-                    productCode, 
-                    productDescription, 
-                    colorCode, 
-                    itemDim1Code, 
-                    warehouseCode, 
+                var result = await _inventoryRepository.GetInventoryStockMultiPurposeAsync(
+                    barcode,
+                    productCode,
+                    productDescription,
+                    colorCode,
+                    itemDim1Code,
+                    warehouseCode,
                     showOnlyPositiveStock);
 
-                if (inventoryStock == null || inventoryStock.Count == 0)
+                // Sonuç bilgisini yazdıralım
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\n==================== STOK SORGULAMA SONUÇLARI ====================");
+                Console.WriteLine($"Bulunan stok kaydı sayısı: {result?.Count ?? 0}");
+                Console.WriteLine($"===================================================================\n");
+                Console.ResetColor();
+
+                if (result == null)
                 {
-                    return NotFound(new ApiResponse<List<InventoryStockModel>>(null, false, "Belirtilen kriterlere uygun envanter/stok bilgisi bulunamadı", "NotFound"));
+                    // Veri bulunamadığında boş liste döndür, 404 yerine
+                    return Ok(new ApiResponse<List<InventoryStockModel>>(new List<InventoryStockModel>(), true, "Belirtilen kriterlere uygun envanter/stok bilgisi bulunamadı"));
                 }
 
-                return Ok(new ApiResponse<List<InventoryStockModel>>(inventoryStock, true, "Envanter/stok bilgisi başarıyla getirildi"));
+                return Ok(new ApiResponse<List<InventoryStockModel>>(result, true, "Envanter/stok bilgisi başarıyla getirildi"));
             }
             catch (Exception ex)
             {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n==================== STOK SORGULAMA HATASI ====================");
+                Console.WriteLine($"Hata: {ex.Message}");
+                Console.WriteLine($"===================================================================\n");
+                Console.ResetColor();
+
                 _logger.LogError(ex, "Çok amaçlı envanter/stok sorgusu yapılırken hata oluştu.");
                 return StatusCode(500, new ApiResponse<List<InventoryStockModel>>(null, false, "Envanter/stok bilgisi getirilirken bir hata oluştu.", "InternalServerError"));
             }
