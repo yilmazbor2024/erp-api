@@ -121,6 +121,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     InvoiceNumber = request.InvoiceNumber,
                     InvoiceDate = request.InvoiceDate,
                     CompanyCode = request.CompanyCode,
+                    OfficeCode = request.OfficeCode, // OfficeCode parametresi eklendi
                     StoreCode = request.StoreCode,
                     WarehouseCode = request.WarehouseCode,
                     CustomerCode = request.CustomerCode,
