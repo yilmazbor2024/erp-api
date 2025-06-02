@@ -848,21 +848,8 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Yıl numarasını al (şu anki yılın son iki hanesi)
                 int currentYearShort = DateTime.Now.Year % 100;
                 
-                // Son fatura numarasını kontrol et
-                if (parts.Length >= 3 && int.TryParse(parts[parts.Length - 1], out int lastNumber))
-                {
-                    // Ay-yıl formatını kontrol et (örn: 7-20 için 7. ay 2020 yılı)
-                    if (int.TryParse(parts[parts.Length - 2], out int lastMonth) && 
-                        lastMonth == currentMonth)
-                    {
-                        // Aynı ay içindeyse, sadece son numarayı artır
-                        int nextNumber = lastNumber + 1;
-                        return $"{processCode}-{currentMonth}-{currentYearShort}-{nextNumber}";
-                    }
-                }
-                
-                // Yeni ay veya format uygun değilse, yeni format oluştur
-                return $"{processCode}-{currentMonth}-{currentYearShort}-1";
+                // Sadece process kodu, ay ve yıl içeren format oluştur
+                return $"{processCode}-{currentMonth}-{currentYearShort}";
             }
             catch (Exception ex)
             {
@@ -870,7 +857,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Hata durumunda varsayılan bir numara dön
                 int currentMonth = DateTime.Now.Month;
                 int currentYearShort = DateTime.Now.Year % 100;
-                return $"{processCode}-{currentMonth}-{currentYearShort}-1";
+                return $"{processCode}-{currentMonth}-{currentYearShort}";
             }
         }
     }
