@@ -836,41 +836,35 @@ namespace ErpMobile.Api.Repositories.Invoice
                 if (string.IsNullOrEmpty(lastInvoiceNumber))
                 {
                     // Eğer hiç fatura yoksa, ilk fatura numarasını oluştur
-                    return $"{processCode}-1";
+                    return $"{processCode}-7-1";
                 }
 
-                // Fatura numarasını parse et
+                // Fatura numarasını parse et (format: WS-7-217 gibi)
                 string[] parts = lastInvoiceNumber.Split('-');
                 
-                // Son kısmı sayı olarak parse et
-                if (parts.Length >= 2 && int.TryParse(parts[parts.Length - 1], out int lastNumber))
+                // Format en az 3 parçadan oluşmalı (WS-7-217 gibi)
+                if (parts.Length >= 3)
                 {
-                    // Son numarayı bir artır
-                    int nextNumber = lastNumber + 1;
-                    
-                    // Sabit kısım "WS-7" gibi bir kod ise
-                    if (parts.Length == 2)
+                    // Son kısmı sayı olarak parse et
+                    if (int.TryParse(parts[parts.Length - 1], out int lastNumber))
                     {
-                        // Örnek: WS-7 ise ve son numara 20 ise, WS-21 olacak
-                        return $"{processCode}-{nextNumber}";
-                    }
-                    else
-                    {
-                        // Birden fazla kısım varsa, son kısmı bir artır
-                        return $"{processCode}-{nextNumber}";
+                        // Son numarayı bir artır
+                        int nextNumber = lastNumber + 1;
+                        
+                        // İlk iki kısmı (WS-7) sabit tut, son kısmı artır
+                        string prefix = string.Join("-", parts.Take(parts.Length - 1));
+                        return $"{prefix}-{nextNumber}";
                     }
                 }
-                else
-                {
-                    // Son kısım sayı değilse veya format uygun değilse, yeni numara oluştur
-                    return $"{processCode}-1";
-                }
+                
+                // Format uygun değilse, varsayılan formatı oluştur
+                return $"{processCode}-7-1";
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Otomatik fatura numarası oluşturulurken hata oluştu");
                 // Hata durumunda varsayılan bir numara dön
-                return $"{processCode}-1";
+                return $"{processCode}-7-1";
             }
         }
     }
