@@ -2,6 +2,8 @@ using System.Text;
 using ErpMobile.Api.Data;
 using ErpMobile.Api.Services.Auth;
 using ErpMobile.Api.Services.Menu;
+using ErpMobile.Api.Services;
+using ErpMobile.Api.Services.ShipmentMethod;
 using ErpMobile.Api.Services.Email;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -218,6 +220,10 @@ builder.Services.AddScoped<ICustomerService>(provider => new CustomerBasicServic
     provider.GetRequiredService<IConfiguration>(),
     provider.GetRequiredService<ILoggerFactory>()
 ));
+// Müşteri varsayılan adres servisi
+builder.Services.AddScoped<ICustomerDefaultService, CustomerDefaultService>();
+// Sevkiyat yöntemi servisi
+builder.Services.AddScoped<IShipmentMethodService, ShipmentMethodService>();
 builder.Services.AddScoped<ICustomerServiceNew, CustomerServiceNew>();
 builder.Services.AddScoped<CustomerStubService>();
 

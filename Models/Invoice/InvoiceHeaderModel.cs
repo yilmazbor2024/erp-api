@@ -63,6 +63,7 @@ namespace ErpMobile.Api.Models.Invoice
         public int? PaymentTerm { get; set; }
         public string ShippingPostalAddressID { get; set; }
         public string BillingPostalAddressID { get; set; }
+        public string ShipmentMethodCode { get; set; }
         public int? TaxExemptionCode { get; set; }
         public decimal? ExchangeRate { get; set; }
         public string CurrAccCode { get; set; }

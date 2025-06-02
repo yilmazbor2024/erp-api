@@ -44,6 +44,23 @@ namespace ErpMobile.Api.Models.Invoice
         
         public int? TransTypeCode { get; set; }
         
+        /// <summary>
+        /// Teslimat adresi ID'si
+        /// </summary>
+        [Required(ErrorMessage = "Teslimat adresi zorunludur")]
+        public Guid ShippingPostalAddressID { get; set; }
+        
+        /// <summary>
+        /// Fatura adresi ID'si
+        /// </summary>
+        [Required(ErrorMessage = "Fatura adresi zorunludur")]
+        public Guid BillingPostalAddressID { get; set; }
+        
+        /// <summary>
+        /// Sevkiyat yöntemi kodu, zorunlu değil
+        /// </summary>
+        public string ShipmentMethodCode { get; set; }
+        
         [Required]
         public string DocCurrencyCode { get; set; }
         
@@ -245,6 +262,11 @@ namespace ErpMobile.Api.Models.Invoice
         /// Parti kodu
         /// </summary>
         public string BatchCode { get; set; }
+        
+        /// <summary>
+        /// Bölüm kodu
+        /// </summary>
+        public string SectionCode { get; set; }
         
         /// <summary>
         /// Satır açıklaması

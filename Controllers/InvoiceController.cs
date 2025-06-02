@@ -164,6 +164,25 @@ namespace ErpMobile.Api.Controllers
                 Console.WriteLine($"Gelen İstek: {System.Text.Json.JsonSerializer.Serialize(request, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })}");
                 Console.ResetColor();
                 
+                // Adres alanlarının doğrulaması
+                if (request.ShippingPostalAddressID == Guid.Empty)
+                {
+                    return BadRequest(new ApiResponse<InvoiceHeaderModel>
+                    {
+                        Success = false,
+                        Message = "Teslimat adresi seçilmesi zorunludur"
+                    });
+                }
+                
+                if (request.BillingPostalAddressID == Guid.Empty)
+                {
+                    return BadRequest(new ApiResponse<InvoiceHeaderModel>
+                    {
+                        Success = false,
+                        Message = "Fatura adresi seçilmesi zorunludur"
+                    });
+                }
+                
                 var response = await _invoiceService.CreateWholesaleInvoiceAsync(request);
                 
                 // Yanıtı logla
@@ -285,6 +304,25 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
+                // Adres alanlarının doğrulaması
+                if (request.ShippingPostalAddressID == Guid.Empty)
+                {
+                    return BadRequest(new ApiResponse<InvoiceHeaderModel>
+                    {
+                        Success = false,
+                        Message = "Teslimat adresi seçilmesi zorunludur"
+                    });
+                }
+                
+                if (request.BillingPostalAddressID == Guid.Empty)
+                {
+                    return BadRequest(new ApiResponse<InvoiceHeaderModel>
+                    {
+                        Success = false,
+                        Message = "Fatura adresi seçilmesi zorunludur"
+                    });
+                }
+                
                 var response = await _invoiceService.CreateWholesalePurchaseInvoiceAsync(request);
                 
                 if (!response.Success)
@@ -387,6 +425,25 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
+                // Adres alanlarının doğrulaması
+                if (request.ShippingPostalAddressID == Guid.Empty)
+                {
+                    return BadRequest(new ApiResponse<InvoiceHeaderModel>
+                    {
+                        Success = false,
+                        Message = "Teslimat adresi seçilmesi zorunludur"
+                    });
+                }
+                
+                if (request.BillingPostalAddressID == Guid.Empty)
+                {
+                    return BadRequest(new ApiResponse<InvoiceHeaderModel>
+                    {
+                        Success = false,
+                        Message = "Fatura adresi seçilmesi zorunludur"
+                    });
+                }
+                
                 var response = await _invoiceService.CreateExpenseInvoiceAsync(request);
                 
                 if (!response.Success)

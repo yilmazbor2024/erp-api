@@ -80,6 +80,11 @@ namespace ErpMobile.Api.Repositories.Invoice
                 PriceCurrencyCode,
                 PriceExchangeRate,
                 Price,
+                BatchCode,
+                SectionCode,
+                OrderDeliveryDate,
+                ManufactureDate,
+                ExpiryDate,
                 InvoiceHeaderID,
                 CreatedUserName,
                 CreatedDate,
@@ -104,6 +109,11 @@ namespace ErpMobile.Api.Repositories.Invoice
                 @PriceCurrencyCode,
                 @PriceExchangeRate,
                 @Price,
+                @BatchCode,
+                @SectionCode,
+                @OrderDeliveryDate,
+                @ManufactureDate,
+                @ExpiryDate,
                 @InvoiceHeaderID,
                 @CreatedUserName,
                 GETDATE(),
@@ -159,17 +169,38 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@PCTRate", 0);
                     _logger.LogInformation($"PCTCode: %0, PCTRate: 0 ekleniyor.");
 
-                    // Para birimi ve fiyat bilgileri
+                    // Para birimi ve fiyat bilgileri - Formdan seçilen para birimi kullanılacak
+                    // DocCurrencyCode - Formdan seçilen para birimi
                     var docCurrencyCode = !string.IsNullOrEmpty(detail.CurrencyCode) ? detail.CurrencyCode : "TRY";
                     command.Parameters.AddWithValue("@DocCurrencyCode", docCurrencyCode);
+                    _logger.LogInformation($"Invoice Line DocCurrencyCode: {docCurrencyCode} kullanılıyor.");
 
-                    var priceCurrencyCode = !string.IsNullOrEmpty(detail.PriceCurrencyCode) ? detail.PriceCurrencyCode : "TRY";
+                    // PriceCurrencyCode - Formdan seçilen para birimi
+                    var priceCurrencyCode = !string.IsNullOrEmpty(detail.PriceCurrencyCode) ? detail.PriceCurrencyCode : docCurrencyCode;
                     command.Parameters.AddWithValue("@PriceCurrencyCode", priceCurrencyCode);
+                    _logger.LogInformation($"Invoice Line PriceCurrencyCode: {priceCurrencyCode} kullanılıyor.");
 
-                    var exchangeRate = detail.ExchangeRate.HasValue ? detail.ExchangeRate.Value : 1.0m;
-                    command.Parameters.AddWithValue("@PriceExchangeRate", exchangeRate);
+                    // PriceExchangeRate - Fiyat listesinden gelirse 1 olacak
+                    var priceExchangeRate = 1.0m; // Varsayılan değer 1
+                    command.Parameters.AddWithValue("@PriceExchangeRate", priceExchangeRate);
+                    _logger.LogInformation($"Invoice Line PriceExchangeRate: {priceExchangeRate} kullanılıyor.");
 
                     command.Parameters.AddWithValue("@Price", detail.UnitPrice);
+
+                    // BatchCode ve SectionCode için boş string kullan
+                    var batchCode = !string.IsNullOrEmpty(detail.BatchCode) ? detail.BatchCode : "";
+                    command.Parameters.AddWithValue("@BatchCode", batchCode);
+                    _logger.LogInformation($"BatchCode: {batchCode} ekleniyor.");
+
+                    var sectionCode = !string.IsNullOrEmpty(detail.SectionCode) ? detail.SectionCode : "";
+                    command.Parameters.AddWithValue("@SectionCode", sectionCode);
+                    _logger.LogInformation($"SectionCode: {sectionCode} ekleniyor.");
+
+                    // Tarih alanları için sabit tarih kullan (1900-01-01)
+                    var defaultDate = new DateTime(1900, 1, 1);
+                    command.Parameters.AddWithValue("@OrderDeliveryDate", defaultDate);
+                    command.Parameters.AddWithValue("@ManufactureDate", defaultDate);
+                    command.Parameters.AddWithValue("@ExpiryDate", defaultDate); // Son kullanma tarihi de aynı
 
                     // Fatura başlık ID'si - zorunlu
                     command.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);

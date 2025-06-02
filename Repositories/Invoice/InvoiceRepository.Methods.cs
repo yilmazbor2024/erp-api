@@ -114,11 +114,23 @@ namespace ErpMobile.Api.Repositories.Invoice
         {
             try
             {
+                // Fatura numarası kontrolü ve otomatik oluşturma
+                string invoiceNumber = request.InvoiceNumber;
+                if (string.IsNullOrEmpty(invoiceNumber) || invoiceNumber == "Otomatik oluşturulacak")
+                {
+                    // Otomatik fatura numarası oluştur
+                    invoiceNumber = await GenerateNextInvoiceNumberAsync("WS");
+                    _logger.LogInformation($"Otomatik fatura numarası oluşturuldu: {invoiceNumber}");
+                }
+
+                // Para birimi kontrolü
+                string docCurrencyCode = !string.IsNullOrEmpty(request.DocCurrencyCode) ? request.DocCurrencyCode : "TRY";
+
                 // Fatura başlığı oluştur
                 var invoiceHeader = new InvoiceHeaderModel
                 {
                     ProcessCode = "WS", // Wholesale Sales
-                    InvoiceNumber = request.InvoiceNumber,
+                    InvoiceNumber = invoiceNumber,
                     InvoiceDate = request.InvoiceDate,
                     CompanyCode = request.CompanyCode,
                     OfficeCode = request.OfficeCode, // OfficeCode parametresi eklendi
@@ -126,10 +138,18 @@ namespace ErpMobile.Api.Repositories.Invoice
                     CustomerCode = request.CustomerCode,
                     CurrAccCode = request.CustomerCode, // CurrAccCode parametresi için CustomerCode kullanılıyor
                     CurrAccTypeCode = 2, // Müşteri
+                    DocCurrencyCode = docCurrencyCode, // Para birimi kodu eklendi
+                    ShippingPostalAddressID = request.ShippingPostalAddressID.ToString(), // Teslimat adresi ID'si
+                    BillingPostalAddressID = request.BillingPostalAddressID.ToString(), // Fatura adresi ID'si
+                    ShipmentMethodCode = request.ShipmentMethodCode, // Sevkiyat yöntemi kodu (opsiyonel)
                     Notes = request.Notes, // Using Notes instead of Description
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now
                 };
+
+                // Adres bilgilerini logla
+                _logger.LogInformation($"Fatura için müşteri teslimat adresi ID: {request.ShippingPostalAddressID}");
+                _logger.LogInformation($"Fatura için müşteri fatura adresi ID: {request.BillingPostalAddressID}");
 
                 // Fatura başlığı ve detayları veritabanına kaydet
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
@@ -146,14 +166,12 @@ namespace ErpMobile.Api.Repositories.Invoice
                             // Fatura detaylarını kaydet
                             if (request.Details != null && request.Details.Any())
                             {
-                                int sortOrder = 10;
+                                int sortOrder = 1;
                                 foreach (var detail in request.Details)
                                 {
                                     await CreateInvoiceLineAsync(connection, transaction, invoiceHeaderId, detail, sortOrder);
-                                    sortOrder += 10;
+                                    sortOrder += 1;
                                 }
-
-                               
                             }
 
                             transaction.Commit();
@@ -284,11 +302,11 @@ namespace ErpMobile.Api.Repositories.Invoice
                             // Fatura detaylarını kaydet
                             if (request.Details != null && request.Details.Any())
                             {
-                                int sortOrder = 10;
+                                int sortOrder = 1;
                                 foreach (var detail in request.Details)
                                 {
                                     await CreateInvoiceLineAsync(connection, transaction, invoiceHeaderId, detail, sortOrder);
-                                    sortOrder += 10;
+                                    sortOrder += 1;
                                 }
 
                                
@@ -353,11 +371,11 @@ namespace ErpMobile.Api.Repositories.Invoice
                             // Fatura detaylarını kaydet
                             if (request.Details != null && request.Details.Any())
                             {
-                                int sortOrder = 10;
+                                int sortOrder = 1;
                                 foreach (var detail in request.Details)
                                 {
                                     await CreateInvoiceLineAsync(connection, transaction, invoiceHeaderId, detail, sortOrder);
-                                    sortOrder += 10;
+                                    sortOrder += 1;
                                 }
 
                                 // Fatura toplamlarını hesapla ve güncelle
@@ -411,6 +429,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                         CurrAccCode,
                         ShippingPostalAddressID,
                         BillingPostalAddressID,
+                        ShipmentMethodCode,
                         TaxExemptionCode,
                         CompanyCode,
                         OfficeCode,
@@ -443,6 +462,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                         @CurrAccCode,
                         @ShippingPostalAddressID,
                         @BillingPostalAddressID,
+                        @ShipmentMethodCode,
                         @TaxExemptionCode,
                         @CompanyCode,
                         @OfficeCode,
@@ -522,9 +542,19 @@ namespace ErpMobile.Api.Repositories.Invoice
                     // CurrAccCode - Formdan gelecek
                     command.Parameters.AddWithValue("@CurrAccCode", invoiceHeader.CurrAccCode);
                     
-                    // Adres bilgileri - Müşteriden alınacak
+                    // Adres bilgileri - Formdan gelen müşteri adres ID'leri kullanılacak
+                    // ShippingPostalAddressID - Teslimat adresi ID'si (Formdan müşteri teslimat adresi alanından)
                     command.Parameters.AddWithValue("@ShippingPostalAddressID", string.IsNullOrEmpty(invoiceHeader.ShippingPostalAddressID) ? DBNull.Value : invoiceHeader.ShippingPostalAddressID);
+                    _logger.LogInformation($"ShippingPostalAddressID: {(string.IsNullOrEmpty(invoiceHeader.ShippingPostalAddressID) ? "NULL" : invoiceHeader.ShippingPostalAddressID)} kullanılıyor.");
+                    
+                    // BillingPostalAddressID - Fatura adresi ID'si (Formdan müşteri fatura adresi alanından)
                     command.Parameters.AddWithValue("@BillingPostalAddressID", string.IsNullOrEmpty(invoiceHeader.BillingPostalAddressID) ? DBNull.Value : invoiceHeader.BillingPostalAddressID);
+                    _logger.LogInformation($"BillingPostalAddressID: {(string.IsNullOrEmpty(invoiceHeader.BillingPostalAddressID) ? "NULL" : invoiceHeader.BillingPostalAddressID)} kullanılıyor.");
+                    
+                    // ShipmentMethodCode - Sevkiyat yöntemi kodu (opsiyonel)
+                    command.Parameters.AddWithValue("@ShipmentMethodCode", string.IsNullOrEmpty(invoiceHeader.ShipmentMethodCode) ? DBNull.Value : invoiceHeader.ShipmentMethodCode);
+                    _logger.LogInformation($"ShipmentMethodCode: {(string.IsNullOrEmpty(invoiceHeader.ShipmentMethodCode) ? "NULL" : invoiceHeader.ShipmentMethodCode)} kullanılıyor.");
+                    
                     command.Parameters.AddWithValue("@TaxExemptionCode", invoiceHeader.TaxExemptionCode ?? 0);
                     
                     // Şirket ve depo bilgileri - Formdan gelecek
@@ -553,20 +583,19 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@FormType", formType);
                     
                     // Döviz bilgileri
-                    // ExchangeRate - TRY için 1, diğer para birimleri için TL karşılığı
-                    decimal exchangeRate = 1; // Varsayılan TRY için 1
-                    if (invoiceHeader.DocCurrencyCode != null && invoiceHeader.DocCurrencyCode != "TRY")
-                    {
-                        // Burada döviz kuru servisi kullanılabilir
-                        // Şimdilik varsayılan 1 kullanıyoruz
-                    }
+                    // ExchangeRate - Formdan gelen TL karşılık değeri
+                    decimal exchangeRate = invoiceHeader.ExchangeRate.HasValue ? invoiceHeader.ExchangeRate.Value : 1; // Formdan gelen değer yoksa 1
                     command.Parameters.AddWithValue("@ExchangeRate", exchangeRate);
+                    _logger.LogInformation($"ExchangeRate: {exchangeRate} kullanılıyor.");
                     
-                    // DocCurrencyCode - Formdan gelecek (USD, TRY, GBP vb.)
-                    command.Parameters.AddWithValue("@DocCurrencyCode", invoiceHeader.DocCurrencyCode ?? "TRY");
+                    // DocCurrencyCode - Formdan seçilen para birimi
+                    string docCurrencyCode = !string.IsNullOrEmpty(invoiceHeader.DocCurrencyCode) ? invoiceHeader.DocCurrencyCode : "TRY";
+                    command.Parameters.AddWithValue("@DocCurrencyCode", docCurrencyCode);
+                    _logger.LogInformation($"DocCurrencyCode: {docCurrencyCode} kullanılıyor.");
                     
-                    // LocalCurrencyCode - TRY standart
+                    // LocalCurrencyCode - Her zaman TRY olacak
                     command.Parameters.AddWithValue("@LocalCurrencyCode", "TRY");
+                    _logger.LogInformation("LocalCurrencyCode: TRY kullanılıyor.");
                     
                     // DocumentTypeCode - 4 standart
                     command.Parameters.AddWithValue("@DocumentTypeCode", 4);
@@ -791,6 +820,97 @@ namespace ErpMobile.Api.Repositories.Invoice
             {
                 _logger.LogError(ex, "Fatura detayları getirilirken hata oluştu");
                 throw;
+            }
+        }
+
+        // Otomatik fatura numarası oluşturan metot
+        public async Task<string> GenerateNextInvoiceNumberAsync(string processCode)
+        {
+            try
+            {
+                // Son fatura numarasını al
+                string lastInvoiceNumber = await GetLastInvoiceNumberByProcessCodeAsync(processCode);
+                
+                if (string.IsNullOrEmpty(lastInvoiceNumber))
+                {
+                    // Eğer hiç fatura yoksa, ilk fatura numarasını oluştur
+                    return $"{processCode}-1";
+                }
+
+                _logger.LogInformation($"Son fatura numarası: {lastInvoiceNumber}");
+                
+                // Fatura numarası zaten processCode ile başlıyorsa, processCode'u tekrar ekleme
+                if (lastInvoiceNumber.StartsWith($"{processCode}-"))
+                {
+                    // Fatura numarasını parse et (format: WS-7-11 gibi)
+                    string[] parts = lastInvoiceNumber.Split('-');
+                    
+                    if (parts.Length < 2)
+                    {
+                        // Format uygun değilse, varsayılan bir numara dön
+                        return $"{processCode}-1";
+                    }
+
+                    // Son kısmı al ve bir artır
+                    if (int.TryParse(parts[parts.Length - 1], out int lastNumber))
+                    {
+                        int nextNumber = lastNumber + 1;
+                        
+                        // Orta kısımları (varsa) koru
+                        if (parts.Length > 2)
+                        {
+                            // İlk kısmı (processCode) atlayarak orta kısımları al
+                            string middlePart = string.Join("-", parts.Skip(1).Take(parts.Length - 2));
+                            return $"{processCode}-{middlePart}-{nextNumber}";
+                        }
+                        else
+                        {
+                            return $"{processCode}-{nextNumber}";
+                        }
+                    }
+                    else
+                    {
+                        // Son kısım sayı değilse, varsayılan bir numara dön
+                        return $"{processCode}-1";
+                    }
+                }
+                else
+                {
+                    // Fatura numarası processCode ile başlamıyorsa, normal işleme devam et
+                    string[] parts = lastInvoiceNumber.Split('-');
+                    
+                    if (parts.Length < 1)
+                    {
+                        return $"{processCode}-1";
+                    }
+
+                    // Son kısmı al ve bir artır
+                    if (int.TryParse(parts[parts.Length - 1], out int lastNumber))
+                    {
+                        int nextNumber = lastNumber + 1;
+                        
+                        // Orta kısımları (varsa) koru
+                        if (parts.Length > 1)
+                        {
+                            string middlePart = string.Join("-", parts.Take(parts.Length - 1));
+                            return $"{processCode}-{middlePart}-{nextNumber}";
+                        }
+                        else
+                        {
+                            return $"{processCode}-{nextNumber}";
+                        }
+                    }
+                    else
+                    {
+                        return $"{processCode}-1";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Otomatik fatura numarası oluşturulurken hata oluştu");
+                // Hata durumunda varsayılan bir numara dön
+                return $"{processCode}-{DateTime.Now.ToString("yyyyMMddHHmmss")}";
             }
         }
     }
