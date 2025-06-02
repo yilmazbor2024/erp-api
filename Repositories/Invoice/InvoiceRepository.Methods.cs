@@ -122,7 +122,6 @@ namespace ErpMobile.Api.Repositories.Invoice
                     InvoiceDate = request.InvoiceDate,
                     CompanyCode = request.CompanyCode,
                     OfficeCode = request.OfficeCode, // OfficeCode parametresi eklendi
-                    StoreCode = request.StoreCode,
                     WarehouseCode = request.WarehouseCode,
                     CustomerCode = request.CustomerCode,
                     CurrAccCode = request.CustomerCode, // CurrAccCode parametresi için CustomerCode kullanılıyor
@@ -154,8 +153,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                                     sortOrder += 10;
                                 }
 
-                                // Fatura toplamlarını hesapla ve güncelle
-                                await CalculateInvoiceTotalsAsync(connection, transaction, invoiceHeaderId);
+                               
                             }
 
                             transaction.Commit();
@@ -256,13 +254,15 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Fatura başlığı oluştur
                 var invoiceHeader = new InvoiceHeaderModel
                 {
-                    ProcessCode = "WP", // Wholesale Purchase
+                    ProcessCode = "BP", // Wholesale Purchase
                     InvoiceNumber = request.InvoiceNumber,
                     InvoiceDate = request.InvoiceDate,
                     CompanyCode = request.CompanyCode,
+                    OfficeCode = request.OfficeCode, // OfficeCode parametresi eklendi
                     StoreCode = request.StoreCode,
                     WarehouseCode = request.WarehouseCode,
                     VendorCode = request.VendorCode, // Using VendorCode instead of CurrAccCode
+                    CurrAccCode = request.VendorCode, // CurrAccCode parametresi için VendorCode kullanılıyor
                     CurrAccTypeCode = 1, // Tedarikçi
                     Notes = request.Notes, // Using Notes instead of Description
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
@@ -291,8 +291,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                                     sortOrder += 10;
                                 }
 
-                                // Fatura toplamlarını hesapla ve güncelle
-                                await CalculateInvoiceTotalsAsync(connection, transaction, invoiceHeaderId);
+                               
                             }
 
                             transaction.Commit();
@@ -328,9 +327,11 @@ namespace ErpMobile.Api.Repositories.Invoice
                     InvoiceNumber = request.InvoiceNumber,
                     InvoiceDate = request.InvoiceDate,
                     CompanyCode = request.CompanyCode,
+                    OfficeCode = request.OfficeCode, // OfficeCode parametresi eklendi
                     StoreCode = request.StoreCode,
                     WarehouseCode = request.WarehouseCode,
                     VendorCode = request.VendorCode, // Using VendorCode instead of CurrAccCode
+                    CurrAccCode = request.VendorCode, // CurrAccCode parametresi için VendorCode kullanılıyor
                     CurrAccTypeCode = 1, // Tedarikçi
                     Notes = request.Notes, // Using Notes instead of Description
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
@@ -360,7 +361,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                                 }
 
                                 // Fatura toplamlarını hesapla ve güncelle
-                                await CalculateInvoiceTotalsAsync(connection, transaction, invoiceHeaderId);
+                                
                             }
 
                             transaction.Commit();
@@ -692,9 +693,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Fatura toplamlarını hesapla
                 var sql = @"
                     SELECT 
-                        SUM(Amount) AS TotalAmount,
-                        SUM(VatAmount) AS TotalVatAmount,
-                        SUM(TotalAmount) AS GrandTotal
+                        SUM(Price * Qty1) AS TotalAmount,
+                        SUM(Price * Qty1 * (VatRate / 100)) AS TotalVatAmount,
+                        SUM(Price * Qty1 * (1 + VatRate / 100)) AS GrandTotal
                     FROM trInvoiceLine
                     WHERE InvoiceHeaderID = @InvoiceHeaderID";
 
