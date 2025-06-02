@@ -831,33 +831,46 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Son fatura numarasını al
                 string lastInvoiceNumber = await GetLastInvoiceNumberByProcessCodeAsync(processCode);
                 
+                _logger.LogInformation($"Son fatura numarası: {lastInvoiceNumber}");
+                
                 if (string.IsNullOrEmpty(lastInvoiceNumber))
                 {
                     // Eğer hiç fatura yoksa, ilk fatura numarasını oluştur
                     return $"{processCode}-1";
                 }
 
-                _logger.LogInformation($"Son fatura numarası: {lastInvoiceNumber}");
-                
                 // Fatura numarasını parse et
                 string[] parts = lastInvoiceNumber.Split('-');
                 
-                // Ay numarasını al (şu anki ay)
-                int currentMonth = DateTime.Now.Month;
-                
-                // Yıl numarasını al (şu anki yılın son iki hanesi)
-                int currentYearShort = DateTime.Now.Year % 100;
-                
-                // Sadece process kodu, ay ve yıl içeren format oluştur
-                return $"{processCode}-{currentMonth}-{currentYearShort}";
+                // Son kısmı sayı olarak parse et
+                if (parts.Length >= 2 && int.TryParse(parts[parts.Length - 1], out int lastNumber))
+                {
+                    // Son numarayı bir artır
+                    int nextNumber = lastNumber + 1;
+                    
+                    // Sabit kısım "WS-7" gibi bir kod ise
+                    if (parts.Length == 2)
+                    {
+                        // Örnek: WS-7 ise ve son numara 20 ise, WS-21 olacak
+                        return $"{processCode}-{nextNumber}";
+                    }
+                    else
+                    {
+                        // Birden fazla kısım varsa, son kısmı bir artır
+                        return $"{processCode}-{nextNumber}";
+                    }
+                }
+                else
+                {
+                    // Son kısım sayı değilse veya format uygun değilse, yeni numara oluştur
+                    return $"{processCode}-1";
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Otomatik fatura numarası oluşturulurken hata oluştu");
                 // Hata durumunda varsayılan bir numara dön
-                int currentMonth = DateTime.Now.Month;
-                int currentYearShort = DateTime.Now.Year % 100;
-                return $"{processCode}-{currentMonth}-{currentYearShort}";
+                return $"{processCode}-1";
             }
         }
     }
