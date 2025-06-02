@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Collections.Generic;
 
 namespace ErpMobile.Api.Models.Invoice
 {
@@ -29,8 +30,9 @@ namespace ErpMobile.Api.Models.Invoice
         public string SubCurrAccCompanyName { get; set; }
         public bool IsCreditSale { get; set; }
         public string ProcessCode { get; set; }
-        public string TransTypeCode { get; set; }
+        public int? TransTypeCode { get; set; }
         public string DocCurrencyCode { get; set; }
+        public string CurrencyCode { get; set; }
         public string Series { get; set; }
         public string SeriesNumber { get; set; }
         public string EInvoiceNumber { get; set; }
@@ -56,8 +58,19 @@ namespace ErpMobile.Api.Models.Invoice
         public string ApplicationID { get; set; }
         public string InvoiceHeaderID { get; set; }
      
-        public string FormType { get; set; }
-        public string DocumentTypeCode { get; set; }
+        public int? FormType { get; set; }
+        public int? DocumentTypeCode { get; set; }
+        public int? PaymentTerm { get; set; }
+        public string ShippingPostalAddressID { get; set; }
+        public string BillingPostalAddressID { get; set; }
+        public int? TaxExemptionCode { get; set; }
+        public decimal? ExchangeRate { get; set; }
+        public string CurrAccCode { get; set; }
+        public string LocalCurrencyCode { get; set; }
+        public DateTime? JournalDate { get; set; }
+        public DateTime? OperationDate { get; set; }
+        public string OperationTime { get; set; }
+        public DateTime? AverageDueDate { get; set; }
         
         // Ek özellikler
         public decimal TotalAmount { get; set; }

@@ -42,7 +42,7 @@ namespace ErpMobile.Api.Models.Invoice
         
         public string ProcessCode { get; set; }
         
-        public string TransTypeCode { get; set; }
+        public int? TransTypeCode { get; set; }
         
         [Required]
         public string DocCurrencyCode { get; set; }
@@ -89,9 +89,9 @@ namespace ErpMobile.Api.Models.Invoice
         /// </summary>
         public string DocumentType { get; set; }
         
-        public string FormType { get; set; }
+        public int? FormType { get; set; }
         
-        public string DocumentTypeCode { get; set; }
+        public int? DocumentTypeCode { get; set; }
         
         public string Notes { get; set; }
         
