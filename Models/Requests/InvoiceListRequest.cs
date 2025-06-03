@@ -54,5 +54,10 @@ namespace ErpMobile.Api.Models.Requests
         /// Fatura durumu (completed, cancelled)
         /// </summary>
         public string Status { get; set; }
+
+        /// <summary>
+        /// İşlem kodu (WS: Toptan Satış, BP: Toptan Alış, EP: Masraf Alış, EXP: Masraf Satış)
+        /// </summary>
+        public string ProcessCode { get; set; }
     }
 } 

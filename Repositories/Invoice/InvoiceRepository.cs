@@ -1661,9 +1661,14 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Fatura tipi filtresi (eğer belirtilmişse)
                 if (!string.IsNullOrEmpty(request.ProcessCode))
                 {
-                    // ProcessCode'u doğrudan ProcessCode olarak kullan
-                    whereConditions.Add("trInvoiceHeader.ProcessCode = @ProcessCode");
+                    // ProcessCode'u case-insensitive olarak karşılaştır
+                    whereConditions.Add("UPPER(trInvoiceHeader.ProcessCode) = UPPER(@ProcessCode)");
                     parameters.Add(new SqlParameter("@ProcessCode", request.ProcessCode));
+                    _logger.LogInformation($"Filtering by ProcessCode: {request.ProcessCode}");
+                }
+                else
+                {
+                    _logger.LogWarning("ProcessCode belirtilmemiş, tüm faturalar listelenecek");
                 }
 
                 if (!string.IsNullOrEmpty(request.InvoiceNumber))
@@ -1752,6 +1757,10 @@ namespace ErpMobile.Api.Repositories.Invoice
 
                 // WHERE koşullarını birleştir
                 string whereClause = whereConditions.Count > 0 ? "WHERE " + string.Join(" AND ", whereConditions) : "";
+                
+                // SQL sorgusunu logla
+                _logger.LogInformation($"WHERE clause: {whereClause}");
+                _logger.LogInformation($"SQL Parameters: {string.Join(", ", parameters.Select(p => $"{p.ParameterName}={p.Value}"))}");
 
                 // Toplam kayıt sayısını almak için sorgu
                 string countQuery = $@"

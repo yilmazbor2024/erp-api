@@ -42,7 +42,8 @@ namespace ErpMobile.Api.Services
                     CustomerCode = request.CustomerCode,
                     SearchText = request.InvoiceNumber,
                     FromDate = request.StartDate,
-                    ToDate = request.EndDate
+                    ToDate = request.EndDate,
+                    ProcessCode = request.ProcessCode
                 };
 
                 string whereClause = BuildWhereClause(filter);
@@ -94,6 +95,11 @@ namespace ErpMobile.Api.Services
                 if (filter.ToDate.HasValue)
                 {
                     parameters.Add("@ToDate", filter.ToDate.Value);
+                }
+                
+                if (!string.IsNullOrEmpty(filter.ProcessCode))
+                {
+                    parameters.Add("@ProcessCode", filter.ProcessCode);
                 }
 
                 int totalCount = await _erpConnection.ExecuteScalarAsync<int>(countQuery, parameters);
@@ -639,8 +645,13 @@ namespace ErpMobile.Api.Services
             {
                 conditions.Add("trInvoiceHeader.InvoiceDate <= @ToDate");
             }
+            
+            if (!string.IsNullOrEmpty(filter.ProcessCode))
+            {
+                conditions.Add("trInvoiceHeader.ProcessCode = @ProcessCode");
+            }
 
             return $"WHERE {string.Join(" AND ", conditions)}";
         }
     }
-} 
+}

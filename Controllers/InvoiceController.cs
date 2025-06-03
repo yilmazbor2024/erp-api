@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using System.Data.SqlClient;
+using System.Net;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using ErpMobile.Api.Models.Common;
 using ErpMobile.Api.Models.Invoice;
 using ErpMobile.Api.Services.Invoice;
@@ -819,11 +822,20 @@ namespace ErpMobile.Api.Controllers
                 }
 
                 // ProcessCode kullanılıyor,  
-                // ProcessCode yoksa uyarı ver ama zorunlu tutma
-                if (string.IsNullOrEmpty(request.ProcessCode))
-                {
-                    _logger.LogWarning("ProcessCode belirtilmemiş, tüm faturalar listelenecek");
-                }
+        // ProcessCode yoksa uyarı ver ama zorunlu tutma
+        if (string.IsNullOrEmpty(request.ProcessCode))
+        {
+            _logger.LogWarning("ProcessCode belirtilmemiş, tüm faturalar listelenecek");
+        }
+        else
+        {
+            _logger.LogInformation($"Filtering by ProcessCode: {request.ProcessCode}");
+            
+            // DEBUGGING: ProcessCode'u uppercase'e çevir
+            // Veritabanında case-sensitive olabilir
+            request.ProcessCode = request.ProcessCode.ToUpper();
+            _logger.LogInformation($"Converted ProcessCode to uppercase: {request.ProcessCode}");
+        }
                 
                 // Diğer alanları varsayılan değerlerle doldur
                 request.StoreCode = request.StoreCode ?? "001";
@@ -855,6 +867,56 @@ namespace ErpMobile.Api.Controllers
                 Console.WriteLine($"WarehouseCode: {request.WarehouseCode}");
               
                 Console.ResetColor();
+                
+                // DEBUGGING: Veritabanındaki ProcessCode değerlerini kontrol et
+                Console.BackgroundColor = ConsoleColor.Green;
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine("\n===== CHECKING DATABASE FOR PROCESSCODE VALUES =====\n");
+                
+                try
+                {
+                    using (var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection")))
+                    {
+                        await connection.OpenAsync();
+                        string debugQuery = "SELECT ProcessCode, COUNT(*) as Count FROM trInvoiceHeader GROUP BY ProcessCode";
+                        var command = new SqlCommand(debugQuery, connection);
+                        
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            Console.WriteLine("Available ProcessCode values in database:");
+                            bool hasAnyRecords = false;
+                            
+                            while (await reader.ReadAsync())
+                            {
+                                hasAnyRecords = true;
+                                string processCode = reader["ProcessCode"].ToString();
+                                int count = Convert.ToInt32(reader["Count"]);
+                                Console.WriteLine($"ProcessCode: {processCode}, Count: {count}");
+                            }
+                            
+                            if (!hasAnyRecords)
+                            {
+                                Console.WriteLine("NO INVOICE RECORDS FOUND IN DATABASE!");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error checking ProcessCode values: {ex.Message}");
+                }
+                
+                Console.ResetColor();
+                
+                // ProcessCode filtresini etkinleştir
+                if (!string.IsNullOrEmpty(request.ProcessCode))
+                {
+                    Console.WriteLine($"NOTICE: Using ProcessCode filter: {request.ProcessCode}");
+                    // Gereksiz parametreleri kaldır
+                    request.CompanyCode = null;
+                    request.StoreCode = null;
+                    request.WarehouseCode = null;
+                }
                 
                 // Doğrudan tüm faturaları getiren servisi çağır
                 var response = await _invoiceService.GetAllInvoicesAsync(request);
