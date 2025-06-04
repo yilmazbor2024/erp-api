@@ -270,6 +270,9 @@ builder.Services.AddScoped<IInvoiceReportService, InvoiceReportService>();
 // Ürün servisleri
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
+// Vergi servisleri
+builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
+
 // Envanter servisleri
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 
