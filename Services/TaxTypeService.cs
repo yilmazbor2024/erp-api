@@ -19,7 +19,7 @@ namespace ErpMobile.Api.Services
 
         public TaxTypeService(IConfiguration configuration, ILogger<TaxTypeService> logger)
         {
-            _connectionString = configuration.GetConnectionString("DefaultConnection");
+            _connectionString = configuration.GetConnectionString("ErpConnection");
             _logger = logger;
         }
 
