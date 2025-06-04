@@ -24,6 +24,7 @@ using ErpMobile.Api.Repositories.Product;
 using ErpMobile.Api.Models.Product;
 using ErpMobile.Api.Repositories.Inventory;
 using ErpMobile.Api.Models.Inventory;
+using ErpMobile.Api.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,21 +39,22 @@ builder.Logging.AddDebug();
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 // Add services to the container.
-// CORS yapılandırması - Production ortamı için güncellendi
+// CORS yapılandırması - Production ortamı için güncellendi ve genişletildi
 var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>() ?? 
     new[] { 
         "http://localhost:3000", 
         "http://edikravat.tr", 
         "https://edikravat.tr",
         "http://b2b.edikravat.tr", 
-        "https://b2b.edikravat.tr" 
+        "https://b2b.edikravat.tr",
+        "*" // Tüm originlere izin ver (geçici çözüm için)
     };
 
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(corsOrigins) 
+        policy.SetIsOriginAllowed(_ => true) // Tüm originlere izin ver
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials(); 
@@ -261,11 +263,19 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
+// Fatura rapor servisleri
+builder.Services.AddScoped<IInvoiceReportRepository, InvoiceReportRepository>();
+builder.Services.AddScoped<IInvoiceReportService, InvoiceReportService>();
+
 // Ürün servisleri
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
 // Envanter servisleri
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
+
+// Geçici Müşteri Token Servisi
+builder.Services.AddScoped<TempCustomerTokenService>();
+builder.Services.AddScoped<ITokenValidationService, TempCustomerTokenService>();
 
 var app = builder.Build();
 
@@ -334,6 +344,7 @@ catch (Exception ex)
 }
 
 // Configure the HTTP request pipeline.
+// CORS middleware'ini pipeline'ın en başına ekle
 app.UseCors();
 
 // OPTIONS isteklerini işleyen middleware
@@ -342,10 +353,12 @@ app.Use(async (context, next) =>
     if (context.Request.Method == "OPTIONS")
     {
         context.Response.StatusCode = 200;
-        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-        context.Response.Headers.Add("Access-Control-Allow-Headers", "*");
-        context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        context.Response.Headers.Add("Access-Control-Max-Age", "86400");
+        // IHeaderDictionary.Append kullanarak güvenli bir şekilde header ekle
+        context.Response.Headers.Append("Access-Control-Allow-Origin", context.Request.Headers["Origin"].ToString());
+        context.Response.Headers.Append("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, X-Requested-With");
+        context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        context.Response.Headers.Append("Access-Control-Allow-Credentials", "true");
+        context.Response.Headers.Append("Access-Control-Max-Age", "86400");
         await context.Response.CompleteAsync();
         return;
     }
