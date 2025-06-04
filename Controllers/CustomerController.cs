@@ -17,6 +17,9 @@ using ErpMobile.Api.Models.Common;
 using Microsoft.AspNetCore.Http;
 using Dapper;
 using Microsoft.Extensions.Configuration;
+using ErpMobile.Api.Models.Requests; 
+using ErpMobile.Api.Models.Responses; 
+using ErpMobile.Api.Services.Interfaces; // Eklendi
 
 namespace ErpMobile.Api.Controllers
 {
@@ -31,8 +34,10 @@ namespace ErpMobile.Api.Controllers
         private readonly ICustomerServiceNew _customerServiceNew;
         private readonly IConfiguration _configuration;
         private readonly CustomerStubService _customerStubService;
+        private readonly TempCustomerTokenService _tempCustomerTokenService;
+        private readonly ITokenValidationService _tokenValidationService;
 
-        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context, ICustomerServiceNew customerServiceNew, IConfiguration configuration, CustomerStubService customerStubService)
+        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context, ICustomerServiceNew customerServiceNew, IConfiguration configuration, CustomerStubService customerStubService, TempCustomerTokenService tempCustomerTokenService, ITokenValidationService tokenValidationService)
         {
             _customerService = customerService;
             _logger = logger;
@@ -40,6 +45,8 @@ namespace ErpMobile.Api.Controllers
             _customerServiceNew = customerServiceNew;
             _configuration = configuration;
             _customerStubService = customerStubService;
+            _tempCustomerTokenService = tempCustomerTokenService;
+            _tokenValidationService = tokenValidationService;
         }
 
         /// <summary>
@@ -100,30 +107,27 @@ namespace ErpMobile.Api.Controllers
         /// <param name="request">Customer create request</param>
         /// <returns>Created customer</returns>
         [HttpPost("Create")]
-        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), StatusCodes.Status201Created)]
-        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateCustomer([FromBody] CustomerCreateRequest request)
         {
             try
             {
-                _logger.LogInformation("Creating new customer: {@Request}", request);
-                
+
+                // Müşteri oluştur
                 var customer = await _customerService.CreateCustomerAsync(request);
-                
+
+                // Normal müşteri oluşturma işlemi - token kullanımı kaldırıldı
+
                 var response = new ApiResponse<CustomerResponse>
                 {
                     Success = true,
                     Data = customer,
                     Message = "Customer created successfully"
                 };
-                
                 return CreatedAtAction(nameof(GetCustomerByCode), new { customerCode = customer.CustomerCode }, response);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating customer");
-                
                 var response = new ApiResponse<string>
                 {
                     Success = false,
@@ -131,7 +135,6 @@ namespace ErpMobile.Api.Controllers
                     Message = "An error occurred while creating the customer",
                     Error = ex.Message
                 };
-                
                 return StatusCode(500, response);
             }
         }
@@ -923,6 +926,190 @@ namespace ErpMobile.Api.Controllers
                     Message = "Müşteri güncelleme sırasında bir hata oluştu",
                     Data = ex.Message
                 });
+            }
+        }
+
+        /// <summary>
+        /// Geçici müşteri kayıt linki oluşturur.
+        /// </summary>
+        /// <param name="request">Geçici link oluşturma isteği.</param>
+        /// <returns>Geçici link ve QR kod bilgileri.</returns>
+        [HttpPost("create-temp-link")]
+        [ProducesResponseType(typeof(ApiResponse<TempLinkResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateTempLink([FromBody] TempLinkRequest request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new ApiResponse<string> { Success = false, Message = "Geçersiz istek", Data = ModelState.ToString() });
+            }
+
+            try
+            {
+                // Kullanıcı bilgilerini al (örneğin JWT token'dan)
+                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "UnknownUser";
+                var userName = User.Identity?.Name ?? "UnknownUser";
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "UnknownIP";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString() ?? "UnknownAgent";
+
+                var result = await _tempCustomerTokenService.CreateTempLinkAsync(request, userId, userName, ipAddress, userAgent);
+                
+                if (result.Success)
+                {
+                    return Ok(new ApiResponse<TempLinkResponse>(result, true, "Geçici link başarıyla oluşturuldu."));
+                }
+                return BadRequest(new ApiResponse<TempLinkResponse>(result, false, result.ErrorMessage ?? "Geçici link oluşturulurken bir hata oluştu."));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "CreateTempLink sırasında hata: {ErrorMessage}", ex.Message);
+                var response = new ApiResponse<string>
+                {
+                    Success = false,
+                    Data = null,
+                    Message = "An error occurred while creating the temporary link",
+                    Error = ex.Message
+                };
+                return StatusCode(500, response);
+            }
+        }
+
+        /// <summary>
+        /// Geçici müşteri kayıt token'ını doğrular.
+        /// </summary>
+        /// <param name="token">Doğrulanacak token.</param>
+        /// <returns>Token doğrulama sonucu.</returns>
+        [AllowAnonymous] // Bu endpoint token ile erişileceği için anonim erişime izin veriyoruz.
+        [HttpGet("validate-token/{token}")]
+        [ProducesResponseType(typeof(ApiResponse<TokenValidationResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ValidateTempToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return BadRequest(new ApiResponse<string> { Success = false, Message = "Token boş olamaz." });
+            }
+
+            try
+            {
+                var result = await _tempCustomerTokenService.ValidateTokenAsync(token);
+                return Ok(new ApiResponse<TokenValidationResponse>(result, result.IsValid, result.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ValidateTempToken sırasında hata: {ErrorMessage}", ex.Message);
+                
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<string>(null, false, "Token doğrulanırken sunucu hatası oluştu.", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Token ile müşteri oluşturma endpoint'i
+        /// </summary>
+        /// <param name="request">Token ve müşteri bilgilerini içeren istek</param>
+        /// <returns>Oluşturulan müşteri bilgileri</returns>
+        [AllowAnonymous] // Bu endpoint token ile erişileceği için anonim erişime izin veriyoruz
+        [HttpPost("create-with-token")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateCustomerWithToken([FromBody] CustomerWithTokenRequest tokenRequest)
+        {
+            try
+            {
+                _logger.LogInformation("Token ile müşteri oluşturma isteği alındı");
+                
+                // Token kontrolü
+                if (tokenRequest == null)
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "Geçersiz istek formatı."));
+                }
+                
+                if (string.IsNullOrWhiteSpace(tokenRequest.Token))
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "Token boş olamaz."));
+                }
+                
+                // Token geçerliliğini kontrol et
+                var tokenValidationResult = await _tokenValidationService.ValidateTokenAsync(tokenRequest.Token);
+                if (!tokenValidationResult.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, tokenValidationResult.Message));
+                }
+                _logger.LogInformation("Token ile müşteri oluşturma isteği alındı");
+                
+                // Token verilerinden CustomerCreateRequestNew oluştur
+                _logger.LogInformation("Token ile gelen müşteri verileri dönüştürülüyor");
+                
+                var customerCreateRequest = new CustomerCreateRequestNew
+                {
+                    CustomerCode = tokenRequest.CustomerData.CustomerCode ?? "",
+                    CustomerName = tokenRequest.CustomerData.CustomerName ?? "",
+                    CustomerSurname = tokenRequest.CustomerData.CustomerSurname ?? "",
+                    CustomerTypeCode = byte.Parse(tokenRequest.CustomerData.CustomerTypeCode ?? "3"),
+                    CompanyCode = short.Parse(tokenRequest.CustomerData.CompanyCode ?? "1"),
+                    OfficeCode = tokenRequest.CustomerData.OfficeCode ?? "M",
+                    CurrencyCode = tokenRequest.CustomerData.CurrencyCode ?? "TRY",
+                    IsIndividualAcc = tokenRequest.CustomerData.IsIndividual,
+                    CreatedUserName = "SYSTEM",
+                    LastUpdatedUserName = "SYSTEM",
+                    TaxNumber = tokenRequest.CustomerData.TaxNumber ?? "",
+                    IdentityNum = tokenRequest.CustomerData.IdentityNum ?? "",
+                    TaxOfficeCode = tokenRequest.CustomerData.TaxOfficeCode ?? "",
+                    IsSubjectToEInvoice = false,
+                    IsSubjectToEShipment = false,
+                    CityCode = tokenRequest.CustomerData.CityCode ?? "",
+                    DistrictCode = tokenRequest.CustomerData.DistrictCode ?? ""
+                    // CustomerCreateRequestNew'da Address alanı yok
+                };
+
+                // Normal müşteri oluşturma metodunu çağır - %100 aynı işlemi yap
+                var result = await _customerServiceNew.CreateCustomerAsync(customerCreateRequest);
+                
+                // Sonuç kontrolü
+                if (!result.Success)
+                {
+                    return BadRequest(new ApiResponse<string>
+                    {
+                        Success = false,
+                        Message = "Müşteri oluşturma başarısız",
+                        Data = result.Message
+                    });
+                }
+                
+                // CustomerResponse nesnesini oluştur
+                var customer = new CustomerResponse
+                {
+                    CustomerCode = result.CustomerCode,
+                    CustomerName = customerCreateRequest.CustomerName
+                };
+                
+                // Token'i kullanıldı olarak işaretle
+                await _tokenValidationService.MarkTokenAsUsedAsync(tokenRequest.Token);
+                
+                _logger.LogInformation($"Token ile müşteri başarıyla oluşturuldu: {customer.CustomerCode}");
+                
+                // Normal create endpoint'i ile aynı yanıt formatını kullan
+                var response = new ApiResponse<CustomerResponse>
+                {
+                    Success = true,
+                    Data = customer,
+                    Message = "Customer created successfully"
+                };
+                return CreatedAtAction(nameof(GetCustomerByCode), new { customerCode = customer.CustomerCode }, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating customer with token");
+                var response = new ApiResponse<string>
+                {
+                    Success = false,
+                    Data = null,
+                    Message = "An error occurred while creating the customer",
+                    Error = ex.Message
+                };
+                return StatusCode(500, response);
             }
         }
     }
