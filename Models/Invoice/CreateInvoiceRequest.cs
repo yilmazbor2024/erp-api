@@ -206,7 +206,7 @@ namespace ErpMobile.Api.Models.Invoice
         /// <summary>
         /// Net tutar (KDV hariç)
         /// </summary>
-        public decimal LineNetAmount { get; set; }
+        public decimal NetAmount { get; set; }
         
         /// <summary>
         /// Toplam tutar (KDV dahil)

@@ -11,6 +11,11 @@ namespace ErpMobile.Api.Models.Requests
     public class CustomerCreateRequest
     {
         /// <summary>
+        /// Geçici müşteri kayıt token'ı (opsiyonel)
+        /// </summary>
+        public string Token { get; set; }
+
+        /// <summary>
         /// Gets or sets the customer code.
         /// </summary>
         [Required]
@@ -197,6 +202,35 @@ namespace ErpMobile.Api.Models.Requests
         /// Gets or sets a value indicating whether the customer is VIP.
         /// </summary>
         public bool IsVIP { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the country code.
+        /// </summary>
+        [StringLength(10)]
+        public string CountryCode { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the state code.
+        /// </summary>
+        [StringLength(10)]
+        public string StateCode { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the address.
+        /// </summary>
+        [StringLength(500)]
+        public string Address { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the tax office.
+        /// </summary>
+        [StringLength(100)]
+        public string TaxOffice { get; set; }
+        
+        /// <summary>
+        /// Gets or sets a value indicating whether the customer is an individual.
+        /// </summary>
+        public bool IsIndividual { get; set; }
         
         /// <summary>
         /// Gets or sets the promotion group code.

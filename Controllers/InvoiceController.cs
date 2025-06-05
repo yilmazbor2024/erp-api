@@ -838,12 +838,12 @@ namespace ErpMobile.Api.Controllers
         }
                 
                 // Diğer alanları varsayılan değerlerle doldur
-                request.StoreCode = request.StoreCode ?? "001";
+                request.StoreCode = request.StoreCode ?? "";
                 request.VendorCode = request.VendorCode ?? "";
-                request.CompanyCode = request.CompanyCode ?? "001";
+                request.CompanyCode = request.CompanyCode ?? "1";
                 request.CustomerCode = request.CustomerCode ?? "";
                 request.InvoiceNumber = request.InvoiceNumber ?? "";
-                request.WarehouseCode = request.WarehouseCode ?? "001";
+                request.WarehouseCode = request.WarehouseCode ?? "";
         
                 // Model durumunu temizle - tüm doğrulama hatalarını görmezden gel
                 ModelState.Clear();
@@ -1061,4 +1061,6 @@ namespace ErpMobile.Api.Controllers
             }
         }
     }
+
+    // Raporlama endpointleri InvoiceReportController.cs dosyasına taşındı
 }

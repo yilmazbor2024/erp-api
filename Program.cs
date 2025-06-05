@@ -46,18 +46,18 @@ var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>(
         "http://edikravat.tr", 
         "https://edikravat.tr",
         "http://b2b.edikravat.tr", 
-        "https://b2b.edikravat.tr",
-        "*" // Tüm originlere izin ver (geçici çözüm için)
+        "https://b2b.edikravat.tr"
+        // Wildcard (*) kaldırıldı, çünkü CORS hatasına neden oluyor
     };
 
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.SetIsOriginAllowed(_ => true) // Tüm originlere izin ver
+        policy.AllowAnyOrigin() // Tüm originlere izin ver
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); 
+              .AllowAnyMethod();
+        // Not: AllowAnyOrigin ile AllowCredentials birlikte kullanılamaz
     });
 });
 builder.Services.AddControllers()

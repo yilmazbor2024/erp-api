@@ -36,6 +36,11 @@ namespace ErpMobile.Api.Models.Requests
         public string CustomerCode { get; set; }
 
         /// <summary>
+        /// Tedarikçi kodu
+        /// </summary>
+        public string VendorCode { get; set; }
+
+        /// <summary>
         /// Fatura numarası
         /// </summary>
         public string InvoiceNumber { get; set; }
@@ -59,5 +64,45 @@ namespace ErpMobile.Api.Models.Requests
         /// İşlem kodu (WS: Toptan Satış, BP: Toptan Alış, EP: Masraf Alış, EXP: Masraf Satış)
         /// </summary>
         public string ProcessCode { get; set; }
+
+        /// <summary>
+        /// Dil kodu
+        /// </summary>
+        public string LangCode { get; set; }
+
+        /// <summary>
+        /// Şirket kodu
+        /// </summary>
+        public string CompanyCode { get; set; }
+
+        /// <summary>
+        /// Mağaza kodu
+        /// </summary>
+        public string StoreCode { get; set; }
+
+        /// <summary>
+        /// Depo kodu
+        /// </summary>
+        public string WarehouseCode { get; set; }
+
+        /// <summary>
+        /// Tamamlandı mı?
+        /// </summary>
+        public bool? IsCompleted { get; set; }
+
+        /// <summary>
+        /// Askıya alındı mı?
+        /// </summary>
+        public bool? IsSuspended { get; set; }
+
+        /// <summary>
+        /// İade mi?
+        /// </summary>
+        public bool? IsReturn { get; set; }
+
+        /// <summary>
+        /// E-Fatura mı?
+        /// </summary>
+        public bool? IsEInvoice { get; set; }
     }
 } 

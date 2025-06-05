@@ -36,8 +36,6 @@ namespace ErpMobile.Api.Models.Invoice
         public decimal VatAmount { get; set; }
         public decimal TotalAmount { get; set; }
         public decimal Amount { get; set; }
-        public decimal LineNetAmount { get; set; }
-        public decimal LineTotalAmount { get; set; }
         
         // Para birimi bilgileri
         public string CurrencyCode { get; set; }

@@ -614,7 +614,7 @@ namespace ErpMobile.Api.Services
                         BanknoteBuyingRate = row["BanknoteBuyingRate"] != DBNull.Value ? Convert.ToDecimal(row["BanknoteBuyingRate"]) : null,
                         BanknoteSellingRate = row["BanknoteSellingRate"] != DBNull.Value ? Convert.ToDecimal(row["BanknoteSellingRate"]) : null,
                         BankForInformationPurposes = row["BankForInformationPurposes"] != DBNull.Value ? Convert.ToDecimal(row["BankForInformationPurposes"]) : null,
-                        Source = row["Source"]?.ToString()
+                        Source = row["Source"] != DBNull.Value ? row["Source"].ToString() : string.Empty
                     });
                 }
                 
