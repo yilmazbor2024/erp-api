@@ -51,7 +51,7 @@ namespace ErpMobile.Api.Repositories.Invoice
             _connectionString = _configuration.GetConnectionString("ErpConnection");
         }
 
-        // Fatura satırı oluşturma metodu
+      // Fatura satırı oluşturma metodu
         private async Task CreateInvoiceLineAsync(SqlConnection connection, SqlTransaction transaction, Guid invoiceHeaderId, CreateInvoiceDetailRequest detail, int sortOrder)
         {
             // InvoiceLineID için yeni bir GUID oluştur
@@ -64,28 +64,60 @@ namespace ErpMobile.Api.Repositories.Invoice
             INSERT INTO trInvoiceLine (
                 InvoiceLineID,
                 SortOrder,
-                ItemTypeCode,
                 ItemCode,
+                ItemTypeCode,
                 ColorCode,
                 ItemDim1Code,
                 ItemDim2Code,
                 ItemDim3Code,
                 Qty1,
                 Qty2,
+                SalespersonCode,
+                PaymentPlanCode,
+                PurchasePlanCode,
+                ReturnReasonCode,
+                UsedBarcode,
+                LineDescription,
                 VatCode,
                 VatRate,
                 PCTCode,
                 PCTRate,
+                LDisRate1,
+                LDisRate2,
+                LDisRate3,
+                LDisRate4,
+                LDisRate5,
+                ReserveLineID,
+                DispOrderLineID,
+                PickingLineID,
+                OrderLineID,
+                OrderAsnLineID,
+                OrderDeliveryDate,
                 DocCurrencyCode,
                 PriceCurrencyCode,
                 PriceExchangeRate,
                 Price,
+                InvoiceHeaderID,
+                ShipmentLineID,
+                PriceListLineID,
+                CostCenterCode,
+                SupportRequestHeaderID,
+                InvoiceLineSumID,
+                GLTypeCode,
+                ImportFileNumber,
+                ExportFileNumber,
+                InvoiceLineSerialSumID,
+                SerialNumber,
+                InvoiceLineBOMID,
                 BatchCode,
                 SectionCode,
-                OrderDeliveryDate,
+                PurchaseRequisitionLineID,
                 ManufactureDate,
+                IsImmutable,
                 ExpiryDate,
-                InvoiceHeaderID,
+                WithHoldingTaxTypeCode,
+                DOVCode,
+                InvoiceLineLinkedProductID,
                 CreatedUserName,
                 CreatedDate,
                 LastUpdatedUserName,
@@ -93,28 +125,60 @@ namespace ErpMobile.Api.Repositories.Invoice
             ) VALUES (
                 @InvoiceLineID,
                 @SortOrder,
-                @ItemTypeCode,
                 @ItemCode,
+                @ItemTypeCode,
                 @ColorCode,
                 @ItemDim1Code,
                 @ItemDim2Code,
                 @ItemDim3Code,
                 @Qty1,
                 @Qty2,
+                @SalespersonCode,
+                @PaymentPlanCode,
+                @PurchasePlanCode,
+                @ReturnReasonCode,
+                @UsedBarcode,
+                @LineDescription,
                 @VatCode,
                 @VatRate,
                 @PCTCode,
                 @PCTRate,
+                @LDisRate1,
+                @LDisRate2,
+                @LDisRate3,
+                @LDisRate4,
+                @LDisRate5,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                @OrderDeliveryDate,
                 @DocCurrencyCode,
                 @PriceCurrencyCode,
                 @PriceExchangeRate,
                 @Price,
+                @InvoiceHeaderID,
+                NULL,
+                NULL,
+                @CostCenterCode,
+                NULL,
+                @InvoiceLineSumID,
+                @GLTypeCode,
+                @ImportFileNumber,
+                @ExportFileNumber,
+                @InvoiceLineSerialSumID,
+                @SerialNumber,
+                @InvoiceLineBOMID,
                 @BatchCode,
                 @SectionCode,
-                @OrderDeliveryDate,
+                NULL,
                 @ManufactureDate,
+                @IsImmutable,
                 @ExpiryDate,
-                @InvoiceHeaderID,
+                @WithHoldingTaxTypeCode,
+                @DOVCode,
+                NULL,
                 @CreatedUserName,
                 GETDATE(),
                 @LastUpdatedUserName,
@@ -127,83 +191,101 @@ namespace ErpMobile.Api.Repositories.Invoice
                     // Zorunlu parametreler
                     command.Parameters.AddWithValue("@InvoiceLineID", invoiceLineId);
                     command.Parameters.AddWithValue("@SortOrder", sortOrder);
-                    command.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode.HasValue ? detail.ItemTypeCode.Value : (byte)1);
-
+                    
                     // ItemCode - zorunlu alan
                     var itemCode = !string.IsNullOrEmpty(detail.ItemCode) ? detail.ItemCode : "TEST001";
                     command.Parameters.AddWithValue("@ItemCode", itemCode);
-                    _logger.LogWarning($"ItemCode: {itemCode} kullanılıyor. Frontend'den gelen değer: {detail.ItemCode ?? "NULL"}");
+                    
+                    command.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode.HasValue ? detail.ItemTypeCode.Value : (byte)1);
 
                     // ColorCode - varsayılan STD
                     var colorCode = !string.IsNullOrEmpty(detail.ColorCode) ? detail.ColorCode : "STD";
                     command.Parameters.AddWithValue("@ColorCode", colorCode);
-                    _logger.LogInformation($"ColorCode: {colorCode} ekleniyor.");
 
                     // ItemDim1Code - varsayılan boş string
                     var itemDim1Code = !string.IsNullOrEmpty(detail.ItemDim1Code) ? detail.ItemDim1Code : "";
                     command.Parameters.AddWithValue("@ItemDim1Code", itemDim1Code);
-                    _logger.LogInformation($"ItemDim1Code: {itemDim1Code} ekleniyor.");
 
                     // ItemDim2Code - varsayılan boş string
                     var itemDim2Code = !string.IsNullOrEmpty(detail.ItemDim2Code) ? detail.ItemDim2Code : "";
                     command.Parameters.AddWithValue("@ItemDim2Code", itemDim2Code);
-                    _logger.LogInformation($"ItemDim2Code: {itemDim2Code} ekleniyor.");
 
                     // ItemDim3Code - varsayılan boş string
                     var itemDim3Code = !string.IsNullOrEmpty(detail.ItemDim3Code) ? detail.ItemDim3Code : "";
                     command.Parameters.AddWithValue("@ItemDim3Code", itemDim3Code);
-                    _logger.LogInformation($"ItemDim3Code: {itemDim3Code} ekleniyor.");
 
                     // Miktar bilgileri - zorunlu
                     command.Parameters.AddWithValue("@Qty1", detail.Qty);
                     command.Parameters.AddWithValue("@Qty2", 0); // Qty2 her zaman 0 olarak ayarla
 
+                    // Yeni eklenen alanlar
+                    command.Parameters.AddWithValue("@SalespersonCode", "");
+                    command.Parameters.AddWithValue("@PaymentPlanCode", "");
+                    command.Parameters.AddWithValue("@PurchasePlanCode", "");
+                    command.Parameters.AddWithValue("@ReturnReasonCode", "");
+                    command.Parameters.AddWithValue("@UsedBarcode", "");
+                    
+                    // LineDescription
+                    var lineDescription = !string.IsNullOrEmpty(detail.Description) ? detail.Description : "";
+                    command.Parameters.AddWithValue("@LineDescription", lineDescription);
+
                     // KDV bilgileri - VatCode %VatRate formatında olmalı
                     var vatCode = "%" + detail.VatRate;
                     command.Parameters.AddWithValue("@VatCode", vatCode);
                     command.Parameters.AddWithValue("@VatRate", detail.VatRate);
-                    _logger.LogInformation($"VatCode: {vatCode}, VatRate: {detail.VatRate} ekleniyor.");
 
                     // PCTCode ve PCTRate
                     command.Parameters.AddWithValue("@PCTCode", "%0");
                     command.Parameters.AddWithValue("@PCTRate", 0);
-                    _logger.LogInformation($"PCTCode: %0, PCTRate: 0 ekleniyor.");
 
-                    // Para birimi ve fiyat bilgileri - Formdan seçilen para birimi kullanılacak
-                    // DocCurrencyCode - Formdan seçilen para birimi
-                    var docCurrencyCode = !string.IsNullOrEmpty(detail.CurrencyCode) ? detail.CurrencyCode : "TRY";
-                    command.Parameters.AddWithValue("@DocCurrencyCode", docCurrencyCode);
-                    _logger.LogInformation($"Invoice Line DocCurrencyCode: {docCurrencyCode} kullanılıyor.");
-
-                    // PriceCurrencyCode - Formdan seçilen para birimi
-                    var priceCurrencyCode = !string.IsNullOrEmpty(detail.PriceCurrencyCode) ? detail.PriceCurrencyCode : docCurrencyCode;
-                    command.Parameters.AddWithValue("@PriceCurrencyCode", priceCurrencyCode);
-                    _logger.LogInformation($"Invoice Line PriceCurrencyCode: {priceCurrencyCode} kullanılıyor.");
-
-                    // PriceExchangeRate - Fiyat listesinden gelirse 1 olacak
-                    var priceExchangeRate = 1.0m; // Varsayılan değer 1
-                    command.Parameters.AddWithValue("@PriceExchangeRate", priceExchangeRate);
-                    _logger.LogInformation($"Invoice Line PriceExchangeRate: {priceExchangeRate} kullanılıyor.");
-
-                    command.Parameters.AddWithValue("@Price", detail.UnitPrice);
-
-                    // BatchCode ve SectionCode için boş string kullan
-                    var batchCode = !string.IsNullOrEmpty(detail.BatchCode) ? detail.BatchCode : "";
-                    command.Parameters.AddWithValue("@BatchCode", batchCode);
-                    _logger.LogInformation($"BatchCode: {batchCode} ekleniyor.");
-
-                    var sectionCode = !string.IsNullOrEmpty(detail.SectionCode) ? detail.SectionCode : "";
-                    command.Parameters.AddWithValue("@SectionCode", sectionCode);
-                    _logger.LogInformation($"SectionCode: {sectionCode} ekleniyor.");
+                    // İndirim oranları
+                    command.Parameters.AddWithValue("@LDisRate1", 0);
+                    command.Parameters.AddWithValue("@LDisRate2", 0);
+                    command.Parameters.AddWithValue("@LDisRate3", 0);
+                    command.Parameters.AddWithValue("@LDisRate4", 0);
+                    command.Parameters.AddWithValue("@LDisRate5", 0);
 
                     // Tarih alanları için sabit tarih kullan (1900-01-01)
                     var defaultDate = new DateTime(1900, 1, 1);
                     command.Parameters.AddWithValue("@OrderDeliveryDate", defaultDate);
-                    command.Parameters.AddWithValue("@ManufactureDate", defaultDate);
-                    command.Parameters.AddWithValue("@ExpiryDate", defaultDate); // Son kullanma tarihi de aynı
 
+                    // Para birimi ve fiyat bilgileri
+                    var docCurrencyCode = !string.IsNullOrEmpty(detail.CurrencyCode) ? detail.CurrencyCode : "TRY";
+                    command.Parameters.AddWithValue("@DocCurrencyCode", docCurrencyCode);
+
+                    var priceCurrencyCode = !string.IsNullOrEmpty(detail.PriceCurrencyCode) ? detail.PriceCurrencyCode : docCurrencyCode;
+                    command.Parameters.AddWithValue("@PriceCurrencyCode", priceCurrencyCode);
+
+                    var priceExchangeRate = detail.ExchangeRate.HasValue ? detail.ExchangeRate.Value : 1.0m;
+                    command.Parameters.AddWithValue("@PriceExchangeRate", priceExchangeRate);
+
+                    command.Parameters.AddWithValue("@Price", detail.UnitPrice);
+                    
                     // Fatura başlık ID'si - zorunlu
                     command.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
+
+                    // Yeni eklenen alanlar
+                    command.Parameters.AddWithValue("@CostCenterCode", "");
+                    command.Parameters.AddWithValue("@InvoiceLineSumID", 0);
+                    command.Parameters.AddWithValue("@GLTypeCode", "");
+                    command.Parameters.AddWithValue("@ImportFileNumber", "");
+                    command.Parameters.AddWithValue("@ExportFileNumber", "");
+                    command.Parameters.AddWithValue("@InvoiceLineSerialSumID", 0);
+                    command.Parameters.AddWithValue("@SerialNumber", "");
+                    command.Parameters.AddWithValue("@InvoiceLineBOMID", 0);
+
+                    // BatchCode ve SectionCode için boş string kullan
+                    var batchCode = !string.IsNullOrEmpty(detail.BatchCode) ? detail.BatchCode : "";
+                    command.Parameters.AddWithValue("@BatchCode", batchCode);
+
+                    var sectionCode = !string.IsNullOrEmpty(detail.SectionCode) ? detail.SectionCode : "";
+                    command.Parameters.AddWithValue("@SectionCode", sectionCode);
+
+                    command.Parameters.AddWithValue("@ManufactureDate", defaultDate);
+                    command.Parameters.AddWithValue("@IsImmutable", false);
+                    command.Parameters.AddWithValue("@ExpiryDate", defaultDate);
+                    command.Parameters.AddWithValue("@WithHoldingTaxTypeCode", "");
+                    command.Parameters.AddWithValue("@DOVCode", "");
 
                     // Oluşturma ve güncelleme bilgileri
                     command.Parameters.AddWithValue("@CreatedUserName", "API");
@@ -221,6 +303,112 @@ namespace ErpMobile.Api.Repositories.Invoice
 
                     // Sorguyu çalıştır
                     await command.ExecuteNonQueryAsync();
+
+                    // Fatura satırı oluşturduktan sonra, trInvoiceLineCurrency tablosuna da kayıt ekleyelim
+                    var invoiceLineCurrencySql = @"
+                    MERGE [trInvoiceLineCurrency]
+                    USING(SELECT [InvoiceLineID] = @InvoiceLineID,
+                    [CurrencyCode] = @CurrencyCode
+                    ) AS TBNA
+                    ON (([trInvoiceLineCurrency].[InvoiceLineID] = @InvoiceLineID)
+                    AND ([trInvoiceLineCurrency].[CurrencyCode] = @CurrencyCode)
+                    AND ([trInvoiceLineCurrency].[InvoiceLineID] = [TBNA].[InvoiceLineID])
+                    AND ([trInvoiceLineCurrency].[CurrencyCode] = [TBNA].[CurrencyCode]))
+                    WHEN MATCHED THEN UPDATE SET
+                    [trInvoiceLineCurrency].[ExchangeRate] = @ExchangeRate
+                    ,[trInvoiceLineCurrency].[RelationCurrencyCode] = @RelationCurrencyCode
+                    ,[trInvoiceLineCurrency].[PriceVI] = @PriceVI
+                    ,[trInvoiceLineCurrency].[AmountVI] = @AmountVI
+                    ,[trInvoiceLineCurrency].[Price] = @Price
+                    ,[trInvoiceLineCurrency].[Amount] = @Amount
+                    ,[trInvoiceLineCurrency].[LDiscount1] = @LDiscount1
+                    ,[trInvoiceLineCurrency].[LDiscount2] = @LDiscount2
+                    ,[trInvoiceLineCurrency].[LDiscount3] = @LDiscount3
+                    ,[trInvoiceLineCurrency].[LDiscount4] = @LDiscount4
+                    ,[trInvoiceLineCurrency].[LDiscount5] = @LDiscount5
+                    ,[trInvoiceLineCurrency].[TDiscount1] = @TDiscount1
+                    ,[trInvoiceLineCurrency].[TDiscount2] = @TDiscount2
+                    ,[trInvoiceLineCurrency].[TDiscount3] = @TDiscount3
+                    ,[trInvoiceLineCurrency].[TDiscount4] = @TDiscount4
+                    ,[trInvoiceLineCurrency].[TDiscount5] = @TDiscount5
+                    ,[trInvoiceLineCurrency].[LDiscountVI1] = @LDiscountVI1
+                    ,[trInvoiceLineCurrency].[LDiscountVI2] = @LDiscountVI2
+                    ,[trInvoiceLineCurrency].[LDiscountVI3] = @LDiscountVI3
+                    ,[trInvoiceLineCurrency].[LDiscountVI4] = @LDiscountVI4
+                    ,[trInvoiceLineCurrency].[LDiscountVI5] = @LDiscountVI5
+                    ,[trInvoiceLineCurrency].[TDiscountVI1] = @TDiscountVI1
+                    ,[trInvoiceLineCurrency].[TDiscountVI2] = @TDiscountVI2
+                    ,[trInvoiceLineCurrency].[TDiscountVI3] = @TDiscountVI3
+                    ,[trInvoiceLineCurrency].[TDiscountVI4] = @TDiscountVI4
+                    ,[trInvoiceLineCurrency].[TDiscountVI5] = @TDiscountVI5
+                    ,[trInvoiceLineCurrency].[TaxBase] = @TaxBase
+                    ,[trInvoiceLineCurrency].[Pct] = @Pct
+                    ,[trInvoiceLineCurrency].[Vat] = @Vat
+                    ,[trInvoiceLineCurrency].[VatDeducation] = @VatDeducation
+                    ,[trInvoiceLineCurrency].[NetAmount] = @NetAmount
+                    ,[trInvoiceLineCurrency].[StoppageAmount] = @StoppageAmount
+                    ,[trInvoiceLineCurrency].[LastUpdatedUserName] = @LastUpdatedUserName
+                    ,[trInvoiceLineCurrency].[LastUpdatedDate] = GETDATE()
+
+                    WHEN NOT MATCHED THEN INSERT([InvoiceLineID], [CurrencyCode], [ExchangeRate], [RelationCurrencyCode], [PriceVI], [AmountVI], [Price], [Amount], [LDiscount1], [LDiscount2], [LDiscount3], [LDiscount4], [LDiscount5], [TDiscount1], [TDiscount2], [TDiscount3], [TDiscount4], [TDiscount5], [LDiscountVI1], [LDiscountVI2], [LDiscountVI3], [LDiscountVI4], [LDiscountVI5], [TDiscountVI1], [TDiscountVI2], [TDiscountVI3], [TDiscountVI4], [TDiscountVI5], [TaxBase], [Pct], [Vat], [VatDeducation], [NetAmount], [StoppageAmount], [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
+                    VALUES(@InvoiceLineID, @CurrencyCode, @ExchangeRate, @RelationCurrencyCode, @PriceVI, @AmountVI, @Price, @Amount, @LDiscount1, @LDiscount2, @LDiscount3, @LDiscount4, @LDiscount5, @TDiscount1, @TDiscount2, @TDiscount3, @TDiscount4, @TDiscount5, @LDiscountVI1, @LDiscountVI2, @LDiscountVI3, @LDiscountVI4, @LDiscountVI5, @TDiscountVI1, @TDiscountVI2, @TDiscountVI3, @TDiscountVI4, @TDiscountVI5, @TaxBase, @Pct, @Vat, @VatDeducation, @NetAmount, @StoppageAmount, @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE());";
+
+                    using (var currencyCommand = new SqlCommand(invoiceLineCurrencySql, connection, transaction))
+                    {
+                        // Temel parametreler
+                        currencyCommand.Parameters.AddWithValue("@InvoiceLineID", invoiceLineId);
+                        currencyCommand.Parameters.AddWithValue("@CurrencyCode", docCurrencyCode);
+                        currencyCommand.Parameters.AddWithValue("@ExchangeRate", priceExchangeRate);
+                        currencyCommand.Parameters.AddWithValue("@RelationCurrencyCode", docCurrencyCode);
+                        
+                        // Fiyat ve tutar bilgileri
+                        decimal price = detail.UnitPrice;
+                        decimal amount = detail.UnitPrice * detail.Qty;
+                        
+                        currencyCommand.Parameters.AddWithValue("@PriceVI", 0);
+                        currencyCommand.Parameters.AddWithValue("@AmountVI", 0);
+                        currencyCommand.Parameters.AddWithValue("@Price", price);
+                        currencyCommand.Parameters.AddWithValue("@Amount", amount);
+                        
+                        // İndirim bilgileri
+                        currencyCommand.Parameters.AddWithValue("@LDiscount1", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscount2", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscount3", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscount4", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscount5", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscount1", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscount2", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscount3", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscount4", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscount5", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscountVI1", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscountVI2", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscountVI3", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscountVI4", 0);
+                        currencyCommand.Parameters.AddWithValue("@LDiscountVI5", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscountVI1", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscountVI2", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscountVI3", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscountVI4", 0);
+                        currencyCommand.Parameters.AddWithValue("@TDiscountVI5", 0);
+                        
+                        // Vergi bilgileri
+                        decimal vatAmount = amount * detail.VatRate / 100;
+                        
+                        currencyCommand.Parameters.AddWithValue("@TaxBase", amount);
+                        currencyCommand.Parameters.AddWithValue("@Pct", 0);
+                        currencyCommand.Parameters.AddWithValue("@Vat", vatAmount);
+                        currencyCommand.Parameters.AddWithValue("@VatDeducation", 0);
+                        currencyCommand.Parameters.AddWithValue("@NetAmount", amount);
+                        currencyCommand.Parameters.AddWithValue("@StoppageAmount", 0);
+                        
+                        // Kullanıcı bilgileri
+                        currencyCommand.Parameters.AddWithValue("@CreatedUserName", "API");
+                        currencyCommand.Parameters.AddWithValue("@LastUpdatedUserName", "API");
+                        
+                        // Sorguyu çalıştır
+                        await currencyCommand.ExecuteNonQueryAsync();
+                    }
                 }
             }
             catch (Exception ex)
