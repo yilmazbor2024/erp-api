@@ -25,6 +25,10 @@ using ErpMobile.Api.Models.Product;
 using ErpMobile.Api.Repositories.Inventory;
 using ErpMobile.Api.Models.Inventory;
 using ErpMobile.Api.Services.Interfaces;
+using ErpMobile.Api.Repositories.CashAccount;
+using ErpMobile.Api.Services.CashAccount;
+using ErpMobile.Api.Repositories.CashTransaction;
+using ErpMobile.Api.Services.CashTransaction;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -212,6 +216,8 @@ builder.Services.AddAuthentication(options =>
 // Normal JWT doğrulaması kullanılıyor
 
 // Register Services
+// Dapper için context ekleme
+builder.Services.AddScoped<DapperContext>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
@@ -279,6 +285,24 @@ builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 // Geçici Müşteri Token Servisi
 builder.Services.AddScoped<TempCustomerTokenService>();
 builder.Services.AddScoped<ITokenValidationService, TempCustomerTokenService>();
+
+// DapperContext kaydı
+builder.Services.AddSingleton<ErpMobile.Api.Data.DapperContext>();
+
+// Kasa Hesapları Servisleri
+builder.Services.AddScoped<ICashAccountRepository, CashAccountRepository>();
+builder.Services.AddScoped<ICashAccountService, CashAccountService>();
+builder.Services.AddScoped<ICashTransactionRepository, CashTransactionRepository>();
+builder.Services.AddScoped<ICashTransactionService, CashTransactionService>();
+builder.Services.AddScoped<ICashService, CashService>();
+
+// Ödeme Servisi
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 var app = builder.Build();
 

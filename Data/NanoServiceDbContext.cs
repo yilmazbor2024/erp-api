@@ -3,7 +3,11 @@ using ErpMobile.Api.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ErpMobile.Api.Models;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace ErpMobile.Api.Data;
@@ -16,6 +20,7 @@ public class NanoServiceDbContext : IdentityDbContext<User, Role, string>
 
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
     public DbSet<MenuItem> MenuItems { get; set; } = null!;
+    public DbSet<TempCustomerToken> TempCustomerTokens { get; set; } = null!;
     public DbSet<UserGroup> UserGroups { get; set; } = null!;
     public DbSet<ModulePermission> ModulePermissions { get; set; } = null!;
 

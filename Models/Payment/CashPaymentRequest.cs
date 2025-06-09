@@ -9,6 +9,8 @@ namespace ErpMobile.Api.Models.Payment
         [Required]
         public Guid InvoiceHeaderID { get; set; }
         
+
+        
         [Required]
         public string CurrencyCode { get; set; } = "TRY";
         

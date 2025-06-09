@@ -19,10 +19,12 @@ namespace ErpMobile.Api.Repositories.Invoice
         {
             try
             {
+                // Fatura numaralarını doğru sıralamak için SQL sorgusunu değiştiriyoruz
+                // InvoiceNumber formatı: WS-7-X şeklinde olduğundan, son kısmı sayısal olarak sıralıyoruz
                 string sql = @"SELECT TOP 1 InvoiceNumber 
                     FROM trInvoiceHeader WITH (NOLOCK) 
                     WHERE ProcessCode = @ProcessCode 
-                    ORDER BY InvoiceHeaderID DESC";
+                    ORDER BY CreatedDate DESC ";
 
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
@@ -497,7 +499,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@ProcessCode", invoiceHeader.ProcessCode);
                     
                     // InvoiceNumber - Otomatik en son kullanılan bulunacak
-                    // Örnek: 1-WS-7-5 ise bir sonraki 1-WS-7-6 olacak
+                    // Örnek: WS-7-5 ise bir sonraki WS-7-6 olacak
                     command.Parameters.AddWithValue("@InvoiceNumber", invoiceHeader.InvoiceNumber);
                     
                     // IsReturn - İade faturası ise true
@@ -842,29 +844,83 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Fatura numarasını parse et (format: WS-7-217 gibi)
                 string[] parts = lastInvoiceNumber.Split('-');
                 
-                // Format en az 3 parçadan oluşmalı (WS-7-217 gibi)
-                if (parts.Length >= 3)
+                // Formatı kontrol et ve düzenle
+                string prefix;
+                int lastNumber = 0;
+                
+                // "1-WS-7-217" formatındaki numaraları "WS-7-217" formatına dönüştür
+                if (parts.Length > 3 && parts[0] == "1" && parts[1] == processCode)
                 {
-                    // Son kısmı sayı olarak parse et
-                    if (int.TryParse(parts[parts.Length - 1], out int lastNumber))
+                    // "1-WS-7-217" formatını "WS-7-217" formatına dönüştür
+                    prefix = $"{parts[1]}-{parts[2]}";
+                    if (int.TryParse(parts[3], out lastNumber))
                     {
                         // Son numarayı bir artır
                         int nextNumber = lastNumber + 1;
-                        
-                        // İlk iki kısmı (WS-7) sabit tut, son kısmı artır
-                        string prefix = string.Join("-", parts.Take(parts.Length - 1));
+                        return $"{prefix}-{nextNumber}";
+                    }
+                }
+                // Normal format (WS-7-217 gibi)
+                else if (parts.Length >= 3 && parts[0] == processCode)
+                {
+                    prefix = $"{parts[0]}-{parts[1]}";
+                    if (int.TryParse(parts[parts.Length - 1], out lastNumber))
+                    {
+                        // Son numarayı bir artır
+                        int nextNumber = lastNumber + 1;
                         return $"{prefix}-{nextNumber}";
                     }
                 }
                 
-                // Format uygun değilse, varsayılan formatı oluştur
-                return $"{processCode}-7-1";
+                // Oluşturulan fatura numarasının benzersiz olduğunu kontrol et
+                string newInvoiceNumber = $"{processCode}-7-{(lastNumber > 0 ? lastNumber + 1 : 1)}";
+                
+                // Veritabanında bu numaranın var olup olmadığını kontrol et
+                bool exists = await CheckInvoiceNumberExistsAsync(newInvoiceNumber);
+                
+                // Eğer numara zaten varsa, benzersiz bir numara bulana kadar artır
+                int attempt = 1;
+                while (exists && attempt < 100) // Sonsuz döngüye girmemek için maksimum 100 deneme
+                {
+                    lastNumber++;
+                    newInvoiceNumber = $"{processCode}-7-{lastNumber}";
+                    exists = await CheckInvoiceNumberExistsAsync(newInvoiceNumber);
+                    attempt++;
+                }
+                
+                return newInvoiceNumber;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Otomatik fatura numarası oluşturulurken hata oluştu");
-                // Hata durumunda varsayılan bir numara dön
-                return $"{processCode}-7-1";
+                // Hata durumunda benzersiz bir numara oluştur
+                string uniqueNumber = $"{processCode}-7-{DateTime.Now.Ticks % 10000}";
+                return uniqueNumber;
+            }
+        }
+        
+        // Fatura numarasının veritabanında var olup olmadığını kontrol eden metot
+        private async Task<bool> CheckInvoiceNumberExistsAsync(string invoiceNumber)
+        {
+            try
+            {
+                string sql = @"SELECT COUNT(1) 
+                    FROM trInvoiceHeader WITH (NOLOCK) 
+                    WHERE InvoiceNumber = @InvoiceNumber";
+
+                using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
+                {
+                    await connection.OpenAsync();
+                    var command = new SqlCommand(sql, connection);
+                    command.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber);
+                    var result = await command.ExecuteScalarAsync();
+                    return Convert.ToInt32(result) > 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Fatura numarası kontrol edilirken hata oluştu: {invoiceNumber}");
+                return false; // Hata durumunda false dön
             }
         }
     }

@@ -56,16 +56,45 @@ namespace ErpMobile.Api.Services
                             // 3. Kasa başlık kaydı oluştur
                             var insertCashHeaderSql = @"
                             INSERT INTO [trCashHeader]
-                            ([CashHeaderID], [DocumentDate], [DocumentTime], [CashNumber], [DocumentNumber],
-                            [RefNumber], [DueDate], [StoreCode], [CurrAccCode], [CurrAccTypeCode],
-                            [Description], [GLTypeCode], [DocCurrencyCode], [LocalCurrencyCode], [ExchangeRate],
-                            [OfficeCode], [IsCompleted], [IsPrinted], [IsLocked], [CompanyCode],
-                            [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
-                            VALUES (@CashHeaderID, @DocumentDate, @DocumentTime, @CashNumber, @DocumentNumber,
-                            @RefNumber, @DueDate, @StoreCode, @CurrAccCode, @CurrAccTypeCode,
-                            @Description, @GLTypeCode, @DocCurrencyCode, @LocalCurrencyCode, @ExchangeRate,
-                            @OfficeCode, @IsCompleted, @IsPrinted, @IsLocked, @CompanyCode,
-                            @UserName, GETDATE(), @UserName, GETDATE())";
+                            ([trCashHeader].[CashHeaderID]                                                   
+                            ,[trCashHeader].[CashTransTypeCode]                                              
+                            ,[trCashHeader].[CashTransNumber]                                                
+                            ,[trCashHeader].[DocumentDate]                                                   
+                            ,[trCashHeader].[DocumentTime]                                                   
+                            ,[trCashHeader].[DocumentNumber]                                                 
+                            ,[trCashHeader].[RefNumber]                                                      
+                            ,[trCashHeader].[PosTerminalID]                                                  
+                            ,[trCashHeader].[Description]                                                    
+                            ,[trCashHeader].[CashCurrAccCode]                                                
+                            ,[trCashHeader].[CashCurrAccTypeCode]                                            
+                            ,[trCashHeader].[StoreCode]                                                      
+                            ,[trCashHeader].[GLTypeCode]                                                     
+                            ,[trCashHeader].[DocCurrencyCode]                                                
+                            ,[trCashHeader].[LocalCurrencyCode]                                              
+                            ,[trCashHeader].[ExchangeRate]                                                   
+                            ,[trCashHeader].[ImportFileNumber]                                               
+                            ,[trCashHeader].[ExportFileNumber]                                               
+                            ,[trCashHeader].[IsPostingApproved]                                              
+                            ,[trCashHeader].[JournalDate]                                                    
+                            ,[trCashHeader].[IsPostingJournal]                                               
+                            ,[trCashHeader].[OfficeCode]                                                     
+                            ,[trCashHeader].[ApplicationCode]                                                
+                            ,[trCashHeader].[ApplicationID]                                                  
+                            ,[trCashHeader].[IsCompleted]                                                    
+                            ,[trCashHeader].[IsPrinted]                                                      
+                            ,[trCashHeader].[IsLocked]                                                       
+                            ,[trCashHeader].[CompanyCode]                                                    
+                            ,[trCashHeader].[CreatedUserName]                                                
+                            ,[trCashHeader].[CreatedDate]                                                    
+                            ,[trCashHeader].[LastUpdatedUserName]                                            
+                            ,[trCashHeader].[LastUpdatedDate]                                                
+                            )
+                            VALUES (@CashHeaderID, @CashTransTypeCode, @CashTransNumber, @DocumentDate, @DocumentTime,
+                            @DocumentNumber, @RefNumber, @PosTerminalID, @Description, @CashCurrAccCode,
+                            @CashCurrAccTypeCode, @StoreCode, @GLTypeCode, @DocCurrencyCode, @LocalCurrencyCode,
+                            @ExchangeRate, @ImportFileNumber, @ExportFileNumber, @IsPostingApproved, @JournalDate,
+                            @IsPostingJournal, @OfficeCode, @ApplicationCode, @ApplicationID, @IsCompleted,
+                            @IsPrinted, @IsLocked, @CompanyCode, @UserName, GETDATE(), @UserName, GETDATE())";
 
                             var today = DateTime.Now;
                             var documentTime = TimeSpan.FromHours(today.Hour) + TimeSpan.FromMinutes(today.Minute) + TimeSpan.FromSeconds(today.Second);
@@ -75,42 +104,92 @@ namespace ErpMobile.Api.Services
                                 CashHeaderID = cashHeaderId,
                                 DocumentDate = today.Date,
                                 DocumentTime = documentTime,
-                                CashNumber = refNumber,
                                 DocumentNumber = "0",
-                                RefNumber = refNumber,
+                                CashTransNumber = "",
+                                PosTerminalID = 0,
+                                CashTransTypeCode = 1,
+                                CashCurrAccCode = request.CurrAccCode,
+                                CashCurrAccTypeCode = request.CurrAccTypeCode,
+                                Description = request.Description ?? "",
+                                RefNumber = request.InvoiceHeaderID,
                                 DueDate = today.Date,
                                 StoreCode = request.StoreCode ?? "",
-                                CurrAccCode = request.CurrAccCode,
-                                CurrAccTypeCode = request.CurrAccTypeCode,
-                                Description = request.Description ?? "",
                                 GLTypeCode = request.GLTypeCode ?? "",
                                 DocCurrencyCode = request.CurrencyCode,
                                 LocalCurrencyCode = "TRY",
                                 ExchangeRate = 1.0,
+                                ImportFileNumber = "",
+                                ExportFileNumber = "",
+                                IsPostingApproved = false,
+                                JournalDate = today.Date,
+                                IsPostingJournal = false,
                                 OfficeCode = request.OfficeCode,
+                                ApplicationCode = "",
+                                ApplicationID = 0,
                                 IsCompleted = true,
                                 IsPrinted = false,
                                 IsLocked = false,
                                 CompanyCode = 1,
+                                CreatedUserName = userName,
+                                CreatedDate = today,
+                                LastUpdatedUserName = userName,
+                                LastUpdatedDate = today,
                                 UserName = userName
                             }, transaction);
 
                             // 4. Kasa satır kaydı oluştur
                             var insertCashLineSql = @"
-                            INSERT INTO [trCashLine]
-                            ([CashLineID], [CashTransTypeCode], [LineDescription], [DocCurrencyCode],
-                            [CashHeaderID], [SortOrder], [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
-                            VALUES (@CashLineID, @CashTransTypeCode, @LineDescription, @DocCurrencyCode,
-                            @CashHeaderID, @SortOrder, @UserName, GETDATE(), @UserName, GETDATE())";
+                             INSERT INTO [trCashLine]
+                            ([trCashLine].[CashLineID]                                                       
+                            ,[trCashLine].[CurrAccCode]                                                      
+                            ,[trCashLine].[CurrAccTypeCode]                                                  
+                            ,[trCashLine].[SubCurrAccID]                                                     
+                            ,[trCashLine].[ContactID]                                                        
+                            ,[trCashLine].[LineDescription]                                                  
+                            ,[trCashLine].[DocCurrencyCode]                                                  
+                            ,[trCashLine].[CashHeaderID]                                                     
+                            ,[trCashLine].[SortOrder]                                                        
+                            ,[trCashLine].[EmployeePayTypeCode]                                              
+                            ,[trCashLine].[GLAccCode]                                                        
+                            ,[trCashLine].[CompanyCode]                                                      
+                            ,[trCashLine].[CostCenterCode]                                                   
+                            ,[trCashLine].[GLTypeCode]                                                       
+                            ,[trCashLine].[ImportFileNumber]                                                 
+                            ,[trCashLine].[ExportFileNumber]                                                 
+                            ,[trCashLine].[CurrAccCurrencyCode]                                              
+                            ,[trCashLine].[CurrAccExchangeRate]                                              
+                            ,[trCashLine].[CurrAccAmount]                                                    
+                            ,[trCashLine].[CreatedUserName]                                                  
+                            ,[trCashLine].[CreatedDate]                                                      
+                            ,[trCashLine].[LastUpdatedUserName]                                              
+                            ,[trCashLine].[LastUpdatedDate]                                                  
+                            )
+                            VALUES (@CashLineID, @CurrAccCode, @CurrAccTypeCode, @SubCurrAccID, @ContactID,
+                            @LineDescription, @DocCurrencyCode, @CashHeaderID, @SortOrder, @EmployeePayTypeCode,
+                            @GLAccCode, @CompanyCode, @CostCenterCode, @GLTypeCode, @ImportFileNumber, @ExportFileNumber,
+                            @CurrAccCurrencyCode, @CurrAccExchangeRate, @CurrAccAmount, @UserName, GETDATE(), @UserName, GETDATE())";
 
                             await connection.ExecuteAsync(insertCashLineSql, new
                             {
                                 CashLineID = cashLineId,
-                                CashTransTypeCode = 1, // Nakit tahsilat
+                                CurrAccCode = request.CurrAccCode,
+                                CurrAccTypeCode = request.CurrAccTypeCode,
+                                SubCurrAccID = (Guid?)null,
+                                ContactID = (Guid?)null,
                                 LineDescription = request.Description ?? "",
                                 DocCurrencyCode = request.CurrencyCode,
                                 CashHeaderID = cashHeaderId,
                                 SortOrder = 1,
+                                EmployeePayTypeCode = (byte?)null,
+                                GLAccCode = "",
+                                CompanyCode = 1,
+                                CostCenterCode = "",
+                                GLTypeCode = request.GLTypeCode ?? "",
+                                ImportFileNumber = "",
+                                ExportFileNumber = "",
+                                CurrAccCurrencyCode = request.CurrencyCode,
+                                CurrAccExchangeRate = 1.0,
+                                CurrAccAmount = request.Amount,
                                 UserName = userName
                             }, transaction);
 
