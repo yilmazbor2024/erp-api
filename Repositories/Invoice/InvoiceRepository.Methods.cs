@@ -142,6 +142,8 @@ namespace ErpMobile.Api.Repositories.Invoice
                     CurrAccCode = request.CustomerCode, // CurrAccCode parametresi için CustomerCode kullanılıyor
                     CurrAccTypeCode = 2, // Müşteri
                     DocCurrencyCode = docCurrencyCode, // Para birimi kodu eklendi
+                    LocalCurrencyCode = request.LocalCurrencyCode, // Yerel para birimi kodu eklendi
+                    ExchangeRate = request.ExchangeRate, // Döviz kuru eklendi
                     ShippingPostalAddressID = request.ShippingPostalAddressID.ToString(), // Teslimat adresi ID'si
                     BillingPostalAddressID = request.BillingPostalAddressID.ToString(), // Fatura adresi ID'si
                     ShipmentMethodCode = request.ShipmentMethodCode, // Sevkiyat yöntemi kodu (opsiyonel)
@@ -149,6 +151,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now
                 };
+                
+                // Döviz bilgilerini logla
+                _logger.LogInformation($"DocCurrencyCode: {docCurrencyCode}, LocalCurrencyCode: {request.LocalCurrencyCode}, ExchangeRate: {request.ExchangeRate}");
 
                 // Adres bilgilerini logla
                 _logger.LogInformation($"Fatura için müşteri teslimat adresi ID: {request.ShippingPostalAddressID}");
