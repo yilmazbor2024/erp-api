@@ -64,7 +64,11 @@ namespace ErpMobile.Api.Models.Invoice
         [Required]
         public string DocCurrencyCode { get; set; }
         
-        public decimal? ExchangeRate { get; set; }
+        [Required]
+        public string LocalCurrencyCode { get; set; }
+        
+        [Required]
+        public decimal ExchangeRate { get; set; }
         
         public string Series { get; set; }
         

@@ -8,6 +8,7 @@ using System.IO;
 using Microsoft.Extensions.Logging;
 using ErpMobile.Api.Models.Invoice;
 using ErpMobile.Api.Models.Common;
+using System.Text;
 
 namespace ErpMobile.Api.Repositories.Invoice
 {
@@ -413,8 +414,12 @@ namespace ErpMobile.Api.Repositories.Invoice
 
             try
             {
-                // Sabit SQL sorgusu kullanarak tüm gerekli alanları ekle
-                var sql = @"
+                // ShipmentMethodCode NULL ise SQL sorgusundan çıkar
+                bool includeShipmentMethodCode = !string.IsNullOrEmpty(invoiceHeader.ShipmentMethodCode);
+                
+                // Dinamik SQL sorgusu oluştur
+                StringBuilder sqlBuilder = new StringBuilder();
+                sqlBuilder.Append(@"
                     INSERT INTO trInvoiceHeader (
                         InvoiceHeaderID,
                         TransTypeCode,
@@ -430,8 +435,15 @@ namespace ErpMobile.Api.Repositories.Invoice
                         CurrAccTypeCode,
                         CurrAccCode,
                         ShippingPostalAddressID,
-                        BillingPostalAddressID,
-                        ShipmentMethodCode,
+                        BillingPostalAddressID,");
+                
+                if (includeShipmentMethodCode)
+                {
+                    sqlBuilder.Append(@"
+                        ShipmentMethodCode,");
+                }
+                
+                sqlBuilder.Append(@"
                         TaxExemptionCode,
                         CompanyCode,
                         OfficeCode,
@@ -463,8 +475,15 @@ namespace ErpMobile.Api.Repositories.Invoice
                         @CurrAccTypeCode,
                         @CurrAccCode,
                         @ShippingPostalAddressID,
-                        @BillingPostalAddressID,
-                        @ShipmentMethodCode,
+                        @BillingPostalAddressID,");
+                
+                if (includeShipmentMethodCode)
+                {
+                    sqlBuilder.Append(@"
+                        @ShipmentMethodCode,");
+                }
+                
+                sqlBuilder.Append(@"
                         @TaxExemptionCode,
                         @CompanyCode,
                         @OfficeCode,
@@ -481,7 +500,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                         GETDATE(),
                         @LastUpdatedUserName,
                         GETDATE()
-                    )";
+                    )");
+                
+                var sql = sqlBuilder.ToString();
 
                 // SQL komutunu oluştur
                 using (var command = new SqlCommand(sql, connection, transaction))
@@ -554,8 +575,17 @@ namespace ErpMobile.Api.Repositories.Invoice
                     _logger.LogInformation($"BillingPostalAddressID: {(string.IsNullOrEmpty(invoiceHeader.BillingPostalAddressID) ? "NULL" : invoiceHeader.BillingPostalAddressID)} kullanılıyor.");
                     
                     // ShipmentMethodCode - Sevkiyat yöntemi kodu (opsiyonel)
-                    command.Parameters.AddWithValue("@ShipmentMethodCode", string.IsNullOrEmpty(invoiceHeader.ShipmentMethodCode) ? DBNull.Value : invoiceHeader.ShipmentMethodCode);
-                    _logger.LogInformation($"ShipmentMethodCode: {(string.IsNullOrEmpty(invoiceHeader.ShipmentMethodCode) ? "NULL" : invoiceHeader.ShipmentMethodCode)} kullanılıyor.");
+                    if (includeShipmentMethodCode)
+                    {
+                        // Büyük veya küçük harfle başlayan ShipmentMethodCode değerini kontrol et
+                        string shipmentMethodValue = invoiceHeader.ShipmentMethodCode;
+                        command.Parameters.AddWithValue("@ShipmentMethodCode", shipmentMethodValue);
+                        _logger.LogInformation($"ShipmentMethodCode: {shipmentMethodValue} kullanılıyor.");
+                    }
+                    else
+                    {
+                        _logger.LogInformation("ShipmentMethodCode: NULL olduğu için SQL sorgusundan çıkarıldı.");
+                    }
                     
                     command.Parameters.AddWithValue("@TaxExemptionCode", invoiceHeader.TaxExemptionCode ?? 0);
                     
@@ -585,19 +615,36 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@FormType", formType);
                     
                     // Döviz bilgileri
-                    // ExchangeRate - Formdan gelen TL karşılık değeri
-                    decimal exchangeRate = invoiceHeader.ExchangeRate.HasValue ? invoiceHeader.ExchangeRate.Value : 1; // Formdan gelen değer yoksa 1
+                    // ExchangeRate - Formdan gelen döviz kuru değeri (zorunlu)
+                    decimal exchangeRate = 0;
+                    if (invoiceHeader.ExchangeRate.HasValue)
+                    {
+                        exchangeRate = invoiceHeader.ExchangeRate.Value;
+                    }
+                    else
+                    {
+                        throw new ArgumentNullException("ExchangeRate", "Döviz kuru değeri belirtilmemiş!");
+                    }
                     command.Parameters.AddWithValue("@ExchangeRate", exchangeRate);
                     _logger.LogInformation($"ExchangeRate: {exchangeRate} kullanılıyor.");
                     
-                    // DocCurrencyCode - Formdan seçilen para birimi
-                    string docCurrencyCode = !string.IsNullOrEmpty(invoiceHeader.DocCurrencyCode) ? invoiceHeader.DocCurrencyCode : "TRY";
+                    // DocCurrencyCode - Formdan seçilen para birimi (zorunlu)
+                    if (string.IsNullOrEmpty(invoiceHeader.DocCurrencyCode))
+                    {
+                        throw new ArgumentNullException("DocCurrencyCode", "Belge para birimi belirtilmemiş!");
+                    }
+                    string docCurrencyCode = invoiceHeader.DocCurrencyCode;
                     command.Parameters.AddWithValue("@DocCurrencyCode", docCurrencyCode);
                     _logger.LogInformation($"DocCurrencyCode: {docCurrencyCode} kullanılıyor.");
                     
-                    // LocalCurrencyCode - Her zaman TRY olacak
-                    command.Parameters.AddWithValue("@LocalCurrencyCode", "TRY");
-                    _logger.LogInformation("LocalCurrencyCode: TRY kullanılıyor.");
+                    // LocalCurrencyCode - Formdan gelen yerel para birimi (zorunlu)
+                    if (string.IsNullOrEmpty(invoiceHeader.LocalCurrencyCode))
+                    {
+                        throw new ArgumentNullException("LocalCurrencyCode", "Yerel para birimi belirtilmemiş!");
+                    }
+                    string localCurrencyCode = invoiceHeader.LocalCurrencyCode;
+                    command.Parameters.AddWithValue("@LocalCurrencyCode", localCurrencyCode);
+                    _logger.LogInformation($"LocalCurrencyCode: {localCurrencyCode} kullanılıyor.");
                     
                     // DocumentTypeCode - 4 standart
                     command.Parameters.AddWithValue("@DocumentTypeCode", 4);
