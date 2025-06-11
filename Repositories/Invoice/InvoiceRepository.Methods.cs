@@ -147,11 +147,13 @@ namespace ErpMobile.Api.Repositories.Invoice
                     ShippingPostalAddressID = request.ShippingPostalAddressID.ToString(), // Teslimat adresi ID'si
                     BillingPostalAddressID = request.BillingPostalAddressID.ToString(), // Fatura adresi ID'si
                     ShipmentMethodCode = request.ShipmentMethodCode, // Sevkiyat yöntemi kodu (opsiyonel)
+                    TaxTypeCode = Convert.ToByte(request.TaxTypeCode), // Vergi tipi kodu tinyint olarak kaydedilmeli
                     Notes = request.Notes, // Using Notes instead of Description
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now
+                    
                 };
-                
+                _logger.LogInformation($"invoiceHeader TaxTypeCode : {invoiceHeader.TaxTypeCode}");
                 // Döviz bilgilerini logla
                 _logger.LogInformation($"DocCurrencyCode: {docCurrencyCode}, LocalCurrencyCode: {request.LocalCurrencyCode}, ExchangeRate: {request.ExchangeRate}");
 
@@ -290,9 +292,10 @@ namespace ErpMobile.Api.Repositories.Invoice
                     VendorCode = request.VendorCode, // Using VendorCode instead of CurrAccCode
                     CurrAccCode = request.VendorCode, // CurrAccCode parametresi için VendorCode kullanılıyor
                     CurrAccTypeCode = 1, // Tedarikçi
+                    TaxTypeCode = Convert.ToByte(request.TaxTypeCode), // Vergi tipi kodu string olarak kaydedilmeli
                     Notes = request.Notes, // Using Notes instead of Description
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
-                    CreatedDate = DateTime.Now
+                    CreatedDate = DateTime.Now  
                 };
 
                 // Fatura başlığı ve detayları veritabanına kaydet
@@ -430,6 +433,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                         TransTypeCode,
                         ProcessCode,
                         InvoiceNumber,
+                        TaxTypeCode,
                         IsReturn,
                         InvoiceDate,
                         InvoiceTime,
@@ -470,6 +474,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                         @TransTypeCode,
                         @ProcessCode,
                         @InvoiceNumber,
+                        @TaxTypeCode,
                         @IsReturn,
                         @InvoiceDate,
                         @InvoiceTime,
@@ -527,7 +532,8 @@ namespace ErpMobile.Api.Repositories.Invoice
                     // InvoiceNumber - Otomatik en son kullanılan bulunacak
                     // Örnek: WS-7-5 ise bir sonraki WS-7-6 olacak
                     command.Parameters.AddWithValue("@InvoiceNumber", invoiceHeader.InvoiceNumber);
-                    
+
+                    command.Parameters.AddWithValue("@TaxTypeCode", invoiceHeader.TaxTypeCode);
                     // IsReturn - İade faturası ise true
                     command.Parameters.AddWithValue("@IsReturn", invoiceHeader.IsReturn);
                     

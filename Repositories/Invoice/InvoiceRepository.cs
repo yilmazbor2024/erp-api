@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using Microsoft.Data.SqlClient;
-using System.Linq;
-using System.Threading.Tasks;
-using System.IO;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -52,7 +50,7 @@ namespace ErpMobile.Api.Repositories.Invoice
         }
 
       // Fatura satırı oluşturma metodu
-        private async Task CreateInvoiceLineAsync(SqlConnection connection, SqlTransaction transaction, Guid invoiceHeaderId, CreateInvoiceDetailRequest detail, int sortOrder)
+        private async Task CreateInvoiceLineAsync(SqlConnection connection, SqlTransaction transaction, Guid invoiceHeaderId, ErpMobile.Api.Models.Invoice.CreateInvoiceDetailRequest detail, int sortOrder)
         {
             // InvoiceLineID için yeni bir GUID oluştur
             var invoiceLineId = Guid.NewGuid();
@@ -196,21 +194,21 @@ namespace ErpMobile.Api.Repositories.Invoice
                     var itemCode = !string.IsNullOrEmpty(detail.ItemCode) ? detail.ItemCode : "TEST001";
                     command.Parameters.AddWithValue("@ItemCode", itemCode);
                     
-                    command.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode.HasValue ? detail.ItemTypeCode.Value : (byte)1);
+                    command.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode.HasValue ? detail.ItemTypeCode.Value.ToString() : "1");
 
-                    // ColorCode - varsayılan STD
+                    // ColorCode - gelen değeri veya varsayılan STD kullan
                     var colorCode = !string.IsNullOrEmpty(detail.ColorCode) ? detail.ColorCode : "STD";
                     command.Parameters.AddWithValue("@ColorCode", colorCode);
 
-                    // ItemDim1Code - varsayılan boş string
+                    // ItemDim1Code - gelen değeri veya varsayılan boş string kullan
                     var itemDim1Code = !string.IsNullOrEmpty(detail.ItemDim1Code) ? detail.ItemDim1Code : "";
                     command.Parameters.AddWithValue("@ItemDim1Code", itemDim1Code);
 
-                    // ItemDim2Code - varsayılan boş string
+                    // ItemDim2Code - gelen değeri veya varsayılan boş string kullan
                     var itemDim2Code = !string.IsNullOrEmpty(detail.ItemDim2Code) ? detail.ItemDim2Code : "";
                     command.Parameters.AddWithValue("@ItemDim2Code", itemDim2Code);
 
-                    // ItemDim3Code - varsayılan boş string
+                    // ItemDim3Code - gelen değeri veya varsayılan boş string kullan
                     var itemDim3Code = !string.IsNullOrEmpty(detail.ItemDim3Code) ? detail.ItemDim3Code : "";
                     command.Parameters.AddWithValue("@ItemDim3Code", itemDim3Code);
 
@@ -225,14 +223,12 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@ReturnReasonCode", "");
                     command.Parameters.AddWithValue("@UsedBarcode", "");
                     
-                    // LineDescription
+                    // LineDescription - açıklama alanını kullan
                     var lineDescription = !string.IsNullOrEmpty(detail.Description) ? detail.Description : "";
                     command.Parameters.AddWithValue("@LineDescription", lineDescription);
 
-                    // KDV bilgileri - VatCode %VatRate formatında olmalı
-                    var vatCode = "%" + detail.VatRate;
-                    command.Parameters.AddWithValue("@VatCode", vatCode);
-                    command.Parameters.AddWithValue("@VatRate", detail.VatRate);
+                    // KDV bilgileri - VatCode ve VatRate TaxTypeCode'a göre belirlenecek
+                    // Bu parametreler aşağıda TaxTypeCode kontrolünden sonra tanımlanacak
 
                     // PCTCode ve PCTRate
                     command.Parameters.AddWithValue("@PCTCode", "%0");
@@ -253,6 +249,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     var docCurrencyCode = !string.IsNullOrEmpty(detail.CurrencyCode) ? detail.CurrencyCode : "TRY";
                     command.Parameters.AddWithValue("@DocCurrencyCode", docCurrencyCode);
 
+                    // Para birimi kodu olarak gelen değeri veya fatura para birimi kodunu kullan
                     var priceCurrencyCode = !string.IsNullOrEmpty(detail.PriceCurrencyCode) ? detail.PriceCurrencyCode : docCurrencyCode;
                     command.Parameters.AddWithValue("@PriceCurrencyCode", priceCurrencyCode);
 
@@ -273,11 +270,59 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@InvoiceLineSerialSumID", 0);
                     command.Parameters.AddWithValue("@SerialNumber", "");
                     command.Parameters.AddWithValue("@InvoiceLineBOMID", 0);
-
-                    // BatchCode ve SectionCode için boş string kullan
+                    // BatchCode için boş string kullan
                     var batchCode = !string.IsNullOrEmpty(detail.BatchCode) ? detail.BatchCode : "";
                     command.Parameters.AddWithValue("@BatchCode", batchCode);
 
+                    // Fatura vergisiz ise (TaxTypeCode = 4), VatCode ve VatRate sıfır olmalı
+                    byte taxTypeCode = 0;
+                    try {
+                        // Fatura başlığının TaxTypeCode değerini kontrol et
+                        using (var cmd = new SqlCommand("SELECT TaxTypeCode FROM trInvoiceHeader WHERE InvoiceHeaderID = @InvoiceHeaderID", connection, transaction))
+                        {
+                            cmd.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
+                            var result = await cmd.ExecuteScalarAsync();
+                            if (result != null && result != DBNull.Value)
+                            {
+                                taxTypeCode = Convert.ToByte(result);
+                                _logger.LogInformation($"Fatura TaxTypeCode değeri: {taxTypeCode}");
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        _logger.LogError(ex, "TaxTypeCode sorgulanırken hata oluştu");
+                    }
+                    
+                    // VatCode ve VatRate değerlerini belirle
+                    string vatCodeValue;
+                    float vatRateValue;
+                    
+                    // TaxTypeCode değerine göre VatCode ve VatRate değerlerini belirle
+                    if (taxTypeCode == 4) // Vergisiz (TaxTypeCode = 4)
+                    {
+                        vatCodeValue = "%0";
+                        vatRateValue = 0;
+                        _logger.LogInformation("Vergisiz fatura için VatCode=%0 ve VatRate=0 ayarlandı");
+                    }
+                    else if (taxTypeCode == 0) // TaxTypeCode 0 durumu için
+                    {
+                        // TaxTypeCode 0 için VatCode ve VatRate değerlerini tutarlı ayarla
+                        vatCodeValue = "%10";
+                        vatRateValue = 10;
+                        _logger.LogInformation($"TaxTypeCode={taxTypeCode} için VatCode=%10 ve VatRate=10 ayarlandı");
+                    }
+                    else
+                    {
+                        // Diğer vergi durumları için
+                        vatCodeValue = !string.IsNullOrEmpty(detail.VatCode) ? detail.VatCode : "%10";
+                        vatRateValue = detail.VatRate > 0 ? detail.VatRate : 10;
+                        _logger.LogInformation($"TaxTypeCode={taxTypeCode} için VatCode={vatCodeValue} ve VatRate={vatRateValue} ayarlandı");
+                    }
+
+                    command.Parameters.AddWithValue("@VatCode", vatCodeValue);
+                    command.Parameters.AddWithValue("@VatRate", vatRateValue);
+
+                    // SectionCode için gelen değeri veya varsayılan boş string kullan
                     var sectionCode = !string.IsNullOrEmpty(detail.SectionCode) ? detail.SectionCode : "";
                     command.Parameters.AddWithValue("@SectionCode", sectionCode);
 
@@ -393,7 +438,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                         currencyCommand.Parameters.AddWithValue("@TDiscountVI5", 0);
                         
                         // Vergi bilgileri
-                        decimal vatAmount = amount * detail.VatRate / 100;
+                        decimal vatAmount = amount * (decimal)detail.VatRate / 100;
                         
                         currencyCommand.Parameters.AddWithValue("@TaxBase", amount);
                         currencyCommand.Parameters.AddWithValue("@Pct", 0);
@@ -706,7 +751,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                                 ExportFileNumber = reader["ExportFileNumber"].ToString(),
                                 ExportTypeCode = reader["ExportTypeCode"].ToString(),
                                 PosTerminalID = reader["PosTerminalID"].ToString(),
-                                TaxTypeCode = reader["TaxTypeCode"].ToString(),
+                                TaxTypeCode = (byte)reader["TaxTypeCode"],
                                 IsCompleted = (bool)reader["IsCompleted"],
                                 IsSuspended = (bool)reader["IsSuspended"],
                                 IsLocked = (bool)reader["IsLocked"],
@@ -873,7 +918,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                                 ExportFileNumber = reader["ExportFileNumber"].ToString(),
                                 ExportTypeCode = reader["ExportTypeCode"].ToString(),
                                 PosTerminalID = reader["PosTerminalID"].ToString(),
-                                TaxTypeCode = reader["TaxTypeCode"].ToString(),
+                                TaxTypeCode = (byte)reader["TaxTypeCode"],
                                 IsCompleted = (bool)reader["IsCompleted"],
                                 IsSuspended = (bool)reader["IsSuspended"],
                                 IsLocked = (bool)reader["IsLocked"],
@@ -2081,5 +2126,26 @@ namespace ErpMobile.Api.Repositories.Invoice
                 throw;
             }
         }
+
+        public async Task<string> GetInvoiceNumberAsync(string invoiceHeaderId)
+        {
+            try
+            {
+                var query = "SELECT InvoiceNumber FROM trInvoiceHeader WHERE InvoiceHeaderID = @InvoiceHeaderID";
+
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    return await connection.QueryFirstOrDefaultAsync<string>(query, new { InvoiceHeaderID = invoiceHeaderId });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fatura numarası alınırken hata oluştu: {Message}", ex.Message);
+                return string.Empty;
+            }
+        }
+
+        // Not: GetInvoiceTaxTypeCodeAsync metodu kaldırıldı, yerine doğrudan SQL sorgusu kullanılıyor
     }
 }

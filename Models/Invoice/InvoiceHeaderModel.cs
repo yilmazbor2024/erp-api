@@ -44,7 +44,7 @@ namespace ErpMobile.Api.Models.Invoice
         public string ExportFileNumber { get; set; }
         public string ExportTypeCode { get; set; }
         public string PosTerminalID { get; set; }
-        public string TaxTypeCode { get; set; }
+        public byte TaxTypeCode { get; set; }
         public bool IsCompleted { get; set; }
         public bool IsSuspended { get; set; }
         public bool IsLocked { get; set; }

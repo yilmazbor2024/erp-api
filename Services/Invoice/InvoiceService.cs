@@ -21,64 +21,70 @@ namespace ErpMobile.Api.Services.Invoice
             _invoiceRepository = invoiceRepository;
         }
 
-        // Fatura numarası oluşturan metot
-        public async Task<ApiResponse<string>> GenerateInvoiceNumberAsync(string processCode)
-        {
-            try
+             // Fatura numarası oluşturan, "1-{processCode}-7-" sabit ön ek kuralına göre çalışan metot
+            public async Task<ApiResponse<string>> GenerateInvoiceNumberAsync(string processCode)
             {
-                // Process kodu kontrolü
-                if (string.IsNullOrEmpty(processCode))
+                try
                 {
+                    if (string.IsNullOrEmpty(processCode))
+                    {
+                        return new ApiResponse<string> { Success = false, Message = "Process kodu boş olamaz" };
+                    }
+
+                    // YENİ KURAL: Ön ek her zaman "1-{processCode}-7" formatında oluşturulur.
+                    string newPrefix = $"1-{processCode}-7";
+
+                    var lastInvoiceNumber = await _invoiceRepository.GetLastInvoiceNumberByProcessCodeAsync(processCode);
+                    
+                    string newInvoiceNumber;
+
+                    // EĞER HİÇ FATURA YOKSA
+                    if (string.IsNullOrEmpty(lastInvoiceNumber))
+                    {
+                        // YENİ KURAL: İlk fatura bu sabit formatla ve 1 ile başlar.
+                        newInvoiceNumber = $"{newPrefix}-1"; // Sonuç: "1-WS-7-1"
+                    }
+                    else // EĞER FATURA VARSA
+                    {
+                        var parts = lastInvoiceNumber.Split('-');
+                        
+                        // Sadece en sondaki sayıyı almamız yeterli.
+                        if (parts.Length > 0 && int.TryParse(parts[parts.Length - 1], out int lastNumber))
+                        {
+                            // Sabit ön eki ve artırılmış son sayıyı birleştir.
+                            newInvoiceNumber = $"{newPrefix}-{lastNumber + 1}"; // Sonuç: "1-WS-7-222"
+                        }
+                        else
+                        {
+                            // Format bozuksa, seriyi kurala göre yeniden başlat.
+                            newInvoiceNumber = $"{newPrefix}-1"; 
+                        }
+                    }
+                    // Gelen isteği logla
+                    Console.BackgroundColor = ConsoleColor.Red;
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine("\n===== SERVICE: YENİ FATURA NUMRASI STOLUŞTUARTED =====\n");
+                    Console.WriteLine($"Yeni lastInvoiceNumber: {lastInvoiceNumber}");
+                    Console.WriteLine($"Yeni newPrefix: {newPrefix}");
+                    Console.WriteLine($"Yeni Fatura Numarası: {newInvoiceNumber}");
+                    Console.ResetColor();
+                    return new ApiResponse<string>
+                    {
+                        Success = true,
+                        Message = "Fatura numarası başarıyla oluşturuldu",
+                        Data = newInvoiceNumber
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Fatura numarası oluşturulurken hata oluştu. Process Code: {ProcessCode}", processCode);
                     return new ApiResponse<string>
                     {
                         Success = false,
-                        Message = "Process kodu boş olamaz"
+                        Message = "Fatura numarası oluşturulurken bir hata oluştu: " + ex.Message
                     };
                 }
-
-                // Veritabanından son fatura numarasını al
-                var lastInvoiceNumber = await _invoiceRepository.GetLastInvoiceNumberByProcessCodeAsync(processCode);
-                
-                // Yeni fatura numarası oluştur
-                string newInvoiceNumber;
-                if (string.IsNullOrEmpty(lastInvoiceNumber))
-                {
-                    // İlk fatura numarası
-                    newInvoiceNumber = $"{processCode}-1";
-                }
-                else
-                {
-                    // Son fatura numarasından yeni numara oluştur
-                    var parts = lastInvoiceNumber.Split('-');
-                    if (parts.Length >= 2 && int.TryParse(parts[1], out int lastNumber))
-                    {
-                        newInvoiceNumber = $"{processCode}-{lastNumber + 1}";
-                    }
-                    else
-                    {
-                        // Format uygun değilse yeni format oluştur
-                        newInvoiceNumber = $"{processCode}-1";
-                    }
-                }
-
-                return new ApiResponse<string>
-                {
-                    Success = true,
-                    Message = "Fatura numarası başarıyla oluşturuldu",
-                    Data = newInvoiceNumber
-                };
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Fatura numarası oluşturulurken hata oluştu");
-                return new ApiResponse<string>
-                {
-                    Success = false,
-                    Message = "Fatura numarası oluşturulurken bir hata oluştu: " + ex.Message
-                };
-            }
-        }
-
         // Toptan satış faturaları
         public async Task<ApiResponse<InvoiceListResult>> GetWholesaleInvoicesAsync(InvoiceListRequest request)
         {

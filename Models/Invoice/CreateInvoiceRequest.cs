@@ -94,7 +94,7 @@ namespace ErpMobile.Api.Models.Invoice
         
         public string PosTerminalID { get; set; }
         
-        public string TaxTypeCode { get; set; }
+        public byte TaxTypeCode { get; set; }
         
         public bool IsCompleted { get; set; }
         
@@ -185,7 +185,7 @@ namespace ErpMobile.Api.Models.Invoice
         /// <summary>
         /// KDV oranı
         /// </summary>
-        public decimal VatRate { get; set; }
+        public float VatRate { get; set; }
         
         /// <summary>
         /// KDV kodu
