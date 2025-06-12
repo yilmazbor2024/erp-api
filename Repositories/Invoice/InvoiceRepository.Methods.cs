@@ -149,6 +149,8 @@ namespace ErpMobile.Api.Repositories.Invoice
                     ShipmentMethodCode = request.ShipmentMethodCode, // Sevkiyat yöntemi kodu (opsiyonel)
                     TaxTypeCode = Convert.ToByte(request.TaxTypeCode), // Vergi tipi kodu tinyint olarak kaydedilmeli
                     Notes = request.Notes, // Using Notes instead of Description
+                    FormType = 0, // Peşin ödeme için FormType=0 olarak ayarlanıyor
+                    PaymentTerm = 0, // Peşin ödeme için PaymentTerm=0 olarak ayarlanıyor
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now
                     
@@ -156,6 +158,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                 _logger.LogInformation($"invoiceHeader TaxTypeCode : {invoiceHeader.TaxTypeCode}");
                 // Döviz bilgilerini logla
                 _logger.LogInformation($"DocCurrencyCode: {docCurrencyCode}, LocalCurrencyCode: {request.LocalCurrencyCode}, ExchangeRate: {request.ExchangeRate}");
+
+                // Ödeme bilgilerini logla
+                _logger.LogInformation($"FormType: {invoiceHeader.FormType} (0=Peşin, 1=Normal), PaymentTerm: {invoiceHeader.PaymentTerm} (0=Peşin, >0=Vadeli gün sayısı)");
 
                 // Adres bilgilerini logla
                 _logger.LogInformation($"Fatura için müşteri teslimat adresi ID: {request.ShippingPostalAddressID}");
@@ -294,9 +299,14 @@ namespace ErpMobile.Api.Repositories.Invoice
                     CurrAccTypeCode = 1, // Tedarikçi
                     TaxTypeCode = Convert.ToByte(request.TaxTypeCode), // Vergi tipi kodu string olarak kaydedilmeli
                     Notes = request.Notes, // Using Notes instead of Description
+                    FormType = 0, // Peşin ödeme için FormType=0 olarak ayarlanıyor
+                    PaymentTerm = 0, // Peşin ödeme için PaymentTerm=0 olarak ayarlanıyor
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now  
                 };
+
+                // Ödeme bilgilerini logla
+                _logger.LogInformation($"FormType: {invoiceHeader.FormType} (0=Peşin, 1=Normal), PaymentTerm: {invoiceHeader.PaymentTerm} (0=Peşin, >0=Vadeli gün sayısı)");
 
                 // Fatura başlığı ve detayları veritabanına kaydet
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
@@ -363,9 +373,14 @@ namespace ErpMobile.Api.Repositories.Invoice
                     CurrAccCode = request.VendorCode, // CurrAccCode parametresi için VendorCode kullanılıyor
                     CurrAccTypeCode = 1, // Tedarikçi
                     Notes = request.Notes, // Using Notes instead of Description
+                    FormType = 0, // Peşin ödeme için FormType=0 olarak ayarlanıyor
+                    PaymentTerm = 0, // Peşin ödeme için PaymentTerm=0 olarak ayarlanıyor
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now
                 };
+
+                // Ödeme bilgilerini logla
+                _logger.LogInformation($"FormType: {invoiceHeader.FormType} (0=Peşin, 1=Normal), PaymentTerm: {invoiceHeader.PaymentTerm} (0=Peşin, >0=Vadeli gün sayısı)");
 
                 // Fatura başlığı ve detayları veritabanına kaydet
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
@@ -546,10 +561,49 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@OperationDate", DateTime.Now.Date);
                     command.Parameters.AddWithValue("@OperationTime", DateTime.Now.ToString("HH:mm:ss"));
                     
-                    // PaymentTerm - Default 30, formdan gelecek
-                    // Peşin yerine vadeli seçilirse 30/45/60/90/120/150/180 olabilir
-                    int paymentTerm = invoiceHeader.PaymentTerm.HasValue ? invoiceHeader.PaymentTerm.Value : 30;
+                    // Form tipi belirleme
+                    int formType = 0; // Varsayılan peşin ödeme
+                    if (invoiceHeader.FormType.HasValue)
+                    {
+                        formType = invoiceHeader.FormType.Value;
+                    }
+                    else
+                    {
+                        switch (invoiceHeader.ProcessCode)
+                        {
+                            case "WS":
+                            case "EP":
+                            case "BP":
+                                formType = 0; // Peşin
+                                break;
+                            default:
+                                formType = 0;
+                                break;
+                        }
+                    }
+                    
+                    // PaymentTerm - Peşin ödemeler için 0, vadeli ödemeler için formdan gelecek
+                    // Peşin ödeme için 0, vadeli seçilirse 30/45/60/90/120/150/180 olabilir
+                    int paymentTerm = 0; // Varsayılan olarak peşin ödeme (PaymentTerm=0)
+                    
+                    // Eğer özel bir ödeme vadesi belirtilmişse onu kullan
+                    if (invoiceHeader.PaymentTerm.HasValue)
+                    {
+                        paymentTerm = invoiceHeader.PaymentTerm.Value;
+                    }
+                    // FormType=0 (peşin) ise PaymentTerm=0 olmalı
+                    else if (formType == 0)
+                    {
+                        paymentTerm = 0;
+                    }
+                    // Diğer durumlarda varsayılan 30 gün
+                    else
+                    {
+                        paymentTerm = 30;
+                    }
+                    
                     command.Parameters.AddWithValue("@PaymentTerm", paymentTerm);
+                    _logger.LogInformation($"PaymentTerm: {paymentTerm} (0=Peşin, >0=Vadeli gün sayısı) kullanılıyor.");
                     
                     // AverageDueDate - InvoiceDate + PaymentTerm kadar olan tarih
                     command.Parameters.AddWithValue("@AverageDueDate", invoiceHeader.InvoiceDate.AddDays(paymentTerm));
@@ -605,25 +659,11 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@OfficeCode", invoiceHeader.OfficeCode);
                     command.Parameters.AddWithValue("@WarehouseCode", invoiceHeader.WarehouseCode);
                     
-                    // Form tipi belirleme
-                    // WS=1, EP=34, BP=1
-                    int formType;
-                    switch (invoiceHeader.ProcessCode)
-                    {
-                        case "WS":
-                            formType = 1; // Toptan satış
-                            break;
-                        case "EP":
-                            formType = 34; // Masraf alış
-                            break;
-                        case "BP":
-                            formType = 1; // Toptan alış
-                            break;
-                        default:
-                            formType = 1; // Varsayılan değer
-                            break;
-                    }
+                    // Form tipi belirleme - Önceden tanımlanmış formType değişkenini kullan
+                    // Not: formType değişkeni daha önce tanımlandığı için burada tekrar tanımlanmıyor
+                    
                     command.Parameters.AddWithValue("@FormType", formType);
+                    _logger.LogInformation($"FormType: {formType} (0=Peşin, 1=Normal) kullanılıyor.");
                     
                     // Döviz bilgileri
                     // ExchangeRate - Formdan gelen döviz kuru değeri (zorunlu)

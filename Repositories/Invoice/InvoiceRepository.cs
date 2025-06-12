@@ -252,11 +252,29 @@ namespace ErpMobile.Api.Repositories.Invoice
                     // Para birimi kodu olarak gelen değeri veya fatura para birimi kodunu kullan
                     var priceCurrencyCode = !string.IsNullOrEmpty(detail.PriceCurrencyCode) ? detail.PriceCurrencyCode : docCurrencyCode;
                     command.Parameters.AddWithValue("@PriceCurrencyCode", priceCurrencyCode);
-
-                    var priceExchangeRate = detail.ExchangeRate.HasValue ? detail.ExchangeRate.Value : 1.0m;
+                    
+                    // DocCurrencyCode ile PriceCurrencyCode aynı ise PriceExchangeRate = 1 ve Price = 0 olmalı
+                    decimal priceExchangeRate;
+                    decimal price;
+                    
+                    if (docCurrencyCode == priceCurrencyCode)
+                    {
+                        // Aynı para birimi kullanıldığında kur 1 olmalı
+                        priceExchangeRate = 1.0m;
+                        // Aynı para birimi kullanıldığında fiyat 0 olmalı
+                        price = 0.0m;
+                        _logger.LogInformation($"DocCurrencyCode ({docCurrencyCode}) ve PriceCurrencyCode ({priceCurrencyCode}) aynı olduğu için PriceExchangeRate=1 ve Price=0 olarak ayarlandı.");
+                    }
+                    else
+                    {
+                        // Farklı para birimleri için gelen değerleri kullan
+                        priceExchangeRate = detail.ExchangeRate.HasValue ? detail.ExchangeRate.Value : 1.0m;
+                        price = detail.UnitPrice;
+                        _logger.LogInformation($"DocCurrencyCode ({docCurrencyCode}) ve PriceCurrencyCode ({priceCurrencyCode}) farklı olduğu için PriceExchangeRate={priceExchangeRate} ve Price={price} olarak ayarlandı.");
+                    }
+                    
                     command.Parameters.AddWithValue("@PriceExchangeRate", priceExchangeRate);
-
-                    command.Parameters.AddWithValue("@Price", detail.UnitPrice);
+                    command.Parameters.AddWithValue("@Price", price);
                     
                     // Fatura başlık ID'si - zorunlu
                     command.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
@@ -407,12 +425,12 @@ namespace ErpMobile.Api.Repositories.Invoice
                         currencyCommand.Parameters.AddWithValue("@RelationCurrencyCode", docCurrencyCode);
                         
                         // Fiyat ve tutar bilgileri
-                        decimal price = detail.UnitPrice;
+                        decimal linePrice = detail.UnitPrice;
                         decimal amount = detail.UnitPrice * detail.Qty;
                         
                         currencyCommand.Parameters.AddWithValue("@PriceVI", 0);
                         currencyCommand.Parameters.AddWithValue("@AmountVI", 0);
-                        currencyCommand.Parameters.AddWithValue("@Price", price);
+                        currencyCommand.Parameters.AddWithValue("@Price", linePrice);
                         currencyCommand.Parameters.AddWithValue("@Amount", amount);
                         
                         // İndirim bilgileri
