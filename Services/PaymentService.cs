@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
@@ -11,6 +10,7 @@ using ErpMobile.Api.Models;
 using ErpMobile.Api.Models.Payment;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using ErpMobile.Api.Repositories.CashAccount;
 using Newtonsoft.Json;
 
 namespace ErpMobile.Api.Services
@@ -19,11 +19,15 @@ namespace ErpMobile.Api.Services
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<PaymentService> _logger;
+        private readonly ICashAccountRepository _cashAccountRepository;
+        private Dictionary<string, string> _cashAccountDescriptions;
 
-        public PaymentService(IConfiguration configuration, ILogger<PaymentService> logger)
+        public PaymentService(IConfiguration configuration, ILogger<PaymentService> logger, ICashAccountRepository cashAccountRepository)
         {
             _configuration = configuration;
             _logger = logger;
+            _cashAccountRepository = cashAccountRepository;
+            _cashAccountDescriptions = new Dictionary<string, string>();
         }
 
         /// <summary>
@@ -35,6 +39,9 @@ namespace ErpMobile.Api.Services
             await connection.OpenAsync();
             
             using var transaction = connection.BeginTransaction();
+            
+            // Kasa açıklamalarını yükle
+            await LoadCashAccountDescriptionsAsync();
             
             try
             {
@@ -82,52 +89,84 @@ namespace ErpMobile.Api.Services
                 Guid debitCurrAccBookId = Guid.Empty;
                 Guid cashCurrAccBookId = Guid.Empty;
 
-                // Cash Header ekle
-                await InsertCashHeaderAsync(connection, transaction, cashHeaderId, request, cashNumber);
-
                 // Debit Header ekle
                 await InsertDebitHeaderAsync(connection, transaction, debitHeaderId, request, debitNumber, cashHeaderId, "");
 
                 // Payment Header ekle
                 await InsertPaymentHeaderAsync(connection, transaction, paymentHeaderId, request, paymentNumber);
 
+                // Para birimine göre ödeme satırlarını gruplandır
+                var paymentRowsByCurrency = request.PaymentRows
+                    .GroupBy(row => row.CurrencyCode)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                Console.WriteLine($"[INFO] Ödeme satırları {paymentRowsByCurrency.Count} farklı para birimine göre gruplandırıldı");
+        
+                int cashHeaderCount = 0;
                 int lineNumber = 0;
-                foreach (var paymentRow in request.PaymentRows)
+        
+                // Tüm para birimi grupları için tek bir CashTransNumber kullan
+                // Bu ERP'nin davranışına uygun olacak
+                string commonCashNumber = cashNumber;
+        
+                // Her para birimi grubu için ayrı bir CashHeader oluştur
+                foreach (var currencyGroup in paymentRowsByCurrency)
                 {
-                    lineNumber++;
+                    string currencyCode = currencyGroup.Key;
+                    List<PaymentRow> currencyRows = currencyGroup.Value;
+            
+                    Console.WriteLine($"[INFO] Para birimi: {currencyCode}, Satır sayısı: {currencyRows.Count}");
+            
+                    // İlk para birimi grubu için orijinal cashHeaderId'yi kullan, diğerleri için yeni oluştur
+                    var currencyCashHeaderId = cashHeaderCount == 0 ? cashHeaderId : Guid.NewGuid();
+            
+                    // Tüm para birimleri için aynı CashTransNumber kullan
+                    // Bu ERP ile tutarlılık sağlayacak
+                    string currencyCashNumber = commonCashNumber;
+            
+                    // Bu para birimi için Cash Header ekle
+                    await InsertCashHeaderAsync(connection, transaction, currencyCashHeaderId, request, currencyCashNumber, currencyCode);
+            
+                    // Bu para birimine ait tüm satırlar için işlem yap
+                    foreach (var paymentRow in currencyRows)
+                    {
+                        lineNumber++;
 
-                    // Line ID'leri oluştur
-                    var cashLineId = Guid.NewGuid();
-                    var debitLineId = Guid.NewGuid();
-                    var paymentLineId = Guid.NewGuid();
+                        // Line ID'leri oluştur
+                        var cashLineId = Guid.NewGuid();
+                        var debitLineId = Guid.NewGuid();
+                        var paymentLineId = Guid.NewGuid();
 
-                    // Cash Line ekle
-                    await InsertCashLineAsync(connection, transaction, cashLineId, cashHeaderId, request, paymentRow, lineNumber);
+                        // Cash Line ekle - currencyCashHeaderId ile ilişkilendir
+                        await InsertCashLineAsync(connection, transaction, cashLineId, currencyCashHeaderId, request, paymentRow, lineNumber);
 
-                    // Cash Line Currency ekle
-                    await InsertCashLineCurrencyAsync(connection, transaction, cashLineId, paymentRow);
+                        // Cash Line Currency ekle
+                        await InsertCashLineCurrencyAsync(connection, transaction, cashLineId, paymentRow);
 
-                    // Debit Line ekle
-                    await InsertDebitLineAsync(connection, transaction, debitHeaderId, debitLineId, request, paymentRow, lineNumber);
+                        // Debit Line ekle
+                        await InsertDebitLineAsync(connection, transaction, debitHeaderId, debitLineId, request, paymentRow, lineNumber);
 
-                    // Debit Line Currency ekle
-                    await InsertDebitLineCurrencyAsync(connection, transaction, debitLineId, paymentRow);
+                        // Debit Line Currency ekle
+                        await InsertDebitLineCurrencyAsync(connection, transaction, debitLineId, paymentRow);
 
-                    // Payment Line ekle
-                    await InsertPaymentLineAsync(connection, transaction, paymentLineId, paymentHeaderId, cashLineId, debitLineId, lineNumber, paymentRow);
+                        // Payment Line ekle
+                        await InsertPaymentLineAsync(connection, transaction, paymentLineId, paymentHeaderId, cashLineId, debitLineId, lineNumber, paymentRow);
 
-                    // Payment Line Currency ekle
-                    await InsertPaymentLineCurrencyAsync(connection, transaction, paymentLineId, paymentRow, request.DocCurrencyCode);
+                        // Payment Line Currency ekle
+                        await InsertPaymentLineCurrencyAsync(connection, transaction, paymentLineId, paymentRow, request.DocCurrencyCode);
 
-                    // Debit işlemi için muhasebe kaydı
-                    debitCurrAccBookId = Guid.NewGuid();
-                    await InsertCurrAccBookAsync(connection, transaction, debitCurrAccBookId, request, "Debit", debitLineId, lineNumber);
-                    await InsertCurrAccBookCurrencyAsync(connection, transaction, debitCurrAccBookId, paymentRow, true);
+                        // Debit işlemi için muhasebe kaydı
+                        debitCurrAccBookId = Guid.NewGuid();
+                        await InsertCurrAccBookAsync(connection, transaction, debitCurrAccBookId, request, "Debit", debitLineId, lineNumber);
+                        await InsertCurrAccBookCurrencyAsync(connection, transaction, debitCurrAccBookId, paymentRow, true);
+                        
+                        // Cash işlemi için muhasebe kaydı
+                        cashCurrAccBookId = Guid.NewGuid();
+                        await InsertCurrAccBookAsync(connection, transaction, cashCurrAccBookId, request, "Cash", cashLineId, lineNumber);
+                        await InsertCurrAccBookCurrencyAsync(connection, transaction, cashCurrAccBookId, paymentRow, false);
+                    }
                     
-                    // Cash işlemi için muhasebe kaydı
-                    cashCurrAccBookId = Guid.NewGuid();
-                    await InsertCurrAccBookAsync(connection, transaction, cashCurrAccBookId, request, "Cash", cashLineId, lineNumber);
-                    await InsertCurrAccBookCurrencyAsync(connection, transaction, cashCurrAccBookId, paymentRow, false);
+                    cashHeaderCount++;
                 }
 
                 // Attribute tablolarına kayıt ekle
@@ -259,7 +298,7 @@ namespace ErpMobile.Api.Services
             }
         }
 
-        private async Task InsertCashHeaderAsync(SqlConnection connection, SqlTransaction transaction, Guid cashHeaderId, CashPaymentRequest request, string cashTransNumber)
+        private async Task InsertCashHeaderAsync(SqlConnection connection, SqlTransaction transaction, Guid cashHeaderId, CashPaymentRequest request, string cashTransNumber, string currencyCode = null)
         {
             // Fatura numarasını almak için SQL sorgusu
             string invoiceNumber = "";
@@ -274,6 +313,21 @@ namespace ErpMobile.Api.Services
                 // Fatura numarası alınamazsa, CashTransNumber kullanılacak
                 invoiceNumber = cashTransNumber;
             }
+            
+            // Para birimine göre uygun kasa kodunu belirle
+            string cashCurrAccCode;
+            if (currencyCode == "USD")
+            {
+                // USD için 102 kodlu kasa (USD KASA)
+                cashCurrAccCode = "102";
+            }
+            else
+            {
+                // TRY ve diğer para birimleri için 101 kodlu kasa (MERKEZ TL KASA)
+                cashCurrAccCode = "101";
+            }
+            
+            Console.WriteLine($"[INFO] Para birimi {currencyCode} için kasa kodu: {cashCurrAccCode} seçildi");
             
             var sql = @"
             INSERT INTO [trCashHeader]
@@ -304,13 +358,13 @@ namespace ErpMobile.Api.Services
                 RefNumber = request.InvoiceNumber, // Fatura numarası kullanılıyor
                 POSTerminalID = 0, // Veritabanı şemasında görülen alan
                 Description = request.Description,
-                CashCurrAccCode = request.CashCurrAccCode,
+                CashCurrAccCode = cashCurrAccCode, // Para birimine göre belirlenen kasa kodu
                 CashCurrAccTypeCode = 7, // Kasa hesap tipi
                 StoreCode = "",
                 GLTypeCode = "",
-                DocCurrencyCode = request.DocCurrencyCode,
+                DocCurrencyCode = currencyCode ?? request.DocCurrencyCode,
                 LocalCurrencyCode = "TRY",
-                ExchangeRate = 1,
+                ExchangeRate = currencyCode == "TRY" ? 1 : (request.PaymentRows?.FirstOrDefault(r => r.CurrencyCode == currencyCode)?.ExchangeRate ?? 1),
                 ImportFileNumber = "", // SQL izlemesinde görülen alan
                 ExportFileNumber = "", // SQL izlemesinde görülen alan
                 IsPostingApproved = true, // SQL izlemesinde görülen alan
@@ -318,7 +372,7 @@ namespace ErpMobile.Api.Services
                 IsPostingJournal = false,
                 OfficeCode = "M",
                 ApplicationCode = "Invoi",
-                ApplicationID = request.InvoiceId,
+                ApplicationID = !string.IsNullOrEmpty(request.InvoiceHeaderID) ? Guid.Parse(request.InvoiceHeaderID) : request.InvoiceId, // Fatura Header ID'si burada kullanılıyor
                 IsCompleted = true,
                 IsPrinted = false,
                 IsLocked = false,
@@ -388,23 +442,111 @@ namespace ErpMobile.Api.Services
                 INSERT ([CashLineID], [CurrencyCode], [Debit], [Credit], [RelationCurrencyCode], [ExchangeRate], [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
                 VALUES (@CashLineID, @CurrencyCode, @Debit, @Credit, @RelationCurrencyCode, @ExchangeRate, @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE());";
 
+            // Önce kendi para birimiyle ilişkili kaydı ekle (USD-USD veya TRY-TRY)
             var parameters = new
             {
                 CashLineID = cashLineId,
                 CurrencyCode = paymentRow.CurrencyCode,
-                RelationCurrencyCode = paymentRow.CurrencyCode, // İşlem para birimi
+                RelationCurrencyCode = paymentRow.CurrencyCode, // Kendi para birimi
                 Debit = paymentRow.Amount,
                 Credit = 0,
-                ExchangeRate = paymentRow.ExchangeRate,
+                ExchangeRate = paymentRow.CurrencyCode == "TRY" ? 1 : paymentRow.ExchangeRate,
                 CreatedUserName = "UZK  Uzak",
                 LastUpdatedUserName = "UZK  Uzak"
             };
 
-            Console.WriteLine("\n[SQL MERGE] trCashLineCurrency:");
+            Console.WriteLine($"\n[SQL MERGE] trCashLineCurrency ({paymentRow.CurrencyCode}-{paymentRow.CurrencyCode} ilişkisi):");
             Console.WriteLine(sql);
             Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parameters)}");
 
             await connection.ExecuteAsync(sql, parameters, transaction);
+            
+            // Eğer para birimi TRY değilse (USD gibi), hem TRY-USD hem de USD-TRY ilişkilerini oluştur
+            if (paymentRow.CurrencyCode != "TRY")
+            {
+                // TRY-USD ilişkisi (TRY para birimi, USD ile ilişkili)
+                var parametersForTRY = new
+                {
+                    CashLineID = cashLineId,
+                    CurrencyCode = "TRY",
+                    RelationCurrencyCode = paymentRow.CurrencyCode, // Örn: USD
+                    Debit = paymentRow.Amount * (decimal)paymentRow.ExchangeRate, // TL karşılığı
+                    Credit = 0,
+                    ExchangeRate = paymentRow.ExchangeRate,
+                    CreatedUserName = "UZK  Uzak",
+                    LastUpdatedUserName = "UZK  Uzak"
+                };
+
+                Console.WriteLine($"\n[SQL MERGE] trCashLineCurrency (TRY-{paymentRow.CurrencyCode} ilişkisi):");
+                Console.WriteLine(sql);
+                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersForTRY)}");
+
+                await connection.ExecuteAsync(sql, parametersForTRY, transaction);
+                
+                // USD-TRY ilişkisi (USD para birimi, TRY ile ilişkili)
+                // ERP'nin oluşturduğu kayıtlarda bu ilişki de var
+                var parametersForForeignToTRY = new
+                {
+                    CashLineID = cashLineId,
+                    CurrencyCode = paymentRow.CurrencyCode, // Örn: USD
+                    RelationCurrencyCode = "TRY",
+                    Debit = paymentRow.Amount, // Döviz miktarı
+                    Credit = 0,
+                    ExchangeRate = paymentRow.ExchangeRate,
+                    CreatedUserName = "UZK  Uzak",
+                    LastUpdatedUserName = "UZK  Uzak"
+                };
+
+                Console.WriteLine($"\n[SQL MERGE] trCashLineCurrency ({paymentRow.CurrencyCode}-TRY ilişkisi):");
+                Console.WriteLine(sql);
+                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersForForeignToTRY)}");
+
+                await connection.ExecuteAsync(sql, parametersForForeignToTRY, transaction);
+            }
+            // Eğer para birimi TRY ise ve kur 1'den farklıysa, ilişkili döviz kaydını ekle
+            else if (paymentRow.ExchangeRate != 1)
+            {
+                // Kur 1'den farklıysa, ilişkili bir döviz var demektir
+                string foreignCurrency = "USD"; // Genellikle USD olur, ama dinamik olarak belirlenebilir
+                
+                // TRY-USD ilişkisi
+                var parametersForTRYtoForeign = new
+                {
+                    CashLineID = cashLineId,
+                    CurrencyCode = "TRY",
+                    RelationCurrencyCode = foreignCurrency,
+                    Debit = paymentRow.Amount, // TL miktarı
+                    Credit = 0,
+                    ExchangeRate = paymentRow.ExchangeRate,
+                    CreatedUserName = "UZK  Uzak",
+                    LastUpdatedUserName = "UZK  Uzak"
+                };
+
+                Console.WriteLine($"\n[SQL MERGE] trCashLineCurrency (TRY-{foreignCurrency} ilişkisi):");
+                Console.WriteLine(sql);
+                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersForTRYtoForeign)}");
+
+                await connection.ExecuteAsync(sql, parametersForTRYtoForeign, transaction);
+                
+                // USD-TRY ilişkisi
+                var parametersForForeign = new
+                {
+                    CashLineID = cashLineId,
+                    CurrencyCode = foreignCurrency,
+                    RelationCurrencyCode = "TRY",
+                    Debit = paymentRow.Amount / (decimal)paymentRow.ExchangeRate, // Döviz karşılığı
+                    Credit = 0,
+                    ExchangeRate = paymentRow.ExchangeRate,
+                    CreatedUserName = "UZK  Uzak",
+                    LastUpdatedUserName = "UZK  Uzak"
+                };
+
+                Console.WriteLine($"\n[SQL MERGE] trCashLineCurrency ({foreignCurrency}-TRY ilişkisi):");
+                Console.WriteLine(sql);
+                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersForForeign)}");
+
+                await connection.ExecuteAsync(sql, parametersForForeign, transaction);
+            }        
         }
 
         private async Task InsertDebitHeaderAsync(SqlConnection connection, SqlTransaction transaction, Guid debitHeaderId, CashPaymentRequest request, string debitNumber, Guid cashLineId, string invoiceNumber)
@@ -568,7 +710,7 @@ namespace ErpMobile.Api.Services
                 DocumentTime = DateTime.Now.TimeOfDay,
                 DocumentNumber = "0",
                 DueDate = DateTime.Now.Date,
-                LineDescription = isDebit ? "Toptan Satış - Fatura" : "MERKEZ TL KASA(101)",
+                LineDescription = isDebit ? $"Toptan Satış - Fatura No: {request.InvoiceNumber}" : $"{GetCashAccountDescription(paymentRow.CashAccountCode)} ({paymentRow.CashAccountCode})",
                 Description = request.Description,
                 InternalDescription = "",
                 // RefNumber alanına frontend'den gelen fatura numarasını atıyoruz
@@ -940,6 +1082,66 @@ namespace ErpMobile.Api.Services
 
                 await connection.ExecuteAsync(sqlFT, parametersFT, transaction);
             }
+        }
+        
+        /// <summary>
+        /// Kasa koduna göre açıklama döndürür
+        /// </summary>
+        private async Task LoadCashAccountDescriptionsAsync()
+        {
+            if (_cashAccountDescriptions.Count == 0)
+            {
+                try
+                {
+                    var cashAccounts = await _cashAccountRepository.GetCashAccountsAsync();
+                    foreach (var account in cashAccounts)
+                    {
+                        if (!string.IsNullOrEmpty(account.CashAccountCode))
+                        {
+                            _cashAccountDescriptions[account.CashAccountCode] = account.CashAccountDescription;
+                        }
+                    }
+                    _logger.LogInformation($"Loaded {_cashAccountDescriptions.Count} cash account descriptions");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error loading cash account descriptions");
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Kasa koduna göre açıklama döndürür
+        /// </summary>
+        private string GetCashAccountDescription(string cashAccountCode)
+        {
+            // Kasa açıklamalarını yükledik mi kontrol et
+            if (_cashAccountDescriptions.Count == 0)
+            {
+                // Yüklenemediği durumda varsayılan değerleri kullan
+                switch (cashAccountCode)
+                {
+                    case "101":
+                        return "MERKEZ TL KASA";
+                    case "102":
+                        return "MERKEZ USD KASA";
+                    case "103":
+                        return "MERKEZ EUR KASA";
+                    case "104":
+                        return "MERKEZ GBP KASA";
+                    default:
+                        return $"KASA {cashAccountCode}";
+                }
+            }
+            
+            // Sözlükte bu kasa kodu var mı?
+            if (_cashAccountDescriptions.TryGetValue(cashAccountCode, out string description))
+            {
+                return description;
+            }
+            
+            // Bulunamadıysa kod ile döndür
+            return $"KASA {cashAccountCode}";
         }
     }
 }

@@ -895,43 +895,39 @@ namespace ErpMobile.Api.Repositories.Invoice
                 
                 if (string.IsNullOrEmpty(lastInvoiceNumber))
                 {
-                    // Eğer hiç fatura yoksa, ilk fatura numarasını oluştur
-                    return $"{processCode}-7-1";
+                    // Eğer hiç fatura yoksa, ilk fatura numarasını oluştur (1-ProcessCode-7-1 formatında)
+                    return $"1-{processCode}-7-1";
                 }
 
-                // Fatura numarasını parse et (format: WS-7-217 gibi)
+                // Fatura numarasını parse et (format: 1-WS-7-217 gibi)
                 string[] parts = lastInvoiceNumber.Split('-');
                 
                 // Formatı kontrol et ve düzenle
-                string prefix;
                 int lastNumber = 0;
                 
-                // "1-WS-7-217" formatındaki numaraları "WS-7-217" formatına dönüştür
-                if (parts.Length > 3 && parts[0] == "1" && parts[1] == processCode)
+                // "1-WS-7-217" formatı için (standart format)
+                if (parts.Length == 4 && parts[0] == "1" && parts[1] == processCode)
                 {
-                    // "1-WS-7-217" formatını "WS-7-217" formatına dönüştür
-                    prefix = $"{parts[1]}-{parts[2]}";
                     if (int.TryParse(parts[3], out lastNumber))
                     {
                         // Son numarayı bir artır
                         int nextNumber = lastNumber + 1;
-                        return $"{prefix}-{nextNumber}";
+                        return $"1-{processCode}-7-{nextNumber}";
                     }
                 }
-                // Normal format (WS-7-217 gibi)
+                // Eski format (WS-7-217 gibi) - geçiş dönemi için
                 else if (parts.Length >= 3 && parts[0] == processCode)
                 {
-                    prefix = $"{parts[0]}-{parts[1]}";
                     if (int.TryParse(parts[parts.Length - 1], out lastNumber))
                     {
-                        // Son numarayı bir artır
+                        // Son numarayı bir artır ve yeni formata dönüştür
                         int nextNumber = lastNumber + 1;
-                        return $"{prefix}-{nextNumber}";
+                        return $"1-{processCode}-7-{nextNumber}";
                     }
                 }
                 
                 // Oluşturulan fatura numarasının benzersiz olduğunu kontrol et
-                string newInvoiceNumber = $"{processCode}-7-{(lastNumber > 0 ? lastNumber + 1 : 1)}";
+                string newInvoiceNumber = $"1-{processCode}-7-{(lastNumber > 0 ? lastNumber + 1 : 1)}";
                 
                 // Veritabanında bu numaranın var olup olmadığını kontrol et
                 bool exists = await CheckInvoiceNumberExistsAsync(newInvoiceNumber);
@@ -941,7 +937,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                 while (exists && attempt < 100) // Sonsuz döngüye girmemek için maksimum 100 deneme
                 {
                     lastNumber++;
-                    newInvoiceNumber = $"{processCode}-7-{lastNumber}";
+                    newInvoiceNumber = $"1-{processCode}-7-{lastNumber}";
                     exists = await CheckInvoiceNumberExistsAsync(newInvoiceNumber);
                     attempt++;
                 }
@@ -951,8 +947,8 @@ namespace ErpMobile.Api.Repositories.Invoice
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Otomatik fatura numarası oluşturulurken hata oluştu");
-                // Hata durumunda benzersiz bir numara oluştur
-                string uniqueNumber = $"{processCode}-7-{DateTime.Now.Ticks % 10000}";
+                // Hata durumunda benzersiz bir numara oluştur (yeni formatta)
+                string uniqueNumber = $"1-{processCode}-7-{DateTime.Now.Ticks % 10000}";
                 return uniqueNumber;
             }
         }
