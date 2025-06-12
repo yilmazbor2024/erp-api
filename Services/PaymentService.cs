@@ -183,6 +183,18 @@ namespace ErpMobile.Api.Services
                 Console.WriteLine("\n[SUCCESS] Cash payment transaction committed successfully");
                 Console.ResetColor();
                 
+                // Faturayı tamamlandı olarak işaretle
+                if (!string.IsNullOrEmpty(request.InvoiceHeaderID))
+                {
+                    await MarkInvoiceAsCompletedAsync(request.InvoiceHeaderID);
+                    Console.WriteLine($"\n[INFO] Fatura {request.InvoiceHeaderID} tamamlandı olarak işaretlendi");
+                }
+                else if (request.InvoiceId != Guid.Empty)
+                {
+                    await MarkInvoiceAsCompletedAsync(request.InvoiceId.ToString());
+                    Console.WriteLine($"\n[INFO] Fatura {request.InvoiceId} tamamlandı olarak işaretlendi");
+                }
+                
                 var response = new CashPaymentResponse
                 {
                     Success = true,
@@ -407,7 +419,7 @@ namespace ErpMobile.Api.Services
                 SortOrder = lineNumber,
                 CurrAccCode = request.CurrAccCode,
                 CurrAccTypeCode = 3, // Müşteri
-                LineDescription = $"{request.InvoiceNumber} nolu fatura için nakit tahsilat (Web)",
+                LineDescription = request.Description,
                 DocCurrencyCode = paymentRow.CurrencyCode,
                 CurrAccAmount = paymentRow.Amount,
                 CurrAccCurrencyCode = paymentRow.CurrencyCode,
@@ -587,14 +599,14 @@ namespace ErpMobile.Api.Services
                 DocCurrencyCode = request.DocCurrencyCode,
                 LocalCurrencyCode = "TRY",
                 ExchangeRate = 1,
-                JournalDate = request.DocumentDate,
+                JournalDate = DateTime.Now.Date,
                 IsPostingJournal = false,
                 OfficeCode = "M",
                 ApplicationCode = "Invoi",
                 ApplicationID = !string.IsNullOrEmpty(request.InvoiceHeaderID) ? Guid.Parse(request.InvoiceHeaderID) : request.InvoiceId,
                 IsCompleted = true,
                 IsPrinted = false,
-                IsLocked = false,
+                IsLocked = false,   
                 CompanyCode = 1,
                 CreatedUserName = "UZK  Uzak",
                 LastUpdatedUserName = "UZK  Uzak"
@@ -623,8 +635,8 @@ namespace ErpMobile.Api.Services
             {
                 DebitLineID = debitLineId,
                 SortOrder = lineNumber,
-                DueDate = request.DocumentDate,
-                LineDescription = $"{request.InvoiceNumber} nolu fatura için borç kaydı (Web)",
+                DueDate = DateTime.Now.Date,
+                LineDescription = request.Description,
                 DocCurrencyCode = paymentRow.CurrencyCode,
                 DebitHeaderID = debitHeaderId,
                 CreatedUserName = "UZK  Uzak",
@@ -634,13 +646,17 @@ namespace ErpMobile.Api.Services
             Console.WriteLine("\n[SQL INSERT] trDebitLine:");
             Console.WriteLine(sql);
             Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parameters)}");
-
+            
             await connection.ExecuteAsync(sql, parameters, transaction);
         }
-
+        
         private async Task InsertDebitLineCurrencyAsync(SqlConnection connection, SqlTransaction transaction, Guid debitLineId, PaymentRow paymentRow)
         {
-            var sql = @"
+            string localCurrencyCode = "TRY"; // Yerel para birimi
+            string docCurrencyCode = paymentRow.CurrencyCode; // Belge para birimi
+            
+            // 1. Belge para birimi kaydı (örn. USD)
+            var sqlDoc = @"
             MERGE INTO [trDebitLineCurrency] AS target
             USING (SELECT @DebitLineID AS DebitLineID, @CurrencyCode AS CurrencyCode) AS source
             ON (target.DebitLineID = source.DebitLineID AND target.CurrencyCode = source.CurrencyCode)
@@ -656,44 +672,82 @@ namespace ErpMobile.Api.Services
                 INSERT ([DebitLineID], [CurrencyCode], [ExchangeRate], [RelationCurrencyCode], [Debit], [Credit], [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
                 VALUES (@DebitLineID, @CurrencyCode, @ExchangeRate, @RelationCurrencyCode, @Debit, @Credit, @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE());";
 
-            var parameters = new
+            var parametersDoc = new
             {
                 DebitLineID = debitLineId,
-                CurrencyCode = paymentRow.CurrencyCode,
-                ExchangeRate = paymentRow.ExchangeRate,
-                RelationCurrencyCode = "TRY", // Yerel para birimi
-                Debit = paymentRow.Amount, // Tahsilat işlemi olduğu için borç kısmına yazılır
+                CurrencyCode = docCurrencyCode,
+                ExchangeRate = 1, // Kendi para biriminde kur 1'dir
+                RelationCurrencyCode = docCurrencyCode, // ERP ile uyumlu olması için kendi para birimiyle ilişkilendir
+                Debit = paymentRow.Amount, // Belge para birimindeki miktar
                 Credit = 0, // Tahsilat işlemi olduğu için alacak kısmı sıfır
                 CreatedUserName = "UZK  Uzak",
                 LastUpdatedUserName = "UZK  Uzak"
             };
 
-            Console.WriteLine("\n[SQL MERGE] trDebitLineCurrency:");
-            Console.WriteLine(sql);
-            Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parameters)}");
+            Console.WriteLine("\n[SQL MERGE] trDebitLineCurrency (Belge Para Birimi):");
+            Console.WriteLine(sqlDoc);
+            Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersDoc)}");
 
-            await connection.ExecuteAsync(sql, parameters, transaction);
+            await connection.ExecuteAsync(sqlDoc, parametersDoc, transaction);
+            
+            // 2. Eğer belge para birimi yerel para biriminden farklıysa, yerel para birimi kaydı da ekle
+            if (docCurrencyCode != localCurrencyCode)
+            {
+                var sqlLocal = @"
+                MERGE INTO [trDebitLineCurrency] AS target
+                USING (SELECT @DebitLineID AS DebitLineID, @CurrencyCode AS CurrencyCode) AS source
+                ON (target.DebitLineID = source.DebitLineID AND target.CurrencyCode = source.CurrencyCode)
+                WHEN MATCHED THEN
+                    UPDATE SET
+                        [ExchangeRate] = @ExchangeRate,
+                        [RelationCurrencyCode] = @RelationCurrencyCode,
+                        [Debit] = @Debit,
+                        [Credit] = @Credit,
+                        [LastUpdatedUserName] = @LastUpdatedUserName,
+                        [LastUpdatedDate] = GETDATE()
+                WHEN NOT MATCHED THEN
+                    INSERT ([DebitLineID], [CurrencyCode], [ExchangeRate], [RelationCurrencyCode], [Debit], [Credit], [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
+                    VALUES (@DebitLineID, @CurrencyCode, @ExchangeRate, @RelationCurrencyCode, @Debit, @Credit, @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE());";
+
+                var parametersLocal = new
+                {
+                    DebitLineID = debitLineId,
+                    CurrencyCode = localCurrencyCode,
+                    ExchangeRate = paymentRow.ExchangeRate,
+                    RelationCurrencyCode = docCurrencyCode, // Yerel para biriminin ilişkili olduğu para birimi
+                    Debit = paymentRow.Amount * (decimal)paymentRow.ExchangeRate, // Yerel para birimindeki karşılığı
+                    Credit = 0, // Tahsilat işlemi olduğu için alacak kısmı sıfır
+                    CreatedUserName = "UZK  Uzak",
+                    LastUpdatedUserName = "UZK  Uzak"
+                };
+
+                Console.WriteLine("\n[SQL MERGE] trDebitLineCurrency (Yerel Para Birimi):");
+                Console.WriteLine(sqlLocal);
+                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersLocal)}");
+
+                await connection.ExecuteAsync(sqlLocal, parametersLocal, transaction);
+            }
         }
 
         private async Task InsertCurrAccBookAsync(SqlConnection connection, SqlTransaction transaction, Guid currAccBookId, CashPaymentRequest request, string type, Guid relatedLineId, int lineNumber)
         {
             var sql = @"
-            INSERT INTO [trCurrAccBook]
-            ([CurrAccBookID], [SortOrder], [CurrAccTypeCode], [CurrAccCode], [DocumentDate], 
-            [DocumentTime], [DocumentNumber], [DueDate], [LineDescription], [Description], 
-            [InternalDescription], [RefNumber], [CompanyCode], [OfficeCode], [StoreTypeCode], 
-            [StoreCode], [LocalCurrencyCode], [DocCurrencyCode], [ApplicationCode], [ApplicationID], 
-            [BaseApplicationCode], [BaseApplicationID], [DebitTypeCode], [CashTransTypeCode], 
-            [ImportFileNumber], [ExportFileNumber], [CreatedUserName], [CreatedDate], 
-            [LastUpdatedUserName], [LastUpdatedDate])
-            VALUES
-            (@CurrAccBookID, @SortOrder, @CurrAccTypeCode, @CurrAccCode, @DocumentDate, 
-            @DocumentTime, @DocumentNumber, @DueDate, @LineDescription, @Description, 
-            @InternalDescription, @RefNumber, @CompanyCode, @OfficeCode, @StoreTypeCode, 
-            @StoreCode, @LocalCurrencyCode, @DocCurrencyCode, @ApplicationCode, @ApplicationID, 
-            @BaseApplicationCode, @BaseApplicationID, @DebitTypeCode, @CashTransTypeCode, 
-            @ImportFileNumber, @ExportFileNumber, @CreatedUserName, GETDATE(), 
-            @LastUpdatedUserName, GETDATE())";
+    INSERT INTO [trCurrAccBook]
+    ([CurrAccBookID], [SortOrder], [CurrAccTypeCode], [CurrAccCode], [DocumentDate], 
+    [DocumentTime], [DocumentNumber], [DueDate], [LineDescription], [Description], 
+    [InternalDescription], [RefNumber], [CompanyCode], [OfficeCode], [StoreTypeCode], 
+    [StoreCode], [LocalCurrencyCode], [DocCurrencyCode], [ApplicationCode], [ApplicationID], 
+    [BaseApplicationCode], [BaseApplicationID], [DebitTypeCode], [CashTransTypeCode], 
+    [ImportFileNumber], [ExportFileNumber], [CreatedUserName], [CreatedDate], 
+    [LastUpdatedUserName], [LastUpdatedDate])
+    VALUES
+    (@CurrAccBookID, @SortOrder, @CurrAccTypeCode, @CurrAccCode, @DocumentDate, 
+    @DocumentTime, @DocumentNumber, @DueDate, @LineDescription, @Description, 
+    @InternalDescription, @RefNumber, @CompanyCode, @OfficeCode, @StoreTypeCode, 
+    @StoreCode, @LocalCurrencyCode, @DocCurrencyCode, @ApplicationCode, @ApplicationID, 
+    @BaseApplicationCode, @BaseApplicationID, @DebitTypeCode, @CashTransTypeCode, 
+    @ImportFileNumber, @ExportFileNumber, @CreatedUserName, GETDATE(), 
+    @LastUpdatedUserName, GETDATE())";
 
             var isDebit = type == "Debit";
             var paymentRow = request.PaymentRows.FirstOrDefault() ?? new PaymentRow { Amount = 0, CurrencyCode = "TRY", ExchangeRate = 1 };
@@ -706,11 +760,11 @@ namespace ErpMobile.Api.Services
                 SortOrder = lineNumber,
                 CurrAccTypeCode = 3, // Müşteri
                 CurrAccCode = request.CurrAccCode,
-                DocumentDate = request.DocumentDate,
+                DocumentDate = DateTime.Now.Date,
                 DocumentTime = DateTime.Now.TimeOfDay,
                 DocumentNumber = "0",
-                DueDate = request.DocumentDate,
-                LineDescription = isDebit ? $"Toptan Satış - Fatura No: {request.InvoiceNumber} (Web)" : $"{GetCashAccountDescription(paymentRow.CashAccountCode)} ({paymentRow.CashAccountCode}) (Web)",
+                DueDate = DateTime.Now.Date,
+                LineDescription = isDebit ? $"Toptan Satış - Fatura No: {request.InvoiceNumber}" : $"{GetCashAccountDescription(paymentRow.CashAccountCode)} ({paymentRow.CashAccountCode})",
                 Description = request.Description,
                 InternalDescription = "",
                 // RefNumber alanına frontend'den gelen fatura numarasını atıyoruz
@@ -817,7 +871,7 @@ namespace ErpMobile.Api.Services
                 DocCurrencyCode = request.DocCurrencyCode,
                 LocalCurrencyCode = "TRY",
                 ExchangeRate = 1,
-                JournalDate = request.DocumentDate,
+                JournalDate = DateTime.Now.Date,
                 IsPostingJournal = false,
                 OfficeCode = "M",
                 ApplicationCode = "Invoi",
@@ -857,7 +911,7 @@ namespace ErpMobile.Api.Services
                 PaymentHeaderID = paymentHeaderId,
                 SortOrder = lineNumber,
                 PaymentTypeCode = 1, // Nakit
-                LineDescription = $"Nakit Ödeme - {paymentRow.Amount} {paymentRow.CurrencyCode} (Web)",
+                LineDescription = $"Nakit Ödeme - {paymentRow.Amount} {paymentRow.CurrencyCode}",
                 DocCurrencyCode = paymentRow.CurrencyCode,
                 CashLineID = cashLineId,
                 DebitLineID = debitLineId,
@@ -873,15 +927,19 @@ namespace ErpMobile.Api.Services
 
             await connection.ExecuteAsync(sql, parameters, transaction);
         }
-
+        
         private async Task InsertPaymentLineCurrencyAsync(SqlConnection connection, SqlTransaction transaction, Guid paymentLineId, PaymentRow paymentRow, string docCurrencyCode)
         {
             try
             {
+                string localCurrencyCode = "TRY"; // Yerel para birimi
+                string paymentCurrencyCode = paymentRow.CurrencyCode; // Ödeme para birimi
+                
                 _logger.LogInformation("[PAYMENT] InsertPaymentLineCurrencyAsync başlıyor: PaymentLineID={PaymentLineID}, CurrencyCode={CurrencyCode}, DocCurrencyCode={DocCurrencyCode}", 
-                    paymentLineId, paymentRow.CurrencyCode, docCurrencyCode);
-                    
-                var sql = @"
+                    paymentLineId, paymentCurrencyCode, docCurrencyCode);
+                
+                // 1. Ödeme para birimi kaydı (örn. USD, GBP, EUR)
+                var sqlPayment = @"
                 MERGE INTO [trPaymentLineCurrency] AS target
                 USING (SELECT @PaymentLineID AS PaymentLineID, @CurrencyCode AS CurrencyCode) AS source
                 ON (target.PaymentLineID = source.PaymentLineID AND target.CurrencyCode = source.CurrencyCode)
@@ -896,24 +954,63 @@ namespace ErpMobile.Api.Services
                     INSERT ([PaymentLineID], [CurrencyCode], [Payment], [ExchangeRate], [RelationCurrencyCode], [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
                     VALUES (@PaymentLineID, @CurrencyCode, @Payment, @ExchangeRate, @RelationCurrencyCode, @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE());";
 
-                var parameters = new
+                var parametersPayment = new
                 {
                     PaymentLineID = paymentLineId,
-                    CurrencyCode = paymentRow.CurrencyCode,
+                    CurrencyCode = paymentCurrencyCode,
                     Payment = paymentRow.Amount,
-                    ExchangeRate = paymentRow.ExchangeRate,
-                    RelationCurrencyCode = docCurrencyCode, // Fatura para birimi (belge para birimi)
+                    ExchangeRate = 1, // Kendi para biriminde kur 1'dir
+                    RelationCurrencyCode = paymentCurrencyCode, // ERP ile uyumlu olması için kendi para birimiyle ilişkilendir
                     CreatedUserName = "UZK  Uzak",
                     LastUpdatedUserName = "UZK  Uzak"
                 };
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("\n[SQL MERGE] trPaymentLineCurrency:");
-                Console.WriteLine(sql);
-                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parameters)}");
+                Console.WriteLine("\n[SQL MERGE] trPaymentLineCurrency (Ödeme Para Birimi):");
+                Console.WriteLine(sqlPayment);
+                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersPayment)}");
                 Console.ResetColor();
 
-                await connection.ExecuteAsync(sql, parameters, transaction);
+                await connection.ExecuteAsync(sqlPayment, parametersPayment, transaction);
+                
+                // 2. Eğer ödeme para birimi yerel para biriminden farklıysa, yerel para birimi kaydı da ekle
+                if (paymentCurrencyCode != localCurrencyCode)
+                {
+                    var sqlLocal = @"
+                    MERGE INTO [trPaymentLineCurrency] AS target
+                    USING (SELECT @PaymentLineID AS PaymentLineID, @CurrencyCode AS CurrencyCode) AS source
+                    ON (target.PaymentLineID = source.PaymentLineID AND target.CurrencyCode = source.CurrencyCode)
+                    WHEN MATCHED THEN
+                        UPDATE SET
+                            [Payment] = @Payment,
+                            [ExchangeRate] = @ExchangeRate,
+                            [RelationCurrencyCode] = @RelationCurrencyCode,
+                            [LastUpdatedUserName] = @LastUpdatedUserName,
+                            [LastUpdatedDate] = GETDATE()
+                    WHEN NOT MATCHED THEN
+                        INSERT ([PaymentLineID], [CurrencyCode], [Payment], [ExchangeRate], [RelationCurrencyCode], [CreatedUserName], [CreatedDate], [LastUpdatedUserName], [LastUpdatedDate])
+                        VALUES (@PaymentLineID, @CurrencyCode, @Payment, @ExchangeRate, @RelationCurrencyCode, @CreatedUserName, GETDATE(), @LastUpdatedUserName, GETDATE());";
+
+                    var parametersLocal = new
+                    {
+                        PaymentLineID = paymentLineId,
+                        CurrencyCode = localCurrencyCode,
+                        Payment = paymentRow.Amount * (decimal)paymentRow.ExchangeRate, // Yerel para birimindeki karşılığı
+                        ExchangeRate = paymentRow.ExchangeRate,
+                        RelationCurrencyCode = paymentCurrencyCode, // Yerel para biriminin ilişkili olduğu para birimi
+                        CreatedUserName = "UZK  Uzak",
+                        LastUpdatedUserName = "UZK  Uzak"
+                    };
+
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("\n[SQL MERGE] trPaymentLineCurrency (Yerel Para Birimi):");
+                    Console.WriteLine(sqlLocal);
+                    Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parametersLocal)}");
+                    Console.ResetColor();
+
+                    await connection.ExecuteAsync(sqlLocal, parametersLocal, transaction);
+                }
+                
                 _logger.LogInformation("[PAYMENT] InsertPaymentLineCurrencyAsync başarılı: PaymentLineID={PaymentLineID}", paymentLineId);
             }
             catch (Exception ex)
@@ -1084,6 +1181,42 @@ namespace ErpMobile.Api.Services
             }
         }
         
+        /// <summary>
+        /// Faturayı tamamlandı olarak işaretler
+        /// </summary>
+        /// <param name="invoiceHeaderId">Fatura başlık ID'si</param>
+        /// <returns>İşlem sonucu</returns>
+        private async Task MarkInvoiceAsCompletedAsync(string invoiceHeaderId)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
+                await connection.OpenAsync();
+
+                var sql = @"
+                UPDATE trInvoiceHeader
+                SET 
+                    IsCompleted = 1,
+                    LastUpdatedDate = GETDATE(),
+                    LastUpdatedUserName = @UserName
+                WHERE 
+                    InvoiceHeaderID = @InvoiceHeaderID";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@InvoiceHeaderID", Guid.Parse(invoiceHeaderId));
+                parameters.Add("@UserName", "System");
+
+                await connection.ExecuteAsync(sql, parameters);
+
+                _logger.LogInformation("[INVOICE] Fatura tamamlandı olarak işaretlendi: {InvoiceHeaderID}", invoiceHeaderId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fatura tamamlandı olarak işaretlenirken hata oluştu: {InvoiceHeaderID}, {Message}", invoiceHeaderId, ex.Message);
+                Console.WriteLine($"[ERROR] Fatura tamamlandı olarak işaretlenirken hata oluştu: {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// Kasa koduna göre açıklama döndürür
         /// </summary>
