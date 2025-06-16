@@ -18,7 +18,6 @@ namespace ErpMobile.Api.Models.Requests
         /// <summary>
         /// Gets or sets the customer code.
         /// </summary>
-        [Required]
         [StringLength(50)]
         public string CustomerCode { get; set; }
 
@@ -59,12 +58,6 @@ namespace ErpMobile.Api.Models.Requests
         [StringLength(20)]
         public string CustomerIdentityNumber { get; set; }
         
-        /// <summary>
-        /// Gets or sets the identity number.
-        /// </summary>
-        [StringLength(20)]
-        public string IdentityNum { get; set; }
-
         /// <summary>
         /// Gets or sets the mersis number.
         /// </summary>
@@ -265,10 +258,7 @@ namespace ErpMobile.Api.Models.Requests
         [StringLength(50)]
         public string LastUpdatedUserName { get; set; } = "SYSTEM";
 
-        /// <summary>
-        /// Gets or sets the exchange type code.
-        /// </summary>
-        public int ExchangeTypeCode { get; set; }
+ 
 
         /// <summary>
         /// Gets or sets the due date formula code.

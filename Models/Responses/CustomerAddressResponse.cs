@@ -4,7 +4,10 @@ namespace ErpMobile.Api.Models.Responses
 {
     public class CustomerAddressResponse
     {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
         public string CustomerCode { get; set; } = string.Empty;
+        public Guid AddressId { get; set; }
         public Guid PostalAddressId { get; set; }
         public string AddressTypeCode { get; set; } = string.Empty;
         public string AddressTypeDescription { get; set; } = string.Empty;
@@ -14,6 +17,7 @@ namespace ErpMobile.Api.Models.Responses
         public string StateDescription { get; set; } = string.Empty;
         public string CityCode { get; set; } = string.Empty;
         public string CityDescription { get; set; } = string.Empty;
+        public string TownCode { get; set; } = string.Empty;
         public string DistrictCode { get; set; } = string.Empty;
         public string DistrictDescription { get; set; } = string.Empty;
         public string QuarterCode { get; set; } = string.Empty;

@@ -65,6 +65,10 @@ builder.Services.AddCors(options =>
     });
 });
 builder.Services.AddControllers()
+    .AddJsonOptions(options => {
+        // JSON property adlarında camelCase kullanımını kabul et (JavaScript uyumluluğu için)
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    })
     .ConfigureApiBehaviorOptions(options => {
         // Model doğrulama hatalarında otomatik BadRequest dönüşünü devre dışı bırak
         options.SuppressModelStateInvalidFilter = true;
@@ -285,6 +289,9 @@ builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 // Geçici Müşteri Token Servisi
 builder.Services.AddScoped<TempCustomerTokenService>();
 builder.Services.AddScoped<ITokenValidationService, TempCustomerTokenService>();
+
+// Token ile müşteri oluşturma servisi
+builder.Services.AddScoped<ICustomerTokenService, CustomerTokenService>();
 
 // DapperContext kaydı
 builder.Services.AddSingleton<ErpMobile.Api.Data.DapperContext>();

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using ErpMobile.Api.Data;
 using ErpMobile.Api.Models.Common;
 using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Services.Interfaces;
 
 namespace ErpMobile.Api.Controllers
 {
@@ -21,12 +22,14 @@ namespace ErpMobile.Api.Controllers
         private readonly ICurrencyService _currencyService;
         private readonly ILogger<CurrencyController> _logger;
         private readonly ErpDbContext _context;
+        private readonly ITokenValidationService _tokenValidationService;
 
-        public CurrencyController(ICurrencyService currencyService, ILogger<CurrencyController> logger, ErpDbContext context)
+        public CurrencyController(ICurrencyService currencyService, ILogger<CurrencyController> logger, ErpDbContext context, ITokenValidationService tokenValidationService)
         {
             _currencyService = currencyService;
             _logger = logger;
             _context = context;
+            _tokenValidationService = tokenValidationService;
         }
 
         /// <summary>
@@ -46,6 +49,37 @@ namespace ErpMobile.Api.Controllers
             {
                 _logger.LogError(ex, "Para birimleri alınırken hata oluştu. Dil Kodu: {LangCode}", langCode);
                 return StatusCode(500, "Para birimleri alınırken bir hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// Para birimi listesini token ile getirir
+        /// </summary>
+        /// <param name="token">Doğrulama token'ı</param>
+        /// <param name="langCode">Dil kodu</param>
+        /// <returns>Para birimi listesi</returns>
+        [AllowAnonymous]
+        [HttpGet("currencies-with-token")]
+        [ProducesResponseType(typeof(ApiResponse<List<CurrencyResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<List<CurrencyResponse>>> GetCurrenciesWithToken([FromQuery] string token, [FromQuery] string langCode = "TR")
+        {
+            try
+            {
+                // Token doğrulama
+                if (!_tokenValidationService.ValidateToken(token, TokenScope.CustomerRegistration))
+                {
+                    return Unauthorized(new ApiResponse<string>(null, false, "Invalid or expired token or token not authorized for this operation."));
+                }
+
+                var currencies = await _currencyService.GetCurrenciesAsync(langCode);
+                return Ok(new ApiResponse<List<CurrencyResponse>>(currencies, true, "Para birimleri başarıyla alındı."));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Para birimleri token ile alınırken hata oluştu. Token: {Token}, Dil Kodu: {LangCode}", token, langCode);
+                return StatusCode(500, new ApiResponse<string>(null, false, "Para birimleri alınırken bir hata oluştu", ex.Message));
             }
         }
 

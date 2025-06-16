@@ -22,5 +22,26 @@ namespace ErpMobile.Api.Interfaces
         /// <param name="request">Müşteri güncelleme isteği</param>
         /// <returns>Güncellenen müşteri bilgileri</returns>
         Task<CustomerUpdateResponseNew> UpdateCustomerAsync(CustomerUpdateRequestNew request);
+        
+        /// <summary>
+        /// Müşteri adres bilgisi ekler
+        /// </summary>
+        /// <param name="request">Müşteri adres bilgisi ekleme isteği</param>
+        /// <returns>Eklenen adres bilgisi</returns>
+        Task<CustomerAddressResponse> AddCustomerAddressAsync(CustomerAddressRequest request);
+        
+        /// <summary>
+        /// Müşteri iletişim bilgisi ekler
+        /// </summary>
+        /// <param name="request">Müşteri iletişim bilgisi ekleme isteği</param>
+        /// <returns>Eklenen iletişim bilgisi</returns>
+        Task<CustomerCommunicationResponse> AddCustomerCommunicationAsync(CustomerCommunicationRequest request);
+        
+        /// <summary>
+        /// Müşteri kişi bilgisi ekler
+        /// </summary>
+        /// <param name="request">Müşteri kişi bilgisi ekleme isteği</param>
+        /// <returns>Eklenen kişi bilgisi</returns>
+        Task<CustomerContactResponse> AddCustomerContactAsync(CustomerContactCreateRequestNew request);
     }
 }

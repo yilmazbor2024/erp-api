@@ -652,5 +652,258 @@ namespace ErpMobile.Api.Services
                 };
             }
         }
+        /// <summary>
+    /// Müşteri adres bilgisi ekler
+    /// </summary>
+    /// <param name="request">Müşteri adres bilgisi ekleme isteği</param>
+    /// <returns>Eklenen adres bilgisi</returns>
+    public async Task<CustomerAddressResponse> AddCustomerAddressAsync(CustomerAddressRequest request)
+    {
+        _logger.LogInformation("[CustomerServiceNew.AddCustomerAddressAsync] - Başlatıldı");
+        
+        if (request == null)
+        {
+            _logger.LogWarning("[CustomerServiceNew.AddCustomerAddressAsync] - Geçersiz istek (null)");
+            return new CustomerAddressResponse
+            {
+                Success = false,
+                Message = "Geçersiz istek"
+            };
+        }
+
+        try
+        {
+            _logger.LogInformation("[CustomerServiceNew.AddCustomerAddressAsync] - Müşteri adresi ekleniyor: {CustomerCode}", request.CustomerCode);
+
+            using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
+            await connection.OpenAsync();
+
+            // Adres ID oluştur
+            var addressId = Guid.NewGuid();
+
+            // Adres ekle
+            string insertQuery = @"
+                INSERT INTO prCurrAccAddress (
+                    AddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode,
+                    CountryCode, CityCode, TownCode, DistrictCode, PostalCode, Address,
+                    IsDefault, SubCurrAccID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                ) VALUES (
+                    @AddressID, @CurrAccTypeCode, @CurrAccCode, @AddressTypeCode,
+                    @CountryCode, @CityCode, @TownCode, @DistrictCode, @PostalCode, @Address,
+                    @IsDefault, @SubCurrAccID, @CreatedUserName, @CreatedDate, @LastUpdatedUserName, @LastUpdatedDate
+                )";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@AddressID", addressId);
+            parameters.Add("@CurrAccTypeCode", 3); // Müşteri tipi kodu
+            parameters.Add("@CurrAccCode", request.CustomerCode);
+            parameters.Add("@AddressTypeCode", request.AddressTypeCode);
+            parameters.Add("@CountryCode", request.CountryCode);
+            parameters.Add("@CityCode", request.CityCode);
+            parameters.Add("@TownCode", request.TownCode ?? string.Empty);
+            parameters.Add("@DistrictCode", request.DistrictCode);
+            parameters.Add("@PostalCode", request.PostalCode ?? string.Empty);
+            parameters.Add("@Address", request.Address);
+            parameters.Add("@IsDefault", request.IsDefault);
+            parameters.Add("@SubCurrAccID", null); // DBNull.Value yerine null kullanıyoruz
+            parameters.Add("@CreatedUserName", request.CreatedUserName);
+            parameters.Add("@CreatedDate", DateTime.Now);
+            parameters.Add("@LastUpdatedUserName", request.LastUpdatedUserName);
+            parameters.Add("@LastUpdatedDate", DateTime.Now);
+
+            await connection.ExecuteAsync(insertQuery, parameters);
+
+            _logger.LogInformation("[CustomerServiceNew.AddCustomerAddressAsync] - Müşteri adresi eklendi: {CustomerCode}, AddressID: {AddressID}", request.CustomerCode, addressId);
+
+            return new CustomerAddressResponse
+            {
+                Success = true,
+                AddressId = addressId,
+                CustomerCode = request.CustomerCode,
+                Message = "Adres başarıyla eklendi"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CustomerServiceNew.AddCustomerAddressAsync] - Müşteri adresi eklenirken hata oluştu: {Message}", ex.Message);
+            return new CustomerAddressResponse
+            {
+                Success = false,
+                Message = $"Adres eklenirken bir hata oluştu: {ex.Message}"
+            };
+        }
     }
+
+    /// <summary>
+    /// Müşteri iletişim bilgisi ekler
+    /// </summary>
+    /// <param name="request">Müşteri iletişim bilgisi ekleme isteği</param>
+    /// <returns>Eklenen iletişim bilgisi</returns>
+    public async Task<CustomerCommunicationResponse> AddCustomerCommunicationAsync(CustomerCommunicationRequest request)
+    {
+        _logger.LogInformation("[CustomerServiceNew.AddCustomerCommunicationAsync] - Başlatıldı");
+        
+        if (request == null)
+        {
+            _logger.LogWarning("[CustomerServiceNew.AddCustomerCommunicationAsync] - Geçersiz istek (null)");
+            return new CustomerCommunicationResponse
+            {
+                Success = false,
+                Message = "Geçersiz istek"
+            };
+        }
+
+        try
+        {
+            _logger.LogInformation("[CustomerServiceNew.AddCustomerCommunicationAsync] - Müşteri iletişim bilgisi ekleniyor: {CustomerCode}", request.CustomerCode);
+
+            using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
+            await connection.OpenAsync();
+
+            // İletişim ID oluştur
+            var communicationId = Guid.NewGuid();
+
+            // İletişim bilgisi ekle
+            string insertQuery = @"
+                INSERT INTO prCurrAccCommunication (
+                    CommunicationID, CurrAccTypeCode, CurrAccCode, CommunicationTypeCode,
+                    CommAddress, IsDefault, IsBlocked, CanSendAdvert, IsConfirmed, SubCurrAccID, 
+                    CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                ) VALUES (
+                    @CommunicationID, @CurrAccTypeCode, @CurrAccCode, @CommunicationTypeCode,
+                    @CommAddress, @IsDefault, @IsBlocked, @CanSendAdvert, @IsConfirmed, @SubCurrAccID, 
+                    @CreatedUserName, @CreatedDate, @LastUpdatedUserName, @LastUpdatedDate
+                )";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@CommunicationID", communicationId);
+            parameters.Add("@CurrAccTypeCode", 3); // Müşteri tipi kodu
+            parameters.Add("@CurrAccCode", request.CustomerCode);
+            parameters.Add("@CommunicationTypeCode", request.CommunicationTypeCode);
+            parameters.Add("@CommAddress", request.CommunicationValue);
+            parameters.Add("@IsDefault", request.IsDefault);
+            parameters.Add("@IsBlocked", false);
+            parameters.Add("@CanSendAdvert", request.CanSendAdvert);
+            parameters.Add("@IsConfirmed", request.IsConfirmed);
+            parameters.Add("@SubCurrAccID", null); // DBNull.Value yerine null kullanıyoruz
+            parameters.Add("@CreatedUserName", request.CreatedUserName);
+            parameters.Add("@CreatedDate", DateTime.Now);
+            parameters.Add("@LastUpdatedUserName", request.LastUpdatedUserName);
+            parameters.Add("@LastUpdatedDate", DateTime.Now);
+
+            await connection.ExecuteAsync(insertQuery, parameters);
+
+            _logger.LogInformation("[CustomerServiceNew.AddCustomerCommunicationAsync] - Müşteri iletişim bilgisi eklendi: {CustomerCode}, CommunicationID: {CommunicationID}", request.CustomerCode, communicationId);
+
+            return new CustomerCommunicationResponse
+            {
+                Success = true,
+                CommunicationId = communicationId,
+                CustomerCode = request.CustomerCode,
+                CommunicationTypeCode = request.CommunicationTypeCode,
+                CommunicationValue = request.CommunicationValue,
+                IsDefault = request.IsDefault,
+                CanSendAdvert = request.CanSendAdvert,
+                IsConfirmed = request.IsConfirmed,
+                CreatedDate = DateTime.Now,
+                CreatedUserName = request.CreatedUserName,
+                Message = "İletişim bilgisi başarıyla eklendi"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CustomerServiceNew.AddCustomerCommunicationAsync] - Müşteri iletişim bilgisi eklenirken hata oluştu: {Message}", ex.Message);
+            return new CustomerCommunicationResponse
+            {
+                Success = false,
+                Message = $"İletişim bilgisi eklenirken bir hata oluştu: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Müşteri kişi bilgisi ekler
+    /// </summary>
+    /// <param name="request">Müşteri kişi bilgisi ekleme isteği</param>
+    /// <returns>Eklenen kişi bilgisi</returns>
+    public async Task<CustomerContactResponse> AddCustomerContactAsync(CustomerContactCreateRequestNew request)
+    {
+        _logger.LogInformation("[CustomerServiceNew.AddCustomerContactAsync] - Başlatıldı");
+        
+        if (request == null)
+        {
+            _logger.LogWarning("[CustomerServiceNew.AddCustomerContactAsync] - Geçersiz istek (null)");
+            return new CustomerContactResponse
+            {
+                Success = false,
+                Message = "Geçersiz istek"
+            };
+        }
+
+        try
+        {
+            _logger.LogInformation("[CustomerServiceNew.AddCustomerContactAsync] - Müşteri kişi bilgisi ekleniyor: {CustomerCode}", request.CustomerCode);
+
+            using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
+            await connection.OpenAsync();
+
+            // Kişi ID oluştur
+            var contactId = Guid.NewGuid();
+
+            // Kişi bilgisi ekle
+            string insertQuery = @"
+                INSERT INTO prCurrAccContact (
+                    ContactID, CurrAccTypeCode, CurrAccCode, ContactTypeCode,
+                    FirstName, LastName, IsAuthorized, IdentityNum, SubCurrAccID,
+                    CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                ) VALUES (
+                    @ContactID, @CurrAccTypeCode, @CurrAccCode, @ContactTypeCode,
+                    @FirstName, @LastName, @IsAuthorized, @IdentityNum, @SubCurrAccID,
+                    @CreatedUserName, @CreatedDate, @LastUpdatedUserName, @LastUpdatedDate
+                )";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@ContactID", contactId);
+            parameters.Add("@CurrAccTypeCode", 3); // Müşteri tipi kodu
+            parameters.Add("@CurrAccCode", request.CustomerCode);
+            parameters.Add("@ContactTypeCode", request.ContactTypeCode);
+            parameters.Add("@FirstName", request.FirstName);
+            parameters.Add("@LastName", request.LastName);
+            parameters.Add("@IsAuthorized", request.IsAuthorized);
+            parameters.Add("@IdentityNum", string.IsNullOrEmpty(request.IdentityNum) ? null : request.IdentityNum); // DBNull.Value yerine null kullanıyoruz
+            parameters.Add("@SubCurrAccID", null); // DBNull.Value yerine null kullanıyoruz
+            parameters.Add("@CreatedUserName", request.CreatedUserName);
+            parameters.Add("@CreatedDate", DateTime.Now);
+            parameters.Add("@LastUpdatedUserName", request.LastUpdatedUserName);
+            parameters.Add("@LastUpdatedDate", DateTime.Now);
+
+            await connection.ExecuteAsync(insertQuery, parameters);
+
+            _logger.LogInformation("[CustomerServiceNew.AddCustomerContactAsync] - Müşteri kişi bilgisi eklendi: {CustomerCode}, ContactID: {ContactID}", request.CustomerCode, contactId);
+
+            return new CustomerContactResponse
+            {
+                Success = true,
+                ContactId = contactId,
+                CustomerCode = request.CustomerCode,
+                ContactTypeCode = request.ContactTypeCode,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                IsAuthorized = request.IsAuthorized,
+                CreatedDate = DateTime.Now,
+                CreatedUserName = request.CreatedUserName,
+                Message = "Kişi bilgisi başarıyla eklendi"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CustomerServiceNew.AddCustomerContactAsync] - Müşteri kişi bilgisi eklenirken hata oluştu: {Message}", ex.Message);
+            return new CustomerContactResponse
+            {
+                Success = false,
+                Message = $"Kişi bilgisi eklenirken bir hata oluştu: {ex.Message}"
+            };
+        }
+    }
+}
 }

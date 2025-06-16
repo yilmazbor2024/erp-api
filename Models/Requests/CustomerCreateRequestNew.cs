@@ -95,6 +95,18 @@ namespace ErpMobile.Api.Models.Requests
         public string? Patronym { get; set; } = string.Empty;
 
         /// <summary>
+        /// Ülke kodu
+        /// </summary>
+        [StringLength(10, ErrorMessage = "Ülke kodu en fazla 10 karakter olabilir")]
+        public string CountryCode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// İl kodu
+        /// </summary>
+        [StringLength(10, ErrorMessage = "İl kodu en fazla 10 karakter olabilir")]
+        public string StateCode { get; set; } = string.Empty;
+
+        /// <summary>
         /// Şehir kodu
         /// </summary>
         [StringLength(10, ErrorMessage = "Şehir kodu en fazla 10 karakter olabilir")]
@@ -113,6 +125,26 @@ namespace ErpMobile.Api.Models.Requests
         public string RegionCode { get; set; } = string.Empty;
 
         /// <summary>
+        /// Adres
+        /// </summary>
+        [StringLength(500, ErrorMessage = "Adres en fazla 500 karakter olabilir")]
+        public string Address { get; set; } = string.Empty;
+
+        /// <summary>
+        /// E-posta adresi
+        /// </summary>
+        [StringLength(100, ErrorMessage = "E-posta adresi en fazla 100 karakter olabilir")]
+        [EmailAddress(ErrorMessage = "Geçerli bir e-posta adresi giriniz")]
+        public string Email { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Telefon numarası
+        /// </summary>
+        [StringLength(20, ErrorMessage = "Telefon numarası en fazla 20 karakter olabilir")]
+        [Phone(ErrorMessage = "Geçerli bir telefon numarası giriniz")]
+        public string PhoneNumber { get; set; } = string.Empty;
+
+        /// <summary>
         /// Ödeme vadesi (gün)
         /// </summary>
         public int PaymentTerm { get; set; } = 0;
@@ -126,8 +158,14 @@ namespace ErpMobile.Api.Models.Requests
         /// <summary>
         /// Para birimi kodu
         /// </summary>
-        [StringLength(5, ErrorMessage = "Para birimi kodu en fazla 5 karakter olabilir")]
+        [StringLength(10, ErrorMessage = "Para birimi kodu en fazla 10 karakter olabilir")]
         public string CurrencyCode { get; set; } = "TRY";
+
+        /// <summary>
+        /// Döviz kuru tipi kodu
+        /// </summary>
+        [StringLength(10, ErrorMessage = "Döviz kuru tipi kodu en fazla 10 karakter olabilir")]
+        public string ExchangeTypeCode { get; set; } = "TCMB";
 
         /// <summary>
         /// Kredi limiti
@@ -251,5 +289,7 @@ namespace ErpMobile.Api.Models.Requests
         /// E-İrsaliye başlangıç tarihi
         /// </summary>
         public DateTime? EShipmentStartDate { get; set; } = null;
+
+        // Addresses ve Communications özellikleri zaten yukarıda tanımlandı
     }
 }

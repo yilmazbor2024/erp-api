@@ -326,17 +326,51 @@ namespace ErpMobile.Api.Services
                 invoiceNumber = cashTransNumber;
             }
             
-            // Para birimine göre uygun kasa kodunu belirle
+            // Para birimine göre uygun kasa kodunu dinamik olarak belirle
             string cashCurrAccCode;
-            if (currencyCode == "USD")
+            try
             {
-                // USD için 102 kodlu kasa (USD KASA)
-                cashCurrAccCode = "102";
+                // Kasa kodlarını veritabanından al
+                var cashAccounts = await _cashAccountRepository.GetCashAccountsAsync();
+                
+                // İlgili para birimine ait ve aktif olan ilk kasa kodunu bul
+                var matchingCashAccount = cashAccounts
+                    .Where(ca => ca.CurrencyCode == (currencyCode ?? request.DocCurrencyCode) && !ca.IsBlocked)
+                    .FirstOrDefault();
+                    
+                if (matchingCashAccount != null)
+                {
+                    cashCurrAccCode = matchingCashAccount.CashAccountCode;
+                    _logger.LogInformation($"Para birimi {currencyCode} için veritabanından kasa kodu bulundu: {cashCurrAccCode} ({matchingCashAccount.CashAccountDescription})");
+                }
+                else
+                {
+                    // Eğer para birimine uygun kasa bulunamazsa, varsayılan kasa kodlarını kullan
+                    if (currencyCode == "USD")
+                    {
+                        cashCurrAccCode = "102"; // Varsayılan USD kasası
+                        _logger.LogWarning($"Para birimi {currencyCode} için veritabanında uygun kasa bulunamadı, varsayılan kod kullanılıyor: {cashCurrAccCode}");
+                    }
+                    else
+                    {
+                        cashCurrAccCode = "101"; // Varsayılan TL kasası
+                        _logger.LogWarning($"Para birimi {currencyCode ?? request.DocCurrencyCode} için veritabanında uygun kasa bulunamadı, varsayılan kod kullanılıyor: {cashCurrAccCode}");
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // TRY ve diğer para birimleri için 101 kodlu kasa (MERKEZ TL KASA)
-                cashCurrAccCode = "101";
+                // Hata durumunda varsayılan kasa kodlarını kullan
+                _logger.LogError(ex, "Kasa kodları alınırken hata oluştu, varsayılan kodlar kullanılacak");
+                
+                if (currencyCode == "USD")
+                {
+                    cashCurrAccCode = "102"; // Varsayılan USD kasası
+                }
+                else
+                {
+                    cashCurrAccCode = "101"; // Varsayılan TL kasası
+                }
             }
             
             Console.WriteLine($"[INFO] Para birimi {currencyCode} için kasa kodu: {cashCurrAccCode} seçildi");

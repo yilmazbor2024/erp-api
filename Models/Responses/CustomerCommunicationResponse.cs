@@ -4,6 +4,8 @@ namespace ErpMobile.Api.Models.Responses
 {
     public class CustomerCommunicationResponse
     {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
         public string CustomerCode { get; set; } = string.Empty;
         public Guid CommunicationId { get; set; }
         public string CommunicationTypeCode { get; set; } = string.Empty;

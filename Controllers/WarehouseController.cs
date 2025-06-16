@@ -8,6 +8,7 @@ using ErpMobile.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using ErpMobile.Api.Models.Common;
+using ErpMobile.Api.Services.Interfaces;
 
 namespace ErpMobile.Api.Controllers
 {
@@ -18,11 +19,13 @@ namespace ErpMobile.Api.Controllers
     {
         private readonly IWarehouseService _warehouseService;
         private readonly ILogger<WarehouseController> _logger;
+        private readonly ITokenValidationService _tokenValidationService;
 
-        public WarehouseController(IWarehouseService warehouseService, ILogger<WarehouseController> logger)
+        public WarehouseController(IWarehouseService warehouseService, ILogger<WarehouseController> logger, ITokenValidationService tokenValidationService)
         {
             _warehouseService = warehouseService;
             _logger = logger;
+            _tokenValidationService = tokenValidationService;
         }
 
         /// <summary>
@@ -116,6 +119,37 @@ namespace ErpMobile.Api.Controllers
                 _logger.LogError(ex, "Error occurred while getting offices");
                 return StatusCode(StatusCodes.Status500InternalServerError, 
                     new ApiResponse<string>(null, false, "An error occurred while getting offices.", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Get all tax offices with token authentication
+        /// </summary>
+        /// <param name="token">Authentication token</param>
+        /// <returns>List of tax offices</returns>
+        [AllowAnonymous]
+        [HttpGet("tax-offices-with-token")]
+        [ProducesResponseType(typeof(ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetTaxOfficesWithToken([FromQuery] string token)
+        {
+            try
+            {
+                // Token doğrulama
+                if (!_tokenValidationService.ValidateToken(token, TokenScope.CustomerRegistration))
+                {
+                    return Unauthorized(new ApiResponse<string>(null, false, "Invalid or expired token or token not authorized for this operation."));
+                }
+
+                var taxOffices = await _warehouseService.GetTaxOfficesAsync();
+                return Ok(new ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>(taxOffices, true, "Tax offices retrieved successfully."));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting tax offices with token");
+                return StatusCode(StatusCodes.Status500InternalServerError, 
+                    new ApiResponse<string>(null, false, "An error occurred while getting tax offices.", ex.Message));
             }
         }
     }

@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using ErpMobile.Api.Services.Interfaces;
 
 namespace ErpMobile.Api.Models
 {
@@ -43,5 +44,10 @@ namespace ErpMobile.Api.Models
         /// Yeni müşteri kaydı için oluşturulmuş bir token ise true
         /// </summary>
         public bool IsNewCustomer { get; set; }
+        
+        /// <summary>
+        /// Token'in kullanım kapsamı
+        /// </summary>
+        public TokenScope Scope { get; set; } = TokenScope.CustomerRegistration;
     }
 }

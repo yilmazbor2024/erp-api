@@ -217,7 +217,8 @@ namespace ErpMobile.Api.Services
                         SELECT 
                             c.CurrAccCode AS CustomerCode,
                             CASE 
-                                WHEN (c.CurrAccTypeCode = 8) OR (c.CurrAccTypeCode = 4 AND c.IsIndividualAcc = 1) THEN ISNULL(c.FirstLastName, '')
+                                WHEN (c.CurrAccTypeCode = 8) OR (c.CurrAccTypeCode = 4 AND c.IsIndividualAcc = 1)
+                                                THEN ISNULL(c.FirstLastName, '')
                                 ELSE ISNULL(cd.CurrAccDescription, '')
                             END AS CustomerName,
                             c.CustomerTypeCode,
@@ -814,7 +815,7 @@ namespace ErpMobile.Api.Services
                                 TaxNumber = request.TaxNumber,
                                 TaxOfficeCode = request.TaxOfficeCode,
                                 CurrAccTypeCode = request.CustomerTypeCode,
-                                IdentityNumber = request.CustomerIdentityNumber,
+                                IdentityNumber = request.CustomerIdentityNumber, // Orijinal halini geri getir
                                 CreditLimit = 0, // Frontend'den gönderilmeyecek, varsayılan değer kullanılıyor
                                 MinBalance = request.MinBalance,
                                 LastUpdatedUserName = request.LastUpdatedUserName ?? "SYSTEM"
@@ -1109,7 +1110,7 @@ namespace ErpMobile.Api.Services
                 CurrAccTypeCode = request.CustomerTypeCode,
                 TaxNumber = request.TaxNumber,
                 TaxOfficeCode = request.TaxOfficeCode,
-                IdentityNumber = request.CustomerIdentityNumber,
+                IdentityNumber = request.CustomerIdentityNumber, // Orijinal halini geri getir
                 CreditLimit = 0, // Frontend'den gönderilmeyecek, varsayılan değer kullanılıyor
                 RiskLimit = 0, // Varsayılan değer
                 PaymentTerm = 30, // Varsayılan değer
