@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
-using System;
 using System.Threading.Tasks;
 using ErpMobile.Api.Data;
 using ErpMobile.Api.Models;
@@ -21,6 +20,10 @@ namespace ErpMobile.Api.Services
         private readonly NanoServiceDbContext _context;
         private readonly ILogger<TempCustomerTokenService> _logger;
         private readonly IConfiguration _configuration;
+        
+        // Rate limiting için IP bazlı istek sayacı
+        private readonly Dictionary<string, (int Count, DateTime FirstRequest)> _ipRequests = new Dictionary<string, (int, DateTime)>();
+        private readonly object _lockObject = new object();
 
         public TempCustomerTokenService(
             NanoServiceDbContext context,
@@ -68,7 +71,8 @@ namespace ErpMobile.Api.Services
                     CreatedByUserName = userName,
                     IpAddress = ipAddress,
                     UserAgent = userAgent,
-                    IsNewCustomer = string.IsNullOrEmpty(request.CustomerCode)
+                    IsNewCustomer = string.IsNullOrEmpty(request.CustomerCode),
+                    Scope = TokenScope.CustomerRegistration // Varsayılan olarak CustomerRegistration atama
                 };
                 
                 _context.Add(tempToken);
@@ -91,6 +95,55 @@ namespace ErpMobile.Api.Services
             {
                 _logger.LogError(ex, "Geçici link oluşturulurken hata oluştu: {ErrorMessage}", ex.Message);
                 throw;
+            }
+        }
+        
+        /// <summary>
+        /// Token'ı doğrular ve geçerli olup olmadığını kontrol eder (senkron)
+        /// </summary>
+        /// <param name="token">Doğrulanacak token</param>
+        /// <returns>Token geçerli mi</returns>
+        public bool ValidateToken(string token)
+        {
+            try
+            {
+                // Rate limiting kontrolü
+                string ipAddress = GetClientIpAddress();
+                if (!CheckRateLimit(ipAddress))
+                {
+                    _logger.LogWarning("Rate limit aşıldı. IP: {IpAddress}", ipAddress);
+                    return false;
+                }
+                
+                // Asenkron metodu senkron olarak çağır
+                var result = ValidateTokenAsync(token).GetAwaiter().GetResult();
+                return result.IsValid;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Token doğrulanırken hata oluştu: {ErrorMessage}", ex.Message);
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Token'ı doğrular ve geçerli olup olmadığını kontrol eder (senkron)
+        /// </summary>
+        /// <param name="token">Doğrulanacak token</param>
+        /// <param name="requiredScope">Gereken token kapsamı</param>
+        /// <returns>Token geçerli mi</returns>
+        public bool ValidateToken(string token, TokenScope requiredScope)
+        {
+            try
+            {
+                // Asenkron metodu senkron olarak çağır
+                var result = ValidateTokenAsync(token, requiredScope).GetAwaiter().GetResult();
+                return result.IsValid;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Token doğrulanırken hata oluştu: {ErrorMessage}", ex.Message);
+                return false;
             }
         }
         
@@ -149,6 +202,40 @@ namespace ErpMobile.Api.Services
                 _logger.LogError(ex, "Token doğrulanırken hata oluştu: {ErrorMessage}", ex.Message);
                 throw;
             }
+        }
+        
+        /// <summary>
+        /// Token'ı doğrular ve geçerli olup olmadığını kontrol eder
+        /// </summary>
+        /// <param name="token">Doğrulanacak token</param>
+        /// <param name="requiredScope">Gereken token kapsamı</param>
+        /// <returns>Token doğrulama sonucu</returns>
+        public async Task<TokenValidationResponse> ValidateTokenAsync(string token, TokenScope requiredScope)
+        {
+            // Önce normal doğrulama yap
+            var result = await ValidateTokenAsync(token);
+            
+            if (!result.IsValid)
+                return result;
+                
+            // Token'ı veritabanından al
+            var tempToken = await _context.Set<TempCustomerToken>()
+                .FirstOrDefaultAsync(t => t.Token == token);
+                
+            // Scope kontrolü yap
+            // TempCustomerToken.Scope alanını kullan
+            TokenScope tokenScope = tempToken.Scope;
+            
+            if (tokenScope != requiredScope)
+            {
+                return new TokenValidationResponse
+                {
+                    IsValid = false,
+                    Message = "Bu token bu işlem için geçerli değil."
+                };
+            }
+            
+            return result;
         }
         
         /// <summary>
@@ -230,6 +317,118 @@ namespace ErpMobile.Api.Services
                 .Replace("+", "-")
                 .Replace("=", "")
                 .Substring(0, 32);
+        }
+        
+        /// <summary>
+        /// Rate limiting kontrolü yapar
+        /// </summary>
+        /// <param name="ipAddress">Kontrol edilecek IP adresi</param>
+        /// <returns>Rate limit aşılmadıysa true</returns>
+        private bool CheckRateLimit(string ipAddress)
+        {
+            lock (_lockObject)
+            {
+                // IP adresini temizle
+                if (string.IsNullOrEmpty(ipAddress))
+                    return true;
+                    
+                // Mevcut zaman
+                var now = DateTime.UtcNow;
+                
+                // IP adresi için istek sayısını kontrol et
+                if (_ipRequests.TryGetValue(ipAddress, out var requestInfo))
+                {
+                    // Son 1 dakika içindeki istekleri kontrol et
+                    if ((now - requestInfo.FirstRequest).TotalMinutes < 1)
+                    {
+                        // 1 dakikada en fazla 10 istek
+                        if (requestInfo.Count >= 10)
+                        {
+                            _logger.LogWarning("Rate limit aşıldı. IP: {IpAddress}", ipAddress);
+                            return false;
+                        }
+                        
+                        // İstek sayısını artır
+                        _ipRequests[ipAddress] = (requestInfo.Count + 1, requestInfo.FirstRequest);
+                    }
+                    else
+                    {
+                        // Süre dolmuş, yeni istek sayacı başlat
+                        _ipRequests[ipAddress] = (1, now);
+                    }
+                }
+                else
+                {
+                    // İlk istek
+                    _ipRequests[ipAddress] = (1, now);
+                }
+                
+                return true;
+            }
+        }
+        
+        /// <summary>
+        /// İstemcinin IP adresini alır
+        /// </summary>
+        /// <returns>IP adresi</returns>
+        private string GetClientIpAddress()
+        {
+            // HttpContext'e erişim olmadığı için şu an boş dönüyör
+            // Gerçek implementasyonda HttpContext.Connection.RemoteIpAddress kullanılmalı
+            // veya IHttpContextAccessor enjekte edilmeli
+            return "127.0.0.1";
+        }
+        
+        /// <summary>
+        /// Müşteri kodu için yeni bir token oluşturur
+        /// </summary>
+        /// <param name="customerCode">Müşteri kodu</param>
+        /// <returns>Oluşturulan token</returns>
+        public async Task<string> GenerateTokenAsync(string customerCode)
+        {
+            try
+            {
+                _logger.LogInformation($"[TempCustomerTokenService.GenerateTokenAsync] - Müşteri için token oluşturuluyor: {customerCode}");
+                
+                if (string.IsNullOrEmpty(customerCode))
+                {
+                    throw new ArgumentException("Müşteri kodu boş olamaz", nameof(customerCode));
+                }
+                
+                // Benzersiz token oluştur
+                string token = GenerateSecureToken();
+                
+                // Geçerlilik süresi (varsayılan 60 dakika)
+                int expiryMinutes = 60;
+                
+                // Token veritabanına kaydet
+                var tempToken = new TempCustomerToken
+                {
+                    Token = token,
+                    CustomerCode = customerCode,
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes),
+                    IsUsed = false,
+                    CreatedByUserId = "SYSTEM",
+                    CreatedByUserName = "SYSTEM",
+                    IpAddress = GetClientIpAddress(),
+                    UserAgent = "API",
+                    IsNewCustomer = false,
+                    Scope = TokenScope.CustomerRegistration
+                };
+                
+                _context.Add(tempToken);
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation($"[TempCustomerTokenService.GenerateTokenAsync] - Müşteri için token oluşturuldu: {customerCode}");
+                
+                return token;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[TempCustomerTokenService.GenerateTokenAsync] - Müşteri için token oluşturulurken hata: {CustomerCode}", customerCode);
+                throw;
+            }
         }
     }
 }

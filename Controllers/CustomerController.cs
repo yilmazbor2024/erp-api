@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -20,6 +22,7 @@ using Microsoft.Extensions.Configuration;
 using ErpMobile.Api.Models.Requests; 
 using ErpMobile.Api.Models.Responses; 
 using ErpMobile.Api.Services.Interfaces; // Eklendi
+using ErpMobile.Api.Interfaces; // ICustomerTokenService için eklendi
 
 namespace ErpMobile.Api.Controllers
 {
@@ -36,8 +39,9 @@ namespace ErpMobile.Api.Controllers
         private readonly CustomerStubService _customerStubService;
         private readonly TempCustomerTokenService _tempCustomerTokenService;
         private readonly ITokenValidationService _tokenValidationService;
+        private readonly ICustomerTokenService _customerTokenService;
 
-        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context, ICustomerServiceNew customerServiceNew, IConfiguration configuration, CustomerStubService customerStubService, TempCustomerTokenService tempCustomerTokenService, ITokenValidationService tokenValidationService)
+        public CustomerController(ICustomerService customerService, ILogger<CustomerController> logger, ErpDbContext context, ICustomerServiceNew customerServiceNew, IConfiguration configuration, CustomerStubService customerStubService, TempCustomerTokenService tempCustomerTokenService, ITokenValidationService tokenValidationService, ICustomerTokenService? customerTokenService = null)
         {
             _customerService = customerService;
             _logger = logger;
@@ -47,6 +51,7 @@ namespace ErpMobile.Api.Controllers
             _customerStubService = customerStubService;
             _tempCustomerTokenService = tempCustomerTokenService;
             _tokenValidationService = tokenValidationService;
+            _customerTokenService = customerTokenService;
         }
 
         /// <summary>
@@ -136,6 +141,324 @@ namespace ErpMobile.Api.Controllers
                     Error = ex.Message
                 };
                 return StatusCode(500, response);
+            }
+        }
+
+        /// <summary>
+        /// Müşteri kodu ile token alma
+        /// </summary>
+        /// <param name="request">Müşteri kodu içeren istek</param>
+        /// <returns>Müşteri için token</returns>
+        [HttpPost("get-token")]
+        [ProducesResponseType(typeof(ApiResponse<TokenResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetCustomerToken([FromBody] CustomerTokenRequest request)
+        {
+            try
+            {
+                _logger.LogInformation($"[CustomerController.GetCustomerToken] - Müşteri için token istendi: {request?.CustomerCode}");
+                
+                if (string.IsNullOrEmpty(request?.CustomerCode))
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "Müşteri kodu gereklidir."));
+                }
+                
+                // Müşteri kodunun geçerliliğini kontrol et
+                var customer = await _customerService.GetCustomerByCodeAsync(request.CustomerCode);
+                if (customer == null)
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, $"Müşteri bulunamadı: {request.CustomerCode}"));
+                }
+                
+                // Müşteri için token oluştur
+                var token = await _tokenValidationService.GenerateTokenAsync(request.CustomerCode);
+                
+                _logger.LogInformation($"[CustomerController.GetCustomerToken] - Müşteri için token oluşturuldu: {request.CustomerCode}");
+                
+                return Ok(new ApiResponse<TokenResponse>(
+                    new TokenResponse { Token = token },
+                    true,
+                    "Müşteri için token başarıyla oluşturuldu."));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[CustomerController.GetCustomerToken] - Müşteri için token oluşturulurken hata: {CustomerCode}", request?.CustomerCode);
+                return StatusCode(StatusCodes.Status500InternalServerError, 
+                    new ApiResponse<string>(null, false, "Müşteri için token oluşturulurken bir hata oluştu.", ex.Message));
+            }
+        }
+        
+        /// <summary>
+        /// Token ile yeni müşteri oluşturma (müşteri kayıt formu için)
+        /// </summary>
+        /// <param name="token">Doğrulama token'ı</param>
+        /// <param name="request">Müşteri oluşturma isteği</param>
+        /// <returns>Oluşturulan müşteri</returns>
+        [AllowAnonymous]
+        [HttpPost("Register")]
+        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), 200)]
+        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), 400)]
+        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), 401)]
+        [ProducesResponseType(typeof(ApiResponse<CustomerResponse>), 500)]
+        public async Task<IActionResult> RegisterCustomer([FromQuery] string token, [FromBody] JsonElement requestDataElement)
+        {
+            try
+            {
+                // Gelen veriyi logla
+                _logger.LogInformation("RegisterCustomer: Received request data");
+                
+                // JsonElement'i CustomerCreateRequestNew modeline dönüştür
+                CustomerCreateRequestNew request = new CustomerCreateRequestNew();
+                
+                try
+                {
+                    // CustomerCode
+                    if (requestDataElement.TryGetProperty("customerCode", out JsonElement customerCodeElement) && customerCodeElement.ValueKind != JsonValueKind.Null)
+                        request.CustomerCode = customerCodeElement.GetString() ?? string.Empty;
+                    else
+                        request.CustomerCode = string.Empty;
+                        
+                    // CustomerName
+                    if (requestDataElement.TryGetProperty("customerName", out JsonElement customerNameElement) && customerNameElement.ValueKind != JsonValueKind.Null)
+                        request.CustomerName = customerNameElement.GetString() ?? string.Empty;
+                    else
+                        request.CustomerName = string.Empty;
+                        
+                    // CustomerSurname
+                    if (requestDataElement.TryGetProperty("customerSurname", out JsonElement customerSurnameElement) && customerSurnameElement.ValueKind != JsonValueKind.Null)
+                        request.CustomerSurname = customerSurnameElement.GetString() ?? string.Empty;
+                    else
+                        request.CustomerSurname = string.Empty;
+                        
+                    // CustomerTypeCode
+                    if (requestDataElement.TryGetProperty("customerTypeCode", out JsonElement customerTypeCodeElement) && customerTypeCodeElement.ValueKind != JsonValueKind.Null)
+                    {
+                        if (customerTypeCodeElement.ValueKind == JsonValueKind.String && customerTypeCodeElement.GetString() == "individual")
+                            request.CustomerTypeCode = 3; // Bireysel müşteri için varsayılan değer
+                        else if (customerTypeCodeElement.ValueKind == JsonValueKind.Number)
+                            request.CustomerTypeCode = customerTypeCodeElement.GetByte();
+                        else
+                            request.CustomerTypeCode = 3; // Varsayılan değer
+                    }
+                    else
+                        request.CustomerTypeCode = 3;
+                        
+                    // CompanyCode
+                    if (requestDataElement.TryGetProperty("companyCode", out JsonElement companyCodeElement) && companyCodeElement.ValueKind != JsonValueKind.Null)
+                    {
+                        if (companyCodeElement.ValueKind == JsonValueKind.Number)
+                            request.CompanyCode = companyCodeElement.GetInt16();
+                        else
+                            request.CompanyCode = 1;
+                    }
+                    else
+                        request.CompanyCode = 1;
+                        
+                    // OfficeCode
+                    if (requestDataElement.TryGetProperty("officeCode", out JsonElement officeCodeElement) && officeCodeElement.ValueKind != JsonValueKind.Null)
+                        request.OfficeCode = officeCodeElement.GetString() ?? "M";
+                    else
+                        request.OfficeCode = "M";
+                        
+                    // CurrencyCode
+                    if (requestDataElement.TryGetProperty("currencyCode", out JsonElement currencyCodeElement) && currencyCodeElement.ValueKind != JsonValueKind.Null)
+                        request.CurrencyCode = currencyCodeElement.GetString() ?? "USD";
+                    else
+                        request.CurrencyCode = "USD";
+                        
+                    // IsIndividualAcc
+                    if (requestDataElement.TryGetProperty("isIndividualAcc", out JsonElement isIndividualAccElement) && isIndividualAccElement.ValueKind != JsonValueKind.Null)
+                        request.IsIndividualAcc = isIndividualAccElement.GetBoolean();
+                    else
+                        request.IsIndividualAcc = true;
+                        
+                    // TaxNumber
+                    if (requestDataElement.TryGetProperty("taxNumber", out JsonElement taxNumberElement) && taxNumberElement.ValueKind != JsonValueKind.Null)
+                        request.TaxNumber = taxNumberElement.GetString() ?? string.Empty;
+                    else
+                        request.TaxNumber = string.Empty;
+                        
+                    // TaxOfficeCode
+                    if (requestDataElement.TryGetProperty("taxOfficeCode", out JsonElement taxOfficeCodeElement) && taxOfficeCodeElement.ValueKind != JsonValueKind.Null)
+                        request.TaxOfficeCode = taxOfficeCodeElement.GetString() ?? string.Empty;
+                    else
+                        request.TaxOfficeCode = string.Empty;
+                        
+                    // IdentityNum
+                    if (requestDataElement.TryGetProperty("identityNum", out JsonElement identityNumElement) && identityNumElement.ValueKind != JsonValueKind.Null)
+                        request.IdentityNum = identityNumElement.GetString() ?? string.Empty;
+                    else
+                        request.IdentityNum = string.Empty;
+                        
+                    // CreatedUserName
+                    if (requestDataElement.TryGetProperty("createdUserName", out JsonElement createdUserNameElement) && createdUserNameElement.ValueKind != JsonValueKind.Null)
+                        request.CreatedUserName = createdUserNameElement.GetString() ?? "system";
+                    else
+                        request.CreatedUserName = "system";
+                        
+                    // LastUpdatedUserName
+                    if (requestDataElement.TryGetProperty("lastUpdatedUserName", out JsonElement lastUpdatedUserNameElement) && lastUpdatedUserNameElement.ValueKind != JsonValueKind.Null)
+                        request.LastUpdatedUserName = lastUpdatedUserNameElement.GetString() ?? "system";
+                    else
+                        request.LastUpdatedUserName = "system";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "RegisterCustomer: Error parsing request data");
+                    return BadRequest(new ApiResponse<CustomerResponse>
+                    {
+                        Success = false,
+                        Message = "Müşteri bilgileri geçersiz",
+                        Data = null,
+                        Error = ex.Message
+                    });
+                }
+                
+                // Adres ve iletişim bilgilerini ayrıca işleyeceğiz
+                // Not: Bu bilgiler müşteri oluştuktan sonra ayrı API çağrıları ile eklenecek
+                
+                // Model binding hatalarını kontrol et
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState
+                        .Where(x => x.Value.Errors.Count > 0)
+                        .Select(x => new { Property = x.Key, Errors = x.Value.Errors.Select(e => e.ErrorMessage).ToList() })
+                        .ToList();
+                    
+                    _logger.LogError("RegisterCustomer: Model binding errors: {@Errors}", errors);
+                    
+                    return BadRequest(new ApiResponse<CustomerResponse>
+                    {
+                        Success = false,
+                        Message = "Müşteri bilgileri geçersiz",
+                        Data = null,
+                        Error = string.Join(", ", errors.SelectMany(e => e.Errors))
+                    });
+                }
+
+                // Token geçerliliğini kontrol et
+                var tokenValidation = await _tokenValidationService.ValidateTokenAsync(token, TokenScope.CustomerRegistration);
+                if (!tokenValidation.IsValid)
+                {
+                    _logger.LogWarning("Token validation failed: {reason}", tokenValidation.Message);
+                    return Unauthorized(new ApiResponse<CustomerResponse>
+                    {
+                        Success = false,
+                        Message = "Geçersiz token",
+                        Data = null,
+                        Error = tokenValidation.Message
+                    });
+                }
+
+                _logger.LogInformation("RegisterCustomer: Token validated successfully for customer: {CustomerName}", request?.CustomerName ?? "Unknown");
+
+                // Varsayılan değerleri ayarla
+                request.CreatedUserName = "system";
+                request.LastUpdatedUserName = "system";
+                
+                // Varsayılan değerler
+                if (request.CompanyCode <= 0) request.CompanyCode = 1;
+                if (string.IsNullOrEmpty(request.OfficeCode)) request.OfficeCode = "M";
+                if (string.IsNullOrEmpty(request.CurrencyCode)) request.CurrencyCode = "USD";
+                
+                // Müşteri tipi varsayılan olarak 3 (normal müşteri)
+                if (request.CustomerTypeCode <= 0) request.CustomerTypeCode = 3;
+                
+                // Müşteri oluşturma işlemi
+                CustomerCreateResponse result;
+                if (_customerTokenService != null)
+                {
+                    // Token servisi varsa, token servisi ile müşteri oluştur
+                    _logger.LogInformation("Token servisi ile müşteri oluşturuluyor");
+                    result = await _customerTokenService.CreateCustomerWithTokenAsync(request);
+                }
+                else
+                {
+                    // Token servisi yoksa, normal servis ile müşteri oluştur
+                    _logger.LogInformation("Normal servis ile müşteri oluşturuluyor");
+                    var resultNew = await _customerServiceNew.CreateCustomerAsync(request);
+                    
+                    // CustomerCreateResponseNew'i CustomerCreateResponse'a dönüştür
+                    result = new CustomerCreateResponse
+                    {
+                        CustomerCode = resultNew.CustomerCode,
+                        CustomerName = resultNew.CustomerName,
+                        TaxNumber = resultNew.TaxNumber,
+                        TaxOfficeCode = resultNew.TaxOfficeCode,
+                        CustomerTypeCode = resultNew.CustomerTypeCode,
+                        CustomerTypeDescription = resultNew.CustomerTypeDescription,
+                        Success = resultNew.Success,
+                        Message = resultNew.Message,
+                        CreatedDate = resultNew.CreatedDate,
+                        CreatedBy = resultNew.CreatedUsername
+                    };
+                }
+
+                // CustomerCreateResponse sınıfında Success ve ErrorMessage özellikleri yok
+                // Bu nedenle her zaman başarılı kabul ediyoruz
+                if (string.IsNullOrEmpty(result.CustomerCode))
+                {
+                    _logger.LogError("Customer creation failed: No customer code returned");
+                    return StatusCode(500, new ApiResponse<CustomerResponse>
+                    {
+                        Success = false,
+                        Message = "Müşteri oluşturma başarısız",
+                        Data = null,
+                        Error = "Müşteri kodu oluşturulamadı"
+                    });
+                }
+
+                // CustomerResponse nesnesini oluştur
+                var customer = new CustomerResponse
+                {
+                    Success = true,
+                    CustomerCode = result.CustomerCode,
+                    CustomerName = result.CustomerName,
+                    TaxNumber = request.TaxNumber ?? string.Empty,
+                    TaxOfficeCode = request.TaxOfficeCode ?? string.Empty,
+                    Email = request.Email,
+                    PhoneNumber = request.PhoneNumber
+                };
+
+                var response = new ApiResponse<CustomerResponse>
+                {
+                    Success = true,
+                    Data = customer,
+                    Message = "Müşteri başarıyla oluşturuldu"
+                };
+                
+                _logger.LogInformation("Customer created successfully with code: {code}", result.CustomerCode);
+                
+                // Token'ı yanıta ekle
+                Response.Headers.Add("X-Customer-Token", token);
+                
+                // Müşteri kodunu doğru şekilde döndür
+                var directResponse = new
+                {
+                    success = true,
+                    message = "Müşteri başarıyla oluşturuldu",
+                    customerCode = result.CustomerCode,
+                    customerName = result.CustomerName,
+                    taxNumber = result.TaxNumber,
+                    taxOfficeCode = result.TaxOfficeCode,
+                    email = request.Email,
+                    phoneNumber = request.PhoneNumber
+                };
+                
+                // Yanıtı döndür
+                return Ok(directResponse);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "RegisterCustomer: Error creating customer with token");
+                return StatusCode(500, new ApiResponse<CustomerResponse>
+                {
+                    Success = false,
+                    Message = "Müşteri oluşturulurken hata oluştu",
+                    Data = null,
+                    Error = ex.Message
+                });
             }
         }
 
@@ -1007,7 +1330,7 @@ namespace ErpMobile.Api.Controllers
         /// <summary>
         /// Token ile müşteri oluşturma endpoint'i
         /// </summary>
-        /// <param name="request">Token ve müşteri bilgilerini içeren istek</param>
+        /// <param name="tokenRequest">Token ve müşteri bilgilerini içeren istek</param>
         /// <returns>Oluşturulan müşteri bilgileri</returns>
         [AllowAnonymous] // Bu endpoint token ile erişileceği için anonim erişime izin veriyoruz
         [HttpPost("create-with-token")]
@@ -1020,28 +1343,97 @@ namespace ErpMobile.Api.Controllers
             {
                 _logger.LogInformation("Token ile müşteri oluşturma isteği alındı");
                 
-                // Token kontrolü
+#if DEBUG
+                // Sadece Development ortamında detaylı loglama yap
+                _logger.LogInformation($"Request ContentType: {Request.ContentType}");
+                
+#endif
+                
+                // Request null kontrolü
                 if (tokenRequest == null)
                 {
-                    return BadRequest(new ApiResponse<string>(null, false, "Geçersiz istek formatı."));
+                    _logger.LogWarning("Request null - JSON binding hatası");
+                    return BadRequest(new ApiResponse<string>(null, false, "Invalid request format. Customer data is required."));
                 }
+                
+#if DEBUG
+                // Sadece Development ortamında detaylı loglama yap
+                _logger.LogInformation($"Gelen istek (parsed): {System.Text.Json.JsonSerializer.Serialize(tokenRequest)}");
+                _logger.LogInformation($"Token değeri: {tokenRequest.Token ?? "null"}");
+                _logger.LogInformation($"CustomerData null mu: {(tokenRequest.CustomerData == null ? "Evet" : "Hayır")}");
+                
+                if (tokenRequest.CustomerData != null)
+                {
+                    _logger.LogInformation($"CustomerData içeriği: {System.Text.Json.JsonSerializer.Serialize(tokenRequest.CustomerData)}");
+                }
+#endif
                 
                 if (string.IsNullOrWhiteSpace(tokenRequest.Token))
                 {
+                    _logger.LogWarning("Token boş");
                     return BadRequest(new ApiResponse<string>(null, false, "Token boş olamaz."));
                 }
                 
                 // Token geçerliliğini kontrol et
+                _logger.LogInformation($"Token doğrulanıyor: {tokenRequest.Token}");
                 var tokenValidationResult = await _tokenValidationService.ValidateTokenAsync(tokenRequest.Token);
+                _logger.LogInformation($"Token doğrulama sonucu: {tokenValidationResult.IsValid}, Mesaj: {tokenValidationResult.Message}");
                 if (!tokenValidationResult.IsValid)
                 {
                     return BadRequest(new ApiResponse<string>(null, false, tokenValidationResult.Message));
                 }
-                _logger.LogInformation("Token ile müşteri oluşturma isteği alındı");
+                
+                _logger.LogInformation("Token geçerli, müşteri verileri dönüştürülüyor");
+                
+                // Müşteri adı zorunlu alan kontrolü
+                if (string.IsNullOrWhiteSpace(tokenRequest.CustomerData.CustomerName))
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "Müşteri adı boş olamaz."));
+                }
+                
+                // Türkiye için TC Kimlik/Vergi validasyonu
+                string country = tokenRequest.CustomerData.CurrencyCode == "TRY" ? "TR" : "";
+                bool isIndividual = tokenRequest.CustomerData.IsIndividual;
+                
+                if (country == "TR")
+                {
+                    if (isIndividual)
+                    {
+                        // Bireysel müşteri için TC Kimlik kontrolü
+                        if (string.IsNullOrWhiteSpace(tokenRequest.CustomerData.IdentityNum))
+                        {
+                            return BadRequest(new ApiResponse<string>(null, false, "Türkiye için bireysel müşterilerde TC Kimlik Numarası zorunludur."));
+                        }
+                        
+                        // TC Kimlik format kontrolü (11 haneli sayı)
+                        if (!System.Text.RegularExpressions.Regex.IsMatch(tokenRequest.CustomerData.IdentityNum, @"^\d{11}$"))
+                        {
+                            return BadRequest(new ApiResponse<string>(null, false, "TC Kimlik Numarası 11 haneli sayı olmalıdır."));
+                        }
+                    }
+                    else
+                    {
+                        // Kurumsal müşteri için vergi numarası kontrolü
+                        if (string.IsNullOrWhiteSpace(tokenRequest.CustomerData.TaxNumber))
+                        {
+                            return BadRequest(new ApiResponse<string>(null, false, "Türkiye için kurumsal müşterilerde Vergi Numarası zorunludur."));
+                        }
+                        
+                        // Vergi numarası format kontrolü (10 veya 11 haneli sayı)
+                        if (!System.Text.RegularExpressions.Regex.IsMatch(tokenRequest.CustomerData.TaxNumber, @"^\d{10,11}$"))
+                        {
+                            return BadRequest(new ApiResponse<string>(null, false, "Vergi Numarası 10 veya 11 haneli sayı olmalıdır."));
+                        }
+                        
+                        // Vergi dairesi kontrolü
+                        if (string.IsNullOrWhiteSpace(tokenRequest.CustomerData.TaxOfficeCode))
+                        {
+                            return BadRequest(new ApiResponse<string>(null, false, "Türkiye için kurumsal müşterilerde Vergi Dairesi seçilmelidir."));
+                        }
+                    }
+                }
                 
                 // Token verilerinden CustomerCreateRequestNew oluştur
-                _logger.LogInformation("Token ile gelen müşteri verileri dönüştürülüyor");
-                
                 var customerCreateRequest = new CustomerCreateRequestNew
                 {
                     CustomerCode = tokenRequest.CustomerData.CustomerCode ?? "",
@@ -1064,7 +1456,7 @@ namespace ErpMobile.Api.Controllers
                     // CustomerCreateRequestNew'da Address alanı yok
                 };
 
-                // Normal müşteri oluşturma metodunu çağır - %100 aynı işlemi yap
+                // Normal müşteri oluşturma metodunu çağır
                 var result = await _customerServiceNew.CreateCustomerAsync(customerCreateRequest);
                 
                 // Sonuç kontrolü
