@@ -109,5 +109,20 @@ namespace ErpMobile.Api.Models.Responses
         /// Gets or sets a value indicating whether the customer is blocked.
         /// </summary>
         public bool IsBlocked { get; set; }
+
+        /// <summary>
+        /// Gets or sets the customer's debt amount.
+        /// </summary>
+        public decimal? Debit { get; set; }
+
+        /// <summary>
+        /// Gets or sets the customer's credit amount.
+        /// </summary>
+        public decimal? Credit { get; set; }
+
+        /// <summary>
+        /// Gets or sets the customer's balance amount.
+        /// </summary>
+        public decimal? Balance { get; set; }
     }
 } 

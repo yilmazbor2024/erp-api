@@ -131,6 +131,18 @@ namespace ErpMobile.Api.Services
                             , cdCurrAcc.IsBlocked
                             , CurrAccType = cdCurrAcc.CurrAccTypeCode
                             , CurrAccTypeCode = cdCurrAcc.CurrAccTypeCode
+                            , Debit = ISNULL((SELECT SUM(ISNULL(cabcLoc.Debit, 0)) 
+                                     FROM trCurrAccBook cab WITH(NOLOCK)
+                                     LEFT OUTER JOIN trCurrAccBookCurrency cabcLoc WITH(NOLOCK) ON cabcLoc.CurrAccBookID = cab.CurrAccBookID AND cab.LocalCurrencyCode = cabcLoc.CurrencyCode
+                                     WHERE cab.CurrAccCode = cdCurrAcc.CurrAccCode), 0)
+                            , Credit = ISNULL((SELECT SUM(ISNULL(cabcLoc.Credit, 0)) 
+                                     FROM trCurrAccBook cab WITH(NOLOCK)
+                                     LEFT OUTER JOIN trCurrAccBookCurrency cabcLoc WITH(NOLOCK) ON cabcLoc.CurrAccBookID = cab.CurrAccBookID AND cab.LocalCurrencyCode = cabcLoc.CurrencyCode
+                                     WHERE cab.CurrAccCode = cdCurrAcc.CurrAccCode), 0)
+                            , Balance = ISNULL((SELECT SUM(ISNULL(cabcLoc.Credit, 0) - ISNULL(cabcLoc.Debit, 0)) 
+                                     FROM trCurrAccBook cab WITH(NOLOCK)
+                                     LEFT OUTER JOIN trCurrAccBookCurrency cabcLoc WITH(NOLOCK) ON cabcLoc.CurrAccBookID = cab.CurrAccBookID AND cab.LocalCurrencyCode = cabcLoc.CurrencyCode
+                                     WHERE cab.CurrAccCode = cdCurrAcc.CurrAccCode), 0)
                             FROM cdCurrAcc WITH(NOLOCK)
                                     LEFT OUTER JOIN cdCurrAccDesc WITH(NOLOCK) ON cdCurrAccDesc.CurrAccTypeCode = cdCurrAcc.CurrAccTypeCode AND cdCurrAccDesc.CurrAccCode = cdCurrAcc.CurrAccCode AND cdCurrAccDesc.LangCode = N'TR'
                                     LEFT OUTER JOIN cdPromotionGroupDesc WITH(NOLOCK) ON cdPromotionGroupDesc.PromotionGroupCode = cdCurrAcc.PromotionGroupCode AND cdPromotionGroupDesc.LangCode = N'TR'
