@@ -78,6 +78,13 @@ namespace ErpMobile.Api.Models.Invoice
         public decimal TotalTax { get; set; }
         public decimal TotalDiscount { get; set; }
         public decimal NetAmount { get; set; }
+        
+        // Frontend'in beklediği alan adları (JSON serileştirme için)
+        public decimal totalGrossAmount { get { return TotalAmount; } set { TotalAmount = value; } }
+        public decimal totalVatAmount { get { return TotalTax; } set { TotalTax = value; } }
+        public decimal totalDiscountAmount { get { return TotalDiscount; } set { TotalDiscount = value; } }
+        public decimal totalNetAmount { get { return NetAmount; } set { NetAmount = value; } }
+        
         public bool IsPaid { get; set; }
         public string Status { get; set; }
         public string Notes { get; set; }

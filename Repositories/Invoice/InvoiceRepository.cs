@@ -186,6 +186,50 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // SQL komutunu oluştur
                 using (var command = new SqlCommand(sql, connection, transaction))
                 {
+                    // Fatura vergisiz ise (TaxTypeCode = 4), VatCode ve VatRate sıfır olmalı
+                    byte taxTypeCode = 0;
+                    try {
+                        // Fatura başlığının TaxTypeCode değerini kontrol et
+                        using (var cmd = new SqlCommand("SELECT TaxTypeCode FROM trInvoiceHeader WHERE InvoiceHeaderID = @InvoiceHeaderID", connection, transaction))
+                        {
+                            cmd.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
+                            var result = await cmd.ExecuteScalarAsync();
+                            if (result != null && result != DBNull.Value)
+                            {
+                                taxTypeCode = Convert.ToByte(result);
+                                _logger.LogInformation($"Fatura TaxTypeCode değeri: {taxTypeCode}");
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        _logger.LogError(ex, "TaxTypeCode sorgulanırken hata oluştu");
+                    }
+                    // VatCode ve VatRate değerlerini belirle
+                    string vatCodeValue;
+                    float vatRateValue;
+                    
+                    // TaxTypeCode değerine göre VatCode ve VatRate değerlerini belirle
+                    if (taxTypeCode == 4) // Vergisiz (TaxTypeCode = 4)
+                    {
+                        vatCodeValue = "%0";
+                        vatRateValue = 0;
+                        _logger.LogInformation("Vergisiz fatura için VatCode=%0 ve VatRate=0 ayarlandı");
+                    }
+                    else if (taxTypeCode == 0) // TaxTypeCode 0 durumu için
+                    {
+                        // TaxTypeCode 0 için VatCode ve VatRate değerlerini tutarlı ayarla
+                        vatCodeValue = "%10";
+                        vatRateValue = 10;
+                        _logger.LogInformation($"TaxTypeCode={taxTypeCode} için VatCode=%10 ve VatRate=10 ayarlandı");
+                    }
+                    else
+                    {
+                        // Diğer vergi durumları için
+                        vatCodeValue = !string.IsNullOrEmpty(detail.VatCode) ? detail.VatCode : "%10";
+                        vatRateValue = detail.VatRate > 0 ? detail.VatRate : 10;
+                        _logger.LogInformation($"TaxTypeCode={taxTypeCode} için VatCode={vatCodeValue} ve VatRate={vatRateValue} ayarlandı");
+                    }
+
                     // Zorunlu parametreler
                     command.Parameters.AddWithValue("@InvoiceLineID", invoiceLineId);
                     command.Parameters.AddWithValue("@SortOrder", sortOrder);
@@ -292,50 +336,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     var batchCode = !string.IsNullOrEmpty(detail.BatchCode) ? detail.BatchCode : "";
                     command.Parameters.AddWithValue("@BatchCode", batchCode);
 
-                    // Fatura vergisiz ise (TaxTypeCode = 4), VatCode ve VatRate sıfır olmalı
-                    byte taxTypeCode = 0;
-                    try {
-                        // Fatura başlığının TaxTypeCode değerini kontrol et
-                        using (var cmd = new SqlCommand("SELECT TaxTypeCode FROM trInvoiceHeader WHERE InvoiceHeaderID = @InvoiceHeaderID", connection, transaction))
-                        {
-                            cmd.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
-                            var result = await cmd.ExecuteScalarAsync();
-                            if (result != null && result != DBNull.Value)
-                            {
-                                taxTypeCode = Convert.ToByte(result);
-                                _logger.LogInformation($"Fatura TaxTypeCode değeri: {taxTypeCode}");
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        _logger.LogError(ex, "TaxTypeCode sorgulanırken hata oluştu");
-                    }
                     
-                    // VatCode ve VatRate değerlerini belirle
-                    string vatCodeValue;
-                    float vatRateValue;
-                    
-                    // TaxTypeCode değerine göre VatCode ve VatRate değerlerini belirle
-                    if (taxTypeCode == 4) // Vergisiz (TaxTypeCode = 4)
-                    {
-                        vatCodeValue = "%0";
-                        vatRateValue = 0;
-                        _logger.LogInformation("Vergisiz fatura için VatCode=%0 ve VatRate=0 ayarlandı");
-                    }
-                    else if (taxTypeCode == 0) // TaxTypeCode 0 durumu için
-                    {
-                        // TaxTypeCode 0 için VatCode ve VatRate değerlerini tutarlı ayarla
-                        vatCodeValue = "%10";
-                        vatRateValue = 10;
-                        _logger.LogInformation($"TaxTypeCode={taxTypeCode} için VatCode=%10 ve VatRate=10 ayarlandı");
-                    }
-                    else
-                    {
-                        // Diğer vergi durumları için
-                        vatCodeValue = !string.IsNullOrEmpty(detail.VatCode) ? detail.VatCode : "%10";
-                        vatRateValue = detail.VatRate > 0 ? detail.VatRate : 10;
-                        _logger.LogInformation($"TaxTypeCode={taxTypeCode} için VatCode={vatCodeValue} ve VatRate={vatRateValue} ayarlandı");
-                    }
 
                     command.Parameters.AddWithValue("@VatCode", vatCodeValue);
                     command.Parameters.AddWithValue("@VatRate", vatRateValue);
@@ -456,7 +457,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                         currencyCommand.Parameters.AddWithValue("@TDiscountVI5", 0);
                         
                         // Vergi bilgileri
-                        decimal vatAmount = amount * (decimal)detail.VatRate / 100;
+                        decimal vatAmount = amount * (decimal)vatRateValue / 100;
                         
                         currencyCommand.Parameters.AddWithValue("@TaxBase", amount);
                         currencyCommand.Parameters.AddWithValue("@Pct", 0);
@@ -739,7 +740,6 @@ namespace ErpMobile.Api.Repositories.Invoice
                                 InvoiceNumber = reader["InvoiceNumber"].ToString(),
                                 IsReturn = (bool)reader["IsReturn"],
                                 IsEInvoice = (bool)reader["IsEInvoice"],
-
                                 InvoiceDate = (DateTime)reader["InvoiceDate"],
                                 InvoiceTime = reader["InvoiceTime"].ToString(),
                                 CurrAccTypeCode = (int)reader["CurrAccTypeCode"],
@@ -787,6 +787,8 @@ namespace ErpMobile.Api.Repositories.Invoice
                                 // Ek alanlar varsayılan değerlerle doldurulabilir
                                 Status = (bool)reader["IsCompleted"] ? "Tamamlandı" : "Bekliyor"
                             };
+
+                            _logger.LogInformation($"Fatura bilgileri - Fatura No: {invoice.InvoiceNumber}, InvoiceHeaderID: {invoice.InvoiceHeaderID}");
 
                             invoices.Add(invoice);
                         }
@@ -1107,18 +1109,58 @@ namespace ErpMobile.Api.Repositories.Invoice
                     Status = Convert.ToBoolean(reader["IsCompleted"]) ? "Tamamlandı" : "Bekliyor"
                 };
 
-                // Opsiyonel alanları kontrol et
+                // Opsiyonel alanları kontrol et ve debug logları ekle
+                decimal totalGrossAmount = 0;
+                decimal totalVatAmount = 0;
+                decimal totalDiscountAmount = 0;
+                decimal totalNetAmount = 0;
+                
                 if (reader.HasColumn("TotalGrossAmount"))
-                    invoice.TotalAmount = reader["TotalGrossAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalGrossAmount"]) : 0;
+                {
+                    totalGrossAmount = reader["TotalGrossAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalGrossAmount"]) : 0;
+                    invoice.TotalAmount = totalGrossAmount;
+                    _logger.LogInformation($"Fatura {invoice.InvoiceNumber} - TotalGrossAmount: {totalGrossAmount}");
+                }
+                else
+                {
+                    _logger.LogWarning($"Fatura {invoice.InvoiceNumber} - TotalGrossAmount sütunu bulunamadı!");
+                }
 
                 if (reader.HasColumn("TotalVatAmount"))
-                    invoice.TotalTax = reader["TotalVatAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalVatAmount"]) : 0;
+                {
+                    totalVatAmount = reader["TotalVatAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalVatAmount"]) : 0;
+                    invoice.TotalTax = totalVatAmount;
+                    _logger.LogInformation($"Fatura {invoice.InvoiceNumber} - TotalVatAmount: {totalVatAmount}");
+                }
+                else
+                {
+                    _logger.LogWarning($"Fatura {invoice.InvoiceNumber} - TotalVatAmount sütunu bulunamadı!");
+                }
 
                 if (reader.HasColumn("TotalDiscountAmount"))
-                    invoice.TotalDiscount = reader["TotalDiscountAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalDiscountAmount"]) : 0;
+                {
+                    totalDiscountAmount = reader["TotalDiscountAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalDiscountAmount"]) : 0;
+                    invoice.TotalDiscount = totalDiscountAmount;
+                    _logger.LogInformation($"Fatura {invoice.InvoiceNumber} - TotalDiscountAmount: {totalDiscountAmount}");
+                }
+                else
+                {
+                    _logger.LogWarning($"Fatura {invoice.InvoiceNumber} - TotalDiscountAmount sütunu bulunamadı!");
+                }
 
                 if (reader.HasColumn("TotalNetAmount"))
-                    invoice.NetAmount = reader["TotalNetAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalNetAmount"]) : 0;
+                {
+                    totalNetAmount = reader["TotalNetAmount"] != DBNull.Value ? Convert.ToDecimal(reader["TotalNetAmount"]) : 0;
+                    invoice.NetAmount = totalNetAmount;
+                    _logger.LogInformation($"Fatura {invoice.InvoiceNumber} - TotalNetAmount: {totalNetAmount}");
+                }
+                else
+                {
+                    _logger.LogWarning($"Fatura {invoice.InvoiceNumber} - TotalNetAmount sütunu bulunamadı!");
+                }
+                
+                // Fatura satırlarını kontrol et
+                _logger.LogInformation($"Fatura {invoice.InvoiceNumber} - InvoiceHeaderID: {invoice.InvoiceHeaderID} - Toplamlar: Brüt={totalGrossAmount}, KDV={totalVatAmount}, İndirim={totalDiscountAmount}, Net={totalNetAmount}");
 
                 if (reader.HasColumn("CreatedUserName"))
                 {
@@ -2020,8 +2062,10 @@ namespace ErpMobile.Api.Repositories.Invoice
                     {whereClause}";
 
                 // Verileri almak için sorgu - AllInvoicesQuery.sql dosyasındaki sorguyu baz alarak
+                // Fatura toplamlarını fatura satırlarından hesaplayan bir sorgu oluşturuyoruz
                 string query = $@"
-                    SELECT InvoiceNumber = trInvoiceHeader.InvoiceNumber
+                    SELECT 
+                     InvoiceNumber = trInvoiceHeader.InvoiceNumber
                      , IsReturn = trInvoiceHeader.IsReturn
                      , IsEInvoice = trInvoiceHeader.IsEInvoice
                      , InvoiceTypeCode = trInvoiceHeader.InvoiceTypeCode
@@ -2088,6 +2132,53 @@ namespace ErpMobile.Api.Repositories.Invoice
                      , CreatedDate = trInvoiceHeader.CreatedDate
                      , LastUpdatedUserName = trInvoiceHeader.LastUpdatedUserName
                      , LastUpdatedDate = trInvoiceHeader.LastUpdatedDate
+                     
+                     -- Fatura toplamlarını fatura satırlarından hesaplama
+                     , TotalGrossAmount = ISNULL((
+                         SELECT SUM(ISNULL(trInvoiceLineCurrency.Amount, 0))
+                         FROM trInvoiceLine WITH (NOLOCK)
+                         LEFT JOIN trInvoiceLineCurrency WITH (NOLOCK) 
+                             ON trInvoiceLineCurrency.InvoiceLineID = trInvoiceLine.InvoiceLineID 
+                             AND trInvoiceLineCurrency.CurrencyCode = trInvoiceHeader.DocCurrencyCode
+                         WHERE trInvoiceLine.InvoiceHeaderID = trInvoiceHeader.InvoiceHeaderID
+                     ), 0)
+                     
+                     , TotalVatAmount = ISNULL((
+                         SELECT SUM(ISNULL(trInvoiceLineCurrency.Vat, 0))
+                         FROM trInvoiceLine WITH (NOLOCK)
+                         LEFT JOIN trInvoiceLineCurrency WITH (NOLOCK) 
+                             ON trInvoiceLineCurrency.InvoiceLineID = trInvoiceLine.InvoiceLineID 
+                             AND trInvoiceLineCurrency.CurrencyCode = trInvoiceHeader.DocCurrencyCode
+                         WHERE trInvoiceLine.InvoiceHeaderID = trInvoiceHeader.InvoiceHeaderID
+                     ), 0)
+                     
+                     , TotalDiscountAmount = ISNULL((
+                         SELECT SUM(ISNULL(trInvoiceLineCurrency.LDiscount1, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.LDiscount2, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.LDiscount3, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.LDiscount4, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.LDiscount5, 0) +
+                                   ISNULL(trInvoiceLineCurrency.TDiscount1, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.TDiscount2, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.TDiscount3, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.TDiscount4, 0) + 
+                                   ISNULL(trInvoiceLineCurrency.TDiscount5, 0))
+                         FROM trInvoiceLine WITH (NOLOCK)
+                         LEFT JOIN trInvoiceLineCurrency WITH (NOLOCK) 
+                             ON trInvoiceLineCurrency.InvoiceLineID = trInvoiceLine.InvoiceLineID 
+                             AND trInvoiceLineCurrency.CurrencyCode = trInvoiceHeader.DocCurrencyCode
+                         WHERE trInvoiceLine.InvoiceHeaderID = trInvoiceHeader.InvoiceHeaderID
+                     ), 0)
+                     
+                     , TotalNetAmount = ISNULL((
+                         SELECT SUM(ISNULL(trInvoiceLineCurrency.NetAmount, 0))
+                         FROM trInvoiceLine WITH (NOLOCK)
+                         LEFT JOIN trInvoiceLineCurrency WITH (NOLOCK) 
+                             ON trInvoiceLineCurrency.InvoiceLineID = trInvoiceLine.InvoiceLineID 
+                             AND trInvoiceLineCurrency.CurrencyCode = trInvoiceHeader.DocCurrencyCode
+                         WHERE trInvoiceLine.InvoiceHeaderID = trInvoiceHeader.InvoiceHeaderID
+                     ), 0)
+                     
                  FROM trInvoiceHeader WITH (NOLOCK) 
                     LEFT OUTER JOIN prSubCurrAcc WITH (NOLOCK)
                         ON prSubCurrAcc.SubCurrAccID = trInvoiceHeader.SubCurrAccID
