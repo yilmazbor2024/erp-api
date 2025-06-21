@@ -27,99 +27,259 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<List<WarehouseTransferResponse>> GetWarehouseTransfersAsync(
-            string sourceWarehouseCode = null, 
-            string targetWarehouseCode = null, 
-            DateTime? startDate = null, 
-            DateTime? endDate = null)
+        public async Task<List<WarehouseTransferItemResponse>> GetWarehouseTransferItemsAsync(string transferNumber)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(transferNumber))
+                {
+                    throw new ArgumentNullException(nameof(transferNumber), "Transfer numarası boş olamaz.");
+                }
+
+                var parameters = new List<SqlParameter>
+                {
+                    new SqlParameter("@TransferNumber", transferNumber)
+                };
+
+                var query = $@"
+                SELECT Lines.* FROM (
+                SELECT    SortOrder				= CASE WHEN 1 = 1 AND 1 = 1 THEN trInnerLine.SortOrder ELSE 0 END
+		, ProductCode			= CASE WHEN trInnerLine.ItemTypeCode = 1 THEN trInnerLine.ItemCode ELSE SPACE(0) END
+		, ProductDescription	= ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) WHERE cdItemDesc.ItemTypeCode = 1 AND cdItemDesc.ItemCode = trInnerLine.ItemCode AND cdItemDesc.LangCode = N'TR'), SPACE(0))
+		, ItemTypeCode			= trInnerLine.ItemTypeCode
+		, ItemTypeDescription	= ISNULL((SELECT ItemTypeDescription FROM bsItemTypeDesc WITH(NOLOCK) WHERE bsItemTypeDesc.ItemTypeCode = trInnerLine.ItemTypeCode AND bsItemTypeDesc.LangCode = N'TR'), SPACE(0))
+		, ItemCode				= trInnerLine.ItemCode
+		, ItemDescription		= ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) WHERE cdItemDesc.ItemTypeCode = trInnerLine.ItemTypeCode AND cdItemDesc.ItemCode =trInnerLine.ItemCode AND cdItemDesc.LangCode =N'TR'), SPACE(0))
+		, ColorCode				= CASE WHEN 1 = 1 THEN trInnerLine.ColorCode ELSE SPACE(0) END
+		, ColorDescription		= ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) WHERE cdColorDesc.ColorCode = CASE WHEN 1 = 1 THEN trInnerLine.ColorCode ELSE SPACE(0) END AND cdColorDesc.LangCode = N'TR'), SPACE(0))
+		, ItemDim1Code			= CASE WHEN 1 = 1 THEN trInnerLine.ItemDim1Code ELSE SPACE(0) END
+		, ItemDim2Code			= CASE WHEN 1 = 1 THEN trInnerLine.ItemDim2Code ELSE SPACE(0) END
+		, ItemDim3Code			= CASE WHEN 1 = 1 THEN trInnerLine.ItemDim3Code ELSE SPACE(0) END
+		, UnitOfMeasureCode1	= cdItem.UnitOfMeasureCode1		
+	    , UnitOfMeasureCode2	= cdItem.UnitOfMeasureCode2		
+	    , Barcode				= ISNULL((SELECT MAX(Barcode) FROM prItemBarcode WITH(NOLOCK)
+											WHERE	prItemBarcode.BarcodeTypeCode	= N''
+												AND prItemBarcode.ItemTypeCode		= trInnerLine.ItemTypeCode
+												AND prItemBarcode.ItemCode			= trInnerLine.ItemCode
+												AND prItemBarcode.ColorCode			= CASE WHEN 1 = 1 THEN trInnerLine.ColorCode ELSE SPACE(0) END 
+												AND prItemBarcode.ItemDim1Code		= CASE WHEN 1 = 1 THEN trInnerLine.ItemDim1Code ELSE SPACE(0) END
+												AND prItemBarcode.ItemDim2Code		= CASE WHEN 1 = 1 THEN trInnerLine.ItemDim2Code ELSE SPACE(0) END
+												AND prItemBarcode.ItemDim3Code		= CASE WHEN 1 = 1 THEN trInnerLine.ItemDim3Code ELSE SPACE(0) END
+												AND 1 = 1 AND 1 = 1) , SPACE(0))
+
+		, Quantity			        = SUM(trInnerLine.Qty1)				
+		, Qty2				        = SUM(trInnerLine.Qty2)		
+		, MissingStock				= SUM(ISNULL(rpTransferApproved.MissingStock, 0))
+	    , OverStock					= SUM(ISNULL(rpTransferApproved.OverStock	, 0))
+
+	    , LineDescription				= CASE WHEN 1 = 1 AND 1 = 1 THEN trInnerLine.LineDescription ELSE SPACE(0) END
+		, HeaderID				= trInnerLine.InnerHeaderID	
+	 
+FROM trInnerLine WITH(NOLOCK)	
+	INNER JOIN cdItem WITH(NOLOCK)
+		ON cdItem.ItemTypeCode = trInnerLine.ItemTypeCode
+		AND cdItem.ItemCode = trInnerLine.ItemCode	
+	LEFT OUTER JOIN ProductHierarchy(N'TR')
+		ON ProductHierarchy.ProductHierarchyID = cdItem.ProductHierarchyID
+	LEFT OUTER JOIN ProductCollection(N'TR')
+		ON ProductCollection.ProductCollectionGrCode = cdItem.ProductCollectionGrCode
+	LEFT OUTER JOIN ProductAttributesFilter 
+		ON ProductAttributesFilter.ItemTypeCode = 1 
+		AND ProductAttributesFilter.ItemCode = cdItem.ItemCode
+	LEFT OUTER JOIN InnerITAttributesFilter 
+		ON InnerITAttributesFilter.InnerLineID = trInnerLine.InnerLineID
+	LEFT OUTER JOIN rpTransferApproved WITH(NOLOCK)
+		ON rpTransferApproved.ApplicationCode		= N'Inner'
+		AND rpTransferApproved.InnerProcessCode		= 'WT'
+		AND rpTransferApproved.ApplicationID		= trInnerLine.InnerHeaderID
+		AND rpTransferApproved.ApplicationLineID	= trInnerLine.InnerLineID
+GROUP BY  CASE WHEN 1 = 1 AND 1 = 1 THEN trInnerLine.SortOrder ELSE 0 END
+		, trInnerLine.ItemTypeCode
+		, trInnerLine.ItemCode
+		, CASE WHEN 1 = 1 THEN trInnerLine.ColorCode ELSE SPACE(0) END
+		, CASE WHEN 1 = 1 THEN trInnerLine.ItemDim1Code ELSE SPACE(0) END
+		, CASE WHEN 1 = 1 THEN trInnerLine.ItemDim2Code ELSE SPACE(0) END
+		, CASE WHEN 1 = 1 THEN trInnerLine.ItemDim3Code ELSE SPACE(0) END
+		, cdItem.UnitOfMeasureCode1	
+		, cdItem.UnitOfMeasureCode2	
+		, CASE WHEN 1 = 1 AND 1 = 1 THEN trInnerLine.LineDescription ELSE SPACE(0) END
+		, ProductAttributesFilter.ProductAtt01
+		, ProductAttributesFilter.ProductAtt02
+		, ProductAttributesFilter.ProductAtt03
+		, ProductAttributesFilter.ProductAtt04
+		, ProductAttributesFilter.ProductAtt05
+		, ProductAttributesFilter.ProductAtt06
+		, ProductAttributesFilter.ProductAtt07
+		, ProductAttributesFilter.ProductAtt08
+		, ProductAttributesFilter.ProductAtt09
+		, ProductAttributesFilter.ProductAtt10
+		, ProductAttributesFilter.ProductAtt11
+		, ProductAttributesFilter.ProductAtt12
+		, ProductAttributesFilter.ProductAtt13
+		, ProductAttributesFilter.ProductAtt14
+		, ProductAttributesFilter.ProductAtt15
+		, trInnerLine.InnerHeaderID
+                ) Lines
+                WHERE EXISTS (
+SELECT * FROM (
+SELECT * FROM (
+SELECT    InnerNumberWT				= trInnerHeader.InnerNumber
+		, OperationDate
+		, OperationTime
+		, InnerProcessCode
+		, InnerProcessDescription	= ISNULL((SELECT InnerProcessDescription FROM bsInnerProcessDesc WITH(NOLOCK) WHERE bsInnerProcessDesc.InnerProcessCode = trInnerHeader.InnerProcessCode AND bsInnerProcessDesc.LangCode = N'TR'), SPACE(0))
+		
+		, Series
+		, SeriesNumber
+		, Description
+
+		, CompanyCode
+		, OfficeCode
+		, OfficeDescription			= ISNULL((SELECT OfficeDescription FROM cdOfficeDesc WITH(NOLOCK) WHERE cdOfficeDesc.OfficeCode = trInnerHeader.OfficeCode AND cdOfficeDesc.LangCode = N'TR'), SPACE(0))
+		, StoreCode	
+		, StoreDescription			= ISNULL((SELECT CurrAccDescription FROM cdCurrAccDesc WITH(NOLOCK) WHERE cdCurrAccDesc.CurrAccTypeCode = trInnerHeader.StoreTypeCode AND cdCurrAccDesc.CurrAccCode = trInnerHeader.StoreCode AND cdCurrAccDesc.LangCode = N'TR') ,SPACE(0))				 
+		, CustomerCode				= trInnerHeader.CurrAccCode  
+		, CustomerDescription		= ISNULL((SELECT CurrAccDescription FROM cdCurrAccDesc WITH(NOLOCK) WHERE cdCurrAccDesc.CurrAccTypeCode = trInnerHeader.CurrAccTypeCode AND cdCurrAccDesc.CurrAccCode = trInnerHeader.CurrAccCode AND cdCurrAccDesc.LangCode = N'TR') ,SPACE(0))
+		, WarehouseCode
+		, WarehouseDescription		= ISNULL((SELECT WarehouseDescription FROM cdWarehouseDesc WITH(NOLOCK) WHERE cdWarehouseDesc.WarehouseCode = trInnerHeader.WarehouseCode AND cdWarehouseDesc.LangCode= N'TR'), SPACE(0))
+		 
+		, ToOfficeCode				
+		, ToWarehouseCode			
+		, ToWarehouseDescription	= ISNULL((SELECT WarehouseDescription FROM cdWarehouseDesc WITH(NOLOCK) WHERE cdWarehouseDesc.WarehouseCode = trInnerHeader.ToWarehouseCode AND cdWarehouseDesc.LangCode= N'TR'), SPACE(0))
+
+		, IsCompleted
+		, IsLocked
+		, IsTransferApproved
+		, TransferApprovedDate
+
+		, InnerHeaderID				= trInnerHeader.InnerHeaderID
+    FROM trInnerHeader WITH(NOLOCK)
+    WHERE trInnerHeader.InnerProcessCode = 'WT'
+    AND trInnerHeader.InnerNumber = @TransferNumber
+    ) Query WHERE CompanyCode = 1
+    ) ReportTable 
+    WHERE ReportTable.InnerHeaderID = Lines.HeaderID )
+                ";
+
+                var items = new List<WarehouseTransferItemResponse>();
+                
+                using (var reader = await _context.ExecuteReaderAsync(query, parameters.ToArray()))
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        items.Add(new WarehouseTransferItemResponse
+                        {
+                            ItemCode = reader["ItemCode"].ToString(),
+                            ItemName = reader["ItemDescription"].ToString(),
+                            ColorCode = reader["ColorCode"].ToString(),
+                            ColorName = reader["ColorDescription"].ToString(),
+                            ItemDim1Code = reader["ItemDim1Code"].ToString(),
+                            ItemDim1Name = string.Empty,
+                            Quantity = Convert.ToDouble(reader["Quantity"]),
+                            UnitCode = reader["UnitOfMeasureCode1"].ToString(),
+                            Barcode = reader["Barcode"].ToString(),
+                            LineDescription = reader["LineDescription"].ToString()
+                        });
+                    }
+                }
+
+                return items;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting warehouse transfer items for transfer number {TransferNumber}", transferNumber);
+                throw new Exception($"Depolar arası sevk satırları getirilirken bir hata oluştu. Transfer No: {transferNumber}", ex);
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task<IEnumerable<WarehouseTransferResponse>> GetWarehouseTransfersAsync(
+            DateTime? startDate = null,
+            DateTime? endDate = null,
+            string warehouseCode = null,
+            string targetWarehouseCode = null)
         {
             try
             {
                 var whereConditions = new List<string>();
                 var parameters = new List<SqlParameter>();
 
-                if (!string.IsNullOrEmpty(sourceWarehouseCode))
-                {
-                    whereConditions.Add("h.WarehouseCode = @SourceWarehouseCode");
-                    parameters.Add(new SqlParameter("@SourceWarehouseCode", sourceWarehouseCode));
-                }
-
-                if (!string.IsNullOrEmpty(targetWarehouseCode))
-                {
-                    whereConditions.Add("h.ToWarehouseCode = @TargetWarehouseCode");
-                    parameters.Add(new SqlParameter("@TargetWarehouseCode", targetWarehouseCode));
-                }
-
                 if (startDate.HasValue)
                 {
-                    whereConditions.Add("h.OperationDate >= @StartDate");
-                    parameters.Add(new SqlParameter("@StartDate", startDate.Value));
+                    whereConditions.Add("trInnerHeader.OperationDate >= @StartDate");
+                    parameters.Add(new SqlParameter("@StartDate", startDate.Value.Date));
+                }
+                else
+                {
+                    // Default son 30 gün
+                    whereConditions.Add("trInnerHeader.OperationDate >= @StartDate");
+                    parameters.Add(new SqlParameter("@StartDate", DateTime.Now.AddDays(-30).Date));
                 }
 
                 if (endDate.HasValue)
                 {
-                    whereConditions.Add("h.OperationDate <= @EndDate");
-                    parameters.Add(new SqlParameter("@EndDate", endDate.Value));
+                    whereConditions.Add("trInnerHeader.OperationDate <= @EndDate");
+                    parameters.Add(new SqlParameter("@EndDate", endDate.Value.Date.AddDays(1).AddSeconds(-1)));
+                }
+                else
+                {
+                    // Default bugün
+                    whereConditions.Add("trInnerHeader.OperationDate <= @EndDate");
+                    parameters.Add(new SqlParameter("@EndDate", DateTime.Now.Date.AddDays(1).AddSeconds(-1)));
                 }
 
-                // Sadece WT (Warehouse Transfer) işlem kodlu kayıtları getir
-                whereConditions.Add("h.InnerProcessCode = 'WT'");
+                if (!string.IsNullOrEmpty(warehouseCode))
+                {
+                    whereConditions.Add("trInnerHeader.WarehouseCode = @WarehouseCode");
+                    parameters.Add(new SqlParameter("@WarehouseCode", warehouseCode));
+                }
 
-                var whereClause = whereConditions.Count > 0 
-                    ? "WHERE " + string.Join(" AND ", whereConditions) 
-                    : string.Empty;
+                if (!string.IsNullOrEmpty(targetWarehouseCode))
+                {
+                    whereConditions.Add("trInnerHeader.ToWarehouseCode = @TargetWarehouseCode");
+                    parameters.Add(new SqlParameter("@TargetWarehouseCode", targetWarehouseCode));
+                }
+
+                string whereClause = whereConditions.Count > 0 ? $"AND {string.Join(" AND ", whereConditions)}" : string.Empty;
 
                 var query = $@"
-                    SELECT 
-                        TransferNumber = h.InnerNumber,
-                        h.OperationDate,
-                        h.OperationTime,
-                        h.Series,
-                        h.SeriesNumber,
-                        h.InnerProcessCode,
-                        h.IsReturn,
-                        h.CompanyCode,
-                        h.OfficeCode,
-                        h.ToOfficeCode,
-                        h.StoreCode,
-                        SourceWarehouseCode = h.WarehouseCode,
-                        SourceWarehouseName = sw.WarehouseName,
-                        TargetWarehouseCode = h.ToWarehouseCode,
-                        TargetWarehouseName = tw.WarehouseName,
-                        h.ToStoreCode,
-                        h.CurrAccTypeCode,
-                        VendorCode = CASE h.CurrAccTypeCode WHEN 1 THEN h.CurrAccCode ELSE '' END,
-                        CustomerCode = CASE h.CurrAccTypeCode WHEN 3 THEN h.CurrAccCode ELSE '' END,
-                        RetailCustomerCode = CASE h.CurrAccTypeCode WHEN 4 THEN h.CurrAccCode ELSE '' END,
-                        EmployeeCode = CASE h.CurrAccTypeCode WHEN 8 THEN h.CurrAccCode ELSE '' END,
-                        TotalQty = ISNULL(InnerLines.Qty1, 0),
-                        h.Description,
-                        h.ImportFileNumber,
-                        h.IsCompleted,
-                        h.IsLocked,
-                        h.IsTransferApproved,
-                        h.IsInnerOrderBase,
-                        h.IsSectionTransfer,
-                        h.ApplicationCode,
-                        ApplicationDescription = ISNULL(app.ApplicationDescription, ''),
-                        h.ApplicationID,
-                        h.InnerHeaderID,
-                        ShipmentMethodCode = ISNULL(ext.ShipmentMethodCode, ''),
-                        ShipmentMethodName = ISNULL(sm.ShipmentMethodName, ''),
-                        h.TransferApprovedDate,
-                        h.CreatedUserName,
-                        h.CreatedDate
-                    FROM trInnerHeader h WITH (NOLOCK)
-                    LEFT JOIN tpInnerHeaderExtension ext WITH (NOLOCK) ON h.InnerHeaderID = ext.InnerHeaderID
-                    LEFT JOIN cdWarehouse sw WITH (NOLOCK) ON h.WarehouseCode = sw.WarehouseCode
-                    LEFT JOIN cdWarehouse tw WITH (NOLOCK) ON h.ToWarehouseCode = tw.WarehouseCode
-                    LEFT JOIN cdShipmentMethod sm WITH (NOLOCK) ON ext.ShipmentMethodCode = sm.ShipmentMethodCode
-                    LEFT JOIN bsApplicationDesc app WITH (NOLOCK) ON app.ApplicationCode = h.ApplicationCode AND app.LangCode = 'TR'
-                    INNER JOIN (SELECT InnerHeaderID, Qty1 = SUM(Qty1) 
-                               FROM trInnerLine WITH (NOLOCK)
-                               GROUP BY InnerHeaderID) AS InnerLines ON InnerLines.InnerHeaderID = h.InnerHeaderID
-                    {whereClause}
-                    ORDER BY h.OperationDate DESC, h.OperationTime DESC
+                SELECT * FROM (
+                SELECT    InnerNumberWT				= trInnerHeader.InnerNumber
+                        , OperationDate
+                        , OperationTime
+                        , InnerProcessCode
+                        , InnerProcessDescription	= ISNULL((SELECT InnerProcessDescription FROM bsInnerProcessDesc WITH(NOLOCK) WHERE bsInnerProcessDesc.InnerProcessCode = trInnerHeader.InnerProcessCode AND bsInnerProcessDesc.LangCode = N'TR'), SPACE(0))
+                        
+                        , Series
+                        , SeriesNumber
+                        , Description
+
+                        , CompanyCode
+                        , OfficeCode
+                        , OfficeDescription			= ISNULL((SELECT OfficeDescription FROM cdOfficeDesc WITH(NOLOCK) WHERE cdOfficeDesc.OfficeCode = trInnerHeader.OfficeCode AND cdOfficeDesc.LangCode = N'TR'), SPACE(0))
+                        , StoreCode	
+                        , StoreDescription			= ISNULL((SELECT CurrAccDescription FROM cdCurrAccDesc WITH(NOLOCK) WHERE cdCurrAccDesc.CurrAccTypeCode = trInnerHeader.StoreTypeCode AND cdCurrAccDesc.CurrAccCode = trInnerHeader.StoreCode AND cdCurrAccDesc.LangCode = N'TR') ,SPACE(0))				 
+                        , CustomerCode				= trInnerHeader.CurrAccCode  
+                        , CustomerDescription		= ISNULL((SELECT CurrAccDescription FROM cdCurrAccDesc WITH(NOLOCK) WHERE cdCurrAccDesc.CurrAccTypeCode = trInnerHeader.CurrAccTypeCode AND cdCurrAccDesc.CurrAccCode = trInnerHeader.CurrAccCode AND cdCurrAccDesc.LangCode = N'TR') ,SPACE(0))
+                        , WarehouseCode
+                        , WarehouseDescription		= ISNULL((SELECT WarehouseDescription FROM cdWarehouseDesc WITH(NOLOCK) WHERE cdWarehouseDesc.WarehouseCode = trInnerHeader.WarehouseCode AND cdWarehouseDesc.LangCode= N'TR'), SPACE(0))
+                        
+                        , ToOfficeCode				
+                        , ToWarehouseCode			
+                        , ToWarehouseDescription	= ISNULL((SELECT WarehouseDescription FROM cdWarehouseDesc WITH(NOLOCK) WHERE cdWarehouseDesc.WarehouseCode = trInnerHeader.ToWarehouseCode AND cdWarehouseDesc.LangCode= N'TR'), SPACE(0))
+
+                        , IsCompleted
+                        , IsLocked
+                        , IsTransferApproved
+                        , TransferApprovedDate
+                        , TotalQty = ISNULL((SELECT SUM(Qty1) FROM trInnerLine WITH(NOLOCK) WHERE trInnerLine.InnerHeaderID = trInnerHeader.InnerHeaderID), 0)
+
+                        , InnerHeaderID				= trInnerHeader.InnerHeaderID
+                FROM trInnerHeader WITH(NOLOCK)
+                WHERE trInnerHeader.InnerProcessCode = 'WT'
+                {whereClause}
+                ) Query WHERE CompanyCode = 1
+                ORDER BY OperationDate DESC, OperationTime DESC
                 ";
 
                 var transfers = new List<WarehouseTransferResponse>();
@@ -130,44 +290,45 @@ namespace ErpMobile.Api.Repositories.Inventory
                     {
                         transfers.Add(new WarehouseTransferResponse
                         {
-                            TransferNumber = reader["TransferNumber"].ToString(),
+                            TransferNumber = reader["InnerNumberWT"].ToString(),
                             OperationDate = Convert.ToDateTime(reader["OperationDate"]),
                             OperationTime = reader["OperationTime"] != DBNull.Value ? (TimeSpan)reader["OperationTime"] : TimeSpan.Zero,
                             Series = reader["Series"].ToString(),
                             SeriesNumber = reader["SeriesNumber"].ToString(),
                             InnerProcessCode = reader["InnerProcessCode"].ToString(),
-                            IsReturn = Convert.ToBoolean(reader["IsReturn"]),
+                            IsReturn = false, // Varsayılan değer
                             CompanyCode = reader["CompanyCode"].ToString(),
                             OfficeCode = reader["OfficeCode"].ToString(),
                             ToOfficeCode = reader["ToOfficeCode"].ToString(),
                             StoreCode = reader["StoreCode"].ToString(),
-                            SourceWarehouseCode = reader["SourceWarehouseCode"].ToString(),
-                            SourceWarehouseName = reader["SourceWarehouseName"].ToString(),
-                            TargetWarehouseCode = reader["TargetWarehouseCode"].ToString(),
-                            TargetWarehouseName = reader["TargetWarehouseName"].ToString(),
-                            ToStoreCode = reader["ToStoreCode"].ToString(),
-                            CurrAccTypeCode = reader["CurrAccTypeCode"].ToString(),
-                            VendorCode = reader["VendorCode"].ToString(),
+                            SourceWarehouseCode = reader["WarehouseCode"].ToString(),
+                            SourceWarehouseName = reader["WarehouseDescription"].ToString(),
+                            TargetWarehouseCode = reader["ToWarehouseCode"].ToString(),
+                            TargetWarehouseName = reader["ToWarehouseDescription"].ToString(),
+                            ToStoreCode = string.Empty, // Varsayılan değer
+                            CurrAccTypeCode = string.Empty, // Varsayılan değer
+                            VendorCode = string.Empty, // Varsayılan değer
                             CustomerCode = reader["CustomerCode"].ToString(),
-                            RetailCustomerCode = reader["RetailCustomerCode"].ToString(),
-                            EmployeeCode = reader["EmployeeCode"].ToString(),
-                            TotalQty = Convert.ToDouble(reader["TotalQty"]),
+                            RetailCustomerCode = string.Empty, // Varsayılan değer
+                            EmployeeCode = string.Empty, // Varsayılan değer
+                            TotalQty = reader["TotalQty"] != DBNull.Value ? Convert.ToDouble(reader["TotalQty"]) : 0,
                             Description = reader["Description"].ToString(),
-                            ImportFileNumber = reader["ImportFileNumber"].ToString(),
+                            ImportFileNumber = string.Empty, // Varsayılan değer
                             IsCompleted = Convert.ToBoolean(reader["IsCompleted"]),
                             IsLocked = Convert.ToBoolean(reader["IsLocked"]),
                             IsApproved = Convert.ToBoolean(reader["IsTransferApproved"]),
-                            IsInnerOrderBase = Convert.ToBoolean(reader["IsInnerOrderBase"]),
-                            IsSectionTransfer = Convert.ToBoolean(reader["IsSectionTransfer"]),
-                            ApplicationCode = reader["ApplicationCode"].ToString(),
-                            ApplicationDescription = reader["ApplicationDescription"].ToString(),
-                            ApplicationID = reader["ApplicationID"] != DBNull.Value ? (Guid?)reader["ApplicationID"] : null,
-                            InnerHeaderID = (Guid)reader["InnerHeaderID"],
-                            ShipmentMethodCode = reader["ShipmentMethodCode"].ToString(),
-                            ShipmentMethodName = reader["ShipmentMethodName"].ToString(),
-                            ApprovalDate = reader["TransferApprovedDate"] != DBNull.Value ? Convert.ToDateTime(reader["TransferApprovedDate"]) : (DateTime?)null,
-                            CreatedUserName = reader["CreatedUserName"].ToString(),
-                            CreatedDate = Convert.ToDateTime(reader["CreatedDate"])
+                            IsTransferApproved = Convert.ToBoolean(reader["IsTransferApproved"]),
+                            IsInnerOrderBase = false, // Varsayılan değer
+                            IsSectionTransfer = false, // Varsayılan değer
+                            ApplicationCode = string.Empty, // Varsayılan değer
+                            ApplicationDescription = string.Empty, // Varsayılan değer
+                            ApplicationID = Guid.Empty, // Varsayılan değer
+                            ShipmentMethodCode = string.Empty, // Varsayılan değer
+                            ShipmentMethodName = string.Empty, // Varsayılan değer
+                            ApprovalDate = reader["TransferApprovedDate"] != DBNull.Value ? Convert.ToDateTime(reader["TransferApprovedDate"]) : null,
+                            TransferApprovedDate = reader["TransferApprovedDate"] != DBNull.Value ? Convert.ToDateTime(reader["TransferApprovedDate"]) : null,
+                            CreatedUserName = string.Empty, // Varsayılan değer
+                            CreatedDate = DateTime.Now // Varsayılan değer
                         });
                     }
                 }
@@ -188,27 +349,52 @@ namespace ErpMobile.Api.Repositories.Inventory
             {
                 // Önce başlık bilgilerini getir
                 var headerQuery = @"
-                    SELECT 
-                        TransferNumber = h.InnerNumber,
-                        SourceWarehouseCode = h.WarehouseCode,
-                        SourceWarehouseName = sw.WarehouseName,
-                        TargetWarehouseCode = h.ToWarehouseCode,
-                        TargetWarehouseName = tw.WarehouseName,
-                        h.OperationDate,
-                        h.OperationTime,
-                        h.Description,
-                        ShipmentMethodCode = ISNULL(ext.ShipmentMethodCode, ''),
-                        ShipmentMethodName = ISNULL(sm.ShipmentMethodName, ''),
-                        h.IsTransferApproved,
-                        h.TransferApprovedDate,
-                        h.CreatedUserName,
-                        h.CreatedDate,
-                        h.InnerHeaderID
-                    FROM trInnerHeader h WITH (NOLOCK)
-                    LEFT JOIN tpInnerHeaderExtension ext WITH (NOLOCK) ON h.InnerHeaderID = ext.InnerHeaderID
-                    LEFT JOIN cdWarehouse sw WITH (NOLOCK) ON h.WarehouseCode = sw.WarehouseCode
-                    LEFT JOIN cdWarehouse tw WITH (NOLOCK) ON h.ToWarehouseCode = tw.WarehouseCode
-                    LEFT JOIN cdShipmentMethod sm WITH (NOLOCK) ON ext.ShipmentMethodCode = sm.ShipmentMethodCode
+                    SELECT InnerNumber = h.InnerNumber
+                        , OperationDate = h.OperationDate
+                        , OperationTime = h.OperationTime 
+                        , Series = h.Series
+                        , SeriesNumber = h.SeriesNumber
+                        , InnerProcessCode = h.InnerProcessCode
+                        , IsReturn = h.IsReturn
+                        , CompanyCode = h.CompanyCode
+                        , OfficeCode = h.OfficeCode
+                        , ToOfficeCode = h.ToOfficeCode
+                        , StoreCode = h.StoreCode
+                        , WarehouseCode = h.WarehouseCode
+                        , ToWarehouseCode = h.ToWarehouseCode
+                        , ToStoreCode = h.ToStoreCode
+                        , CurrAccTypeCode = h.CurrAccTypeCode
+                        , VendorCode = CASE CurrAccTypeCode WHEN 1 THEN h.CurrAccCode ELSE SPACE(0) END
+                        , CustomerCode = CASE CurrAccTypeCode WHEN 3 THEN h.CurrAccCode ELSE SPACE(0) END
+                        , RetailCustomerCode = CASE CurrAccTypeCode WHEN 4 THEN h.CurrAccCode ELSE SPACE(0) END
+                        , EmployeeCode = CASE CurrAccTypeCode WHEN 8 THEN h.CurrAccCode ELSE SPACE(0) END
+                        , TotalQty = ISNULL(InnerLines.Qty1, 0)
+                        , Description = h.Description
+                        , ImportFileNumber = h.ImportFileNumber
+                        , IsCompleted = h.IsCompleted
+                        , IsLocked = h.IsLocked
+                        , IsTransferApproved = h.IsTransferApproved
+                        , IsInnerOrderBase = h.IsInnerOrderBase
+                        , IsSectionTransfer = h.IsSectionTransfer
+                        , ApplicationCode = h.ApplicationCode
+                        , ApplicationDescription = ISNULL(bsApplicationDesc.ApplicationDescription, SPACE(0))
+                        , h.ApplicationID
+                        , h.InnerHeaderID
+                        , SourceWarehouseName = ISNULL((SELECT WarehouseDescription FROM cdWarehouseDesc WITH(NOLOCK) WHERE cdWarehouseDesc.WarehouseCode = h.WarehouseCode AND cdWarehouseDesc.LangCode= N'TR'), SPACE(0))
+                        , TargetWarehouseName = ISNULL((SELECT WarehouseDescription FROM cdWarehouseDesc WITH(NOLOCK) WHERE cdWarehouseDesc.WarehouseCode = h.ToWarehouseCode AND cdWarehouseDesc.LangCode= N'TR'), SPACE(0))
+                        , ShipmentMethodCode = ISNULL(ext.ShipmentMethodCode, '')
+                        , ShipmentMethodName = ISNULL((SELECT ShipmentMethodDescription FROM cdShipmentMethodDesc WITH(NOLOCK) WHERE cdShipmentMethodDesc.ShipmentMethodCode = ext.ShipmentMethodCode AND cdShipmentMethodDesc.LangCode = N'TR'), SPACE(0))
+                        , h.CreatedUserName
+                        , h.CreatedDate
+                    FROM trInnerHeader h WITH(NOLOCK) 
+                        LEFT OUTER JOIN bsApplicationDesc WITH(NOLOCK)  
+                            ON bsApplicationDesc.ApplicationCode = h.ApplicationCode
+                            AND bsApplicationDesc.LangCode = 'tr'
+                        LEFT JOIN tpInnerHeaderExtension ext WITH (NOLOCK) ON h.InnerHeaderID = ext.InnerHeaderID
+                        LEFT JOIN (SELECT InnerHeaderID, Qty1 = SUM(Qty1) 
+                                FROM trInnerLine WITH(NOLOCK)
+                                GROUP BY InnerHeaderID) AS InnerLines
+                            ON InnerLines.InnerHeaderID = h.InnerHeaderID
                     WHERE h.InnerNumber = @TransferNumber AND h.InnerProcessCode = 'WT'
                 ";
 
@@ -222,10 +408,10 @@ namespace ErpMobile.Api.Repositories.Inventory
                     {
                         transfer = new WarehouseTransferDetailResponse
                         {
-                            TransferNumber = reader["TransferNumber"].ToString(),
-                            SourceWarehouseCode = reader["SourceWarehouseCode"].ToString(),
+                            TransferNumber = reader["InnerNumber"].ToString(),
+                            SourceWarehouseCode = reader["WarehouseCode"].ToString(),
                             SourceWarehouseName = reader["SourceWarehouseName"].ToString(),
-                            TargetWarehouseCode = reader["TargetWarehouseCode"].ToString(),
+                            TargetWarehouseCode = reader["ToWarehouseCode"].ToString(),
                             TargetWarehouseName = reader["TargetWarehouseName"].ToString(),
                             OperationDate = Convert.ToDateTime(reader["OperationDate"]),
                             OperationTime = reader["OperationTime"] != DBNull.Value ? (TimeSpan)reader["OperationTime"] : TimeSpan.Zero,
@@ -233,9 +419,10 @@ namespace ErpMobile.Api.Repositories.Inventory
                             ShipmentMethodCode = reader["ShipmentMethodCode"].ToString(),
                             ShipmentMethodName = reader["ShipmentMethodName"].ToString(),
                             IsApproved = Convert.ToBoolean(reader["IsTransferApproved"]),
-                            ApprovalDate = reader["TransferApprovedDate"] != DBNull.Value ? Convert.ToDateTime(reader["TransferApprovedDate"]) : (DateTime?)null,
+                            ApprovalDate = reader["IsTransferApproved"] != DBNull.Value && Convert.ToBoolean(reader["IsTransferApproved"]) ? Convert.ToDateTime(reader["OperationDate"]) : (DateTime?)null,
                             CreatedUserName = reader["CreatedUserName"].ToString(),
                             CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
+                            TotalQty = reader["TotalQty"] != DBNull.Value ? Convert.ToDouble(reader["TotalQty"]) : 0,
                             Items = new List<WarehouseTransferItemResponse>()
                         };
 
@@ -250,19 +437,29 @@ namespace ErpMobile.Api.Repositories.Inventory
                 // Şimdi satır detaylarını getir
                 var linesQuery = @"
                     SELECT 
+                        SortOrder = CASE WHEN 1 = 1 AND 1 = 1 THEN l.SortOrder ELSE 0 END,
+                        ProductCode = CASE WHEN l.ItemTypeCode = 1 THEN l.ItemCode ELSE SPACE(0) END,
+                        ProductDescription = ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) WHERE cdItemDesc.ItemTypeCode = 1 AND cdItemDesc.ItemCode = l.ItemCode AND cdItemDesc.LangCode = N'TR'), SPACE(0)),
+                        l.ItemTypeCode,
+                        ItemTypeDescription = ISNULL((SELECT ItemTypeDescription FROM bsItemTypeDesc WITH(NOLOCK) WHERE bsItemTypeDesc.ItemTypeCode = l.ItemTypeCode AND bsItemTypeDesc.LangCode = N'TR'), SPACE(0)),
                         l.ItemCode,
-                        ItemName = ISNULL(i.ItemName, ''),
+                        ItemDescription = ISNULL((SELECT ItemDescription FROM cdItemDesc WITH(NOLOCK) WHERE cdItemDesc.ItemTypeCode = l.ItemTypeCode AND cdItemDesc.ItemCode = l.ItemCode AND cdItemDesc.LangCode = N'TR'), SPACE(0)),
                         l.ColorCode,
-                        ColorName = ISNULL(c.ColorName, ''),
+                        ColorDescription = ISNULL((SELECT ColorDescription FROM cdColorDesc WITH(NOLOCK) WHERE cdColorDesc.ColorCode = l.ColorCode AND cdColorDesc.LangCode = N'TR'), SPACE(0)),
                         l.ItemDim1Code,
-                        ItemDim1Name = ISNULL(d1.ItemDim1Name, ''),
+                        ItemDim1Description = ISNULL((SELECT ItemDim1Description FROM cdItemDim1Desc WITH(NOLOCK) WHERE cdItemDim1Desc.ItemDim1Code = l.ItemDim1Code AND cdItemDim1Desc.LangCode = N'TR'), SPACE(0)),
+                        UnitOfMeasureCode1 = i.UnitOfMeasureCode1,
+                        UnitOfMeasureCode2 = i.UnitOfMeasureCode2,
+                        Barcode = ISNULL((SELECT MAX(Barcode) FROM prItemBarcode WITH(NOLOCK)
+                                WHERE prItemBarcode.BarcodeTypeCode = N''
+                                AND prItemBarcode.ItemTypeCode = l.ItemTypeCode
+                                AND prItemBarcode.ItemCode = l.ItemCode
+                                AND prItemBarcode.ColorCode = l.ColorCode
+                                AND prItemBarcode.ItemDim1Code = l.ItemDim1Code), SPACE(0)),
                         Quantity = l.Qty1,
-                        l.LineDescription,
-                        Barcode = l.UsedBarcode
+                        l.LineDescription
                     FROM trInnerLine l WITH (NOLOCK)
-                    LEFT JOIN cdItem i WITH (NOLOCK) ON l.ItemCode = i.ItemCode
-                    LEFT JOIN cdColor c WITH (NOLOCK) ON l.ColorCode = c.ColorCode
-                    LEFT JOIN cdItemDim1 d1 WITH (NOLOCK) ON l.ItemDim1Code = d1.ItemDim1Code
+                    LEFT JOIN cdItem i WITH (NOLOCK) ON l.ItemTypeCode = i.ItemTypeCode AND l.ItemCode = i.ItemCode
                     WHERE l.InnerHeaderID = @InnerHeaderID
                     ORDER BY l.SortOrder
                 ";
@@ -276,12 +473,13 @@ namespace ErpMobile.Api.Repositories.Inventory
                         transfer.Items.Add(new WarehouseTransferItemResponse
                         {
                             ItemCode = reader["ItemCode"].ToString(),
-                            ItemName = reader["ItemName"].ToString(),
+                            ItemName = reader["ItemDescription"].ToString(),
                             ColorCode = reader["ColorCode"].ToString(),
-                            ColorName = reader["ColorName"].ToString(),
+                            ColorName = reader["ColorDescription"].ToString(),
                             ItemDim1Code = reader["ItemDim1Code"].ToString(),
-                            ItemDim1Name = reader["ItemDim1Name"].ToString(),
+                            ItemDim1Name = reader["ItemDim1Description"].ToString(),
                             Quantity = Convert.ToDouble(reader["Quantity"]),
+                            UnitCode = reader["UnitOfMeasureCode1"].ToString(),
                             LineDescription = reader["LineDescription"].ToString(),
                             Barcode = reader["Barcode"].ToString()
                         });
