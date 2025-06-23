@@ -687,16 +687,18 @@ namespace ErpMobile.Api.Services
             // Adres ID oluştur
             var addressId = Guid.NewGuid();
 
-            // Adres ekle
+            // Adres ekle - vergi numarası ve vergi dairesi alanlarını ekle
             string insertQuery = @"
                 INSERT INTO prCurrAccAddress (
                     AddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode,
                     CountryCode, CityCode, TownCode, DistrictCode, PostalCode, Address,
-                    IsDefault, SubCurrAccID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                    IsDefault, SubCurrAccID, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate,
+                    TaxNumber, TaxOfficeCode
                 ) VALUES (
                     @AddressID, @CurrAccTypeCode, @CurrAccCode, @AddressTypeCode,
                     @CountryCode, @CityCode, @TownCode, @DistrictCode, @PostalCode, @Address,
-                    @IsDefault, @SubCurrAccID, @CreatedUserName, @CreatedDate, @LastUpdatedUserName, @LastUpdatedDate
+                    @IsDefault, @SubCurrAccID, @CreatedUserName, @CreatedDate, @LastUpdatedUserName, @LastUpdatedDate,
+                    @TaxNumber, @TaxOfficeCode
                 )";
 
             var parameters = new DynamicParameters();
@@ -1026,6 +1028,32 @@ namespace ErpMobile.Api.Services
                 columns += ", Address";
                 values += ", @Address";
                 parameters.Add("@Address", request.Address);
+            }
+            
+            // Vergi numarası - boş değilse ekle
+            if (!string.IsNullOrEmpty(request.TaxNumber))
+            {
+                columns += ", TaxNumber";
+                values += ", @TaxNumber";
+                parameters.Add("@TaxNumber", request.TaxNumber);
+                _logger.LogInformation("[CustomerServiceNew.CreateCustomerAddressAsync] - Vergi numarası eklendi: {TaxNumber}", request.TaxNumber);
+            }
+            else
+            {
+                _logger.LogWarning("[CustomerServiceNew.CreateCustomerAddressAsync] - Vergi numarası boş! SQL sorgusuna eklenmedi.");
+            }
+            
+            // Vergi dairesi - boş değilse ekle
+            if (!string.IsNullOrEmpty(request.TaxOfficeCode))
+            {
+                columns += ", TaxOfficeCode";
+                values += ", @TaxOfficeCode";
+                parameters.Add("@TaxOfficeCode", request.TaxOfficeCode);
+                _logger.LogInformation("[CustomerServiceNew.CreateCustomerAddressAsync] - Vergi dairesi kodu eklendi: {TaxOfficeCode}", request.TaxOfficeCode);
+            }
+            else
+            {
+                _logger.LogWarning("[CustomerServiceNew.CreateCustomerAddressAsync] - Vergi dairesi kodu boş! SQL sorgusuna eklenmedi.");
             }
             
             // Diğer zorunlu alanlar
