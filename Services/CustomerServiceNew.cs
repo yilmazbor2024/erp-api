@@ -248,6 +248,17 @@ namespace ErpMobile.Api.Services
                         {
                             parameters.Add("@TaxNumber", request.TaxNumber);
                         }
+                        
+                        // TC Kimlik numarası bireysel müşteriler için zorunlu
+                        if (!string.IsNullOrEmpty(request.IdentityNum))
+                        {
+                            parameters.Add("@IdentityNum", request.IdentityNum);
+                            _logger.LogInformation("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - TC Kimlik numarası parametresi eklendi: {IdentityNum}\u001b[0m", request.IdentityNum);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - TC Kimlik numarası boş!\u001b[0m");
+                        }
                     }
                     else
                     {
@@ -266,12 +277,6 @@ namespace ErpMobile.Api.Services
                         // Frontend'den para birimi gelmediğinde varsayılan olarak TRY ekle
                         parameters.Add("@CurrencyCode", "TRY");
                         _logger.LogWarning("\u001b[33m[CustomerServiceNew.CreateCustomerAsync] - Para birimi gelmedi! Varsayılan olarak TRY eklendi.\u001b[0m");
-                    }
-                    
-                    // Diğer koşullu alanlar
-                    if (!string.IsNullOrEmpty(request.IdentityNum))
-                    {
-                        parameters.Add("@IdentityNum", request.IdentityNum);
                     }
                     
                     if (!string.IsNullOrEmpty(request.TaxNumber) && !request.IsIndividualAcc)
@@ -926,6 +931,29 @@ namespace ErpMobile.Api.Services
             };
         }
 
+        // Gelen isteği detaylı logla
+        _logger.LogInformation("[CustomerServiceNew.CreateCustomerAddressAsync] - Gelen istek: CustomerCode={CustomerCode}, AddressTypeCode={AddressTypeCode}, CountryCode={CountryCode}, StateCode={StateCode}, CityCode={CityCode}, DistrictCode={DistrictCode}", 
+            request.CustomerCode,
+            request.AddressTypeCode ?? "NULL",
+            request.CountryCode ?? "NULL",
+            request.StateCode ?? "NULL",
+            request.CityCode ?? "NULL",
+            request.DistrictCode ?? "NULL");
+
+        // Zorunlu alanların kontrolü
+        if (string.IsNullOrEmpty(request.CustomerCode) || request.CustomerCode == "")
+        {
+            _logger.LogWarning("[CustomerServiceNew.CreateCustomerAddressAsync] - Müşteri kodu boş veya boş string");
+            
+            // Token ile gelen müşteri kodu kullanılabilir, ancak bu durumda controller'dan gelmeli
+            // Bu noktada sadece hata dönüyoruz, controller'da gerekli düzeltme yapılacak
+            return new CustomerAddressResult
+            {
+                Success = false,
+                Message = "Müşteri kodu boş olamaz"
+            };
+        }
+
         try
         {
             _logger.LogInformation("[CustomerServiceNew.CreateCustomerAddressAsync] - Müşteri adres bilgisi kaydediliyor: {CustomerCode}", request.CustomerCode);
@@ -936,33 +964,86 @@ namespace ErpMobile.Api.Services
             // Adres ID oluştur - Guid kullanıyoruz, normal akışla aynı olması için
             var addressId = Guid.NewGuid();
 
-            // Adres bilgisi ekle - prCurrAccPostalAddress tablosunu kullanıyoruz (normal akışla aynı)
-            string insertQuery = @"
-                INSERT INTO prCurrAccPostalAddress (
-                    PostalAddressID, CurrAccTypeCode, CurrAccCode, AddressTypeCode,
-                    CountryCode, StateCode, CityCode, DistrictCode, Address,
-                    IsBlocked, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                ) VALUES (
-                    @PostalAddressID, @CurrAccTypeCode, @CurrAccCode, @AddressTypeCode,
-                    @CountryCode, @StateCode, @CityCode, @DistrictCode, @Address,
-                    @IsBlocked, @CreatedUserName, @CreatedDate, @LastUpdatedUserName, @LastUpdatedDate
-                )";
-
+            // SQL sorgusunu hazırla - NULL değerleri doğru şekilde işleyecek şekilde
+            string insertQuery = "INSERT INTO prCurrAccPostalAddress (";
+            string columns = "PostalAddressID, CurrAccTypeCode, CurrAccCode";
+            string values = "@PostalAddressID, @CurrAccTypeCode, @CurrAccCode";
+            
+            // Parametreleri hazırla
             var parameters = new DynamicParameters();
             parameters.Add("@PostalAddressID", addressId);
             parameters.Add("@CurrAccTypeCode", 3); // Müşteri tipi kodu - normal akışla aynı
             parameters.Add("@CurrAccCode", request.CustomerCode);
-            parameters.Add("@AddressTypeCode", request.AddressTypeCode);
-            parameters.Add("@CountryCode", request.CountryCode);
-            parameters.Add("@StateCode", request.StateCode ?? "TR.00"); // StateCode eklendi
-            parameters.Add("@CityCode", request.CityCode);
-            parameters.Add("@DistrictCode", request.DistrictCode);
-            parameters.Add("@Address", request.Address);
-            parameters.Add("@IsBlocked", false); // IsBlocked eklendi - normal akışla aynı
+            
+            // Adres tipi
+            if (!string.IsNullOrEmpty(request.AddressTypeCode))
+            {
+                columns += ", AddressTypeCode";
+                values += ", @AddressTypeCode";
+                parameters.Add("@AddressTypeCode", request.AddressTypeCode);
+            }
+            
+            // Ülke kodu
+            if (!string.IsNullOrEmpty(request.CountryCode))
+            {
+                columns += ", CountryCode";
+                values += ", @CountryCode";
+                parameters.Add("@CountryCode", request.CountryCode);
+            }
+            
+            // Bölge kodu
+            if (!string.IsNullOrEmpty(request.StateCode))
+            {
+                columns += ", StateCode";
+                values += ", @StateCode";
+                parameters.Add("@StateCode", request.StateCode);
+            }
+            
+            // Şehir kodu
+            if (!string.IsNullOrEmpty(request.CityCode))
+            {
+                columns += ", CityCode";
+                values += ", @CityCode";
+                parameters.Add("@CityCode", request.CityCode);
+            }
+            
+            // İlçe kodu - boş değilse ekle
+            if (!string.IsNullOrEmpty(request.DistrictCode) && request.DistrictCode != "")
+            {
+                columns += ", DistrictCode";
+                values += ", @DistrictCode";
+                parameters.Add("@DistrictCode", request.DistrictCode);
+                _logger.LogInformation("[CustomerServiceNew.CreateCustomerAddressAsync] - İlçe kodu eklendi: {DistrictCode}", request.DistrictCode);
+            }
+            else
+            {
+                _logger.LogWarning("[CustomerServiceNew.CreateCustomerAddressAsync] - İlçe kodu boş! SQL sorgusuna eklenmedi.");
+            }
+            
+            // Adres
+            if (!string.IsNullOrEmpty(request.Address))
+            {
+                columns += ", Address";
+                values += ", @Address";
+                parameters.Add("@Address", request.Address);
+            }
+            
+            // Diğer zorunlu alanlar
+            columns += ", IsBlocked, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate";
+            values += ", @IsBlocked, @CreatedUserName, @CreatedDate, @LastUpdatedUserName, @LastUpdatedDate";
+            
+            parameters.Add("@IsBlocked", false);
             parameters.Add("@CreatedUserName", request.CreatedUserName ?? "SYSTEM");
             parameters.Add("@CreatedDate", DateTime.Now);
             parameters.Add("@LastUpdatedUserName", request.LastUpdatedUserName ?? "SYSTEM");
             parameters.Add("@LastUpdatedDate", DateTime.Now);
+            
+            // SQL sorgusunu tamamla
+            insertQuery += columns + ") VALUES (" + values + ")";
+            
+            _logger.LogInformation("[CustomerServiceNew.CreateCustomerAddressAsync] - SQL sorgusu: {Query}", insertQuery);
+            _logger.LogInformation("[CustomerServiceNew.CreateCustomerAddressAsync] - Parametreler: {Parameters}", 
+                string.Join(", ", parameters.ParameterNames.Select(p => $"{p}={parameters.Get<object>(p)}")));
 
             await connection.ExecuteAsync(insertQuery, parameters);
 
