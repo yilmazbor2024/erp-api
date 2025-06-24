@@ -114,11 +114,36 @@ namespace ErpMobile.Api.Models.Invoice
         
         public int? DocumentTypeCode { get; set; }
         
+        /// <summary>
+        /// Ödeme gün sayısı (vadeli ödeme için)
+        /// </summary>
+        public int PaymentTerm { get; set; }
+        
         public string Notes { get; set; }
+        
+        /// <summary>
+        /// Fatura toplam tutarı (KDV dahil)
+        /// </summary>
+        public decimal TotalAmount { get; set; }
+        
+        /// <summary>
+        /// Fatura net tutarı (KDV hariç)
+        /// </summary>
+        public decimal NetAmount { get; set; }
+        
+        /// <summary>
+        /// Fatura ara toplam tutarı (indirimler öncesi)
+        /// </summary>
+        public decimal SubtotalAmount { get; set; }
         
         // Fatura detay bilgileri
         [Required]
         public List<CreateInvoiceDetailRequest> Details { get; set; }
+        
+        /// <summary>
+        /// Fatura başlığı uzantı bilgileri (tpInvoiceHeaderExtension tablosu için)
+        /// </summary>
+        public InvoiceHeaderExtensionModel InvoiceHeaderExtension { get; set; }
     }
 
     public class CreateInvoiceDetailRequest
@@ -211,6 +236,11 @@ namespace ErpMobile.Api.Models.Invoice
         /// Net tutar (KDV hariç)
         /// </summary>
         public decimal NetAmount { get; set; }
+
+         /// <summary>
+        /// Net tutar (KDV hariç)
+        /// </summary>
+        public decimal TotalAmount { get; set; }
         
         /// <summary>
         /// Toplam tutar (KDV dahil)

@@ -5,6 +5,9 @@ using Microsoft.Extensions.Logging;
 using ErpMobile.Api.Models.Common;
 using ErpMobile.Api.Models.Invoice;
 using ErpMobile.Api.Repositories.Invoice;
+using ErpApi.Services;
+using ErpApi.Services.Interfaces;
+using ErpApi.Models.Payments;
 
 namespace ErpMobile.Api.Services.Invoice
 {
@@ -12,13 +15,16 @@ namespace ErpMobile.Api.Services.Invoice
     {
         private readonly ILogger<InvoiceService> _logger;
         private readonly IInvoiceRepository _invoiceRepository;
+        private readonly ICreditPaymentService _creditPaymentService;
 
         public InvoiceService(
             ILogger<InvoiceService> logger,
-            IInvoiceRepository invoiceRepository)
+            IInvoiceRepository invoiceRepository,
+            ICreditPaymentService creditPaymentService)
         {
             _logger = logger;
             _invoiceRepository = invoiceRepository;
+            _creditPaymentService = creditPaymentService;
         }
 
              // Fatura numarası oluşturan, "1-{processCode}-7-" sabit ön ek kuralına göre çalışan metot
@@ -260,6 +266,112 @@ namespace ErpMobile.Api.Services.Invoice
                 
                 // Faturayı oluştur
                 var invoice = await _invoiceRepository.CreateWholesaleInvoiceAsync(request);
+                
+                // Vadeli ödeme işlemi
+                if (request.IsCreditSale && invoice != null)
+                {
+                    _logger.LogInformation("Vadeli ödeme işlemi başlatılıyor. Fatura ID: {InvoiceHeaderId}", invoice.InvoiceHeaderID);
+                    
+                    try
+                    {
+                        // Vadeli ödeme için request oluştur
+                        var creditPaymentRequest = new CreditPaymentRequest
+                        {
+                            InvoiceHeaderID = invoice.InvoiceHeaderID.ToString(),
+                            InvoiceNumber = invoice.InvoiceNumber,
+                            CurrAccCode = invoice.CurrAccCode,
+                            CurrAccTypeCode = (byte)(invoice.CurrAccTypeCode), // int'den byte'a dönüşüm
+                            ProcessCode = invoice.ProcessCode,
+                            DocCurrencyCode = invoice.DocCurrencyCode,
+                            LocalCurrencyCode = invoice.LocalCurrencyCode,
+                            ExchangeRate = invoice.ExchangeRate.HasValue ? invoice.ExchangeRate.Value : 1m, // decimal? -> decimal
+                            PaymentRows = new List<PaymentRow>()
+                        };
+                        
+                        // Fatura tutarını frontend'den gelen değerden al
+                        decimal totalAmount = request.TotalAmount > 0 ? request.TotalAmount : invoice.TotalAmount;
+                        
+                        _logger.LogInformation("Fatura tutarları: Frontend TotalAmount={RequestTotalAmount}, Invoice.TotalAmount={InvoiceTotalAmount}, totalNetAmount={totalNetAmount}, totalGrossAmount={totalGrossAmount}", 
+                            request.TotalAmount, invoice.TotalAmount, invoice.totalNetAmount, invoice.totalGrossAmount);
+                        
+                        _logger.LogInformation("Kullanılan tutar: {UsedAmount} (Frontend'den gelen değer kullanılıyor)", totalAmount);
+                            
+                        if (totalAmount <= 0)
+                        {
+                            _logger.LogWarning("DİKKAT: Fatura tutarı sıfır veya negatif: {Amount}. Faturanın toplam tutarını kontrol edin.", totalAmount);
+                        }
+                        
+                        // Ödeme satırı ekle - Vadeli ödemede tek satır kullanıyoruz
+                        // PaymentTerm 0 olsa bile vadeli ödeme için kayıt oluşturuyoruz
+                        int paymentTerm = request.FormType.HasValue ? request.FormType.Value : 30;
+                        if (paymentTerm <= 0) paymentTerm = 30; // Varsayılan vade 30 gün
+                        
+                        decimal exchangeRate = invoice.ExchangeRate.HasValue ? invoice.ExchangeRate.Value : 1m;
+                        
+                        _logger.LogInformation("PaymentRow oluşturuluyor. Amount: {Amount}, CurrencyCode: {CurrencyCode}, ExchangeRate: {ExchangeRate}, TRY karşılığı: {TRYAmount}", 
+                            totalAmount, invoice.DocCurrencyCode, exchangeRate, totalAmount * exchangeRate);
+                            
+                        creditPaymentRequest.PaymentRows.Add(new PaymentRow
+                        {
+                            Amount = totalAmount,
+                            DueDate = request.InvoiceDate.AddDays(paymentTerm),
+                            CurrencyCode = invoice.DocCurrencyCode,
+                            ExchangeRate = exchangeRate
+                        });
+                        
+                        _logger.LogInformation("Vadeli ödeme isteği oluşturuldu. Tutar: {Amount}, Döviz: {Currency}, Kur: {ExchangeRate}, Vade Tarihi: {DueDate}", 
+                            totalAmount, invoice.DocCurrencyCode, invoice.ExchangeRate.HasValue ? invoice.ExchangeRate.Value : 1m, request.InvoiceDate.AddDays(paymentTerm).ToString("yyyy-MM-dd"));
+                        
+                        // Döviz kuru kontrolü - Daha sıkı validasyon
+                        if (invoice.DocCurrencyCode != "TRY")
+                        {
+                            if (invoice.ExchangeRate == null)
+                            {
+                                _logger.LogError("HATA: Döviz kuru null: {CurrencyCode} için kur değeri bulunamadı.", invoice.DocCurrencyCode);
+                                throw new InvalidOperationException($"Döviz kuru bulunamadı: {invoice.DocCurrencyCode}");
+                            }
+                            else if (invoice.ExchangeRate <= 1)
+                            {
+                                _logger.LogWarning("DİKKAT: Döviz kuru 1 veya daha düşük: {ExchangeRate}. Kur kontrol edilmeli.", invoice.ExchangeRate);
+                                // Burada kur 1'den düşükse uyarı veriyoruz ama işleme devam ediyoruz
+                                // Eğer tamamen engellemek istersek, aşağıdaki satırı aktif edebiliriz:
+                                // throw new InvalidOperationException($"Geçersiz döviz kuru: {invoice.ExchangeRate}");
+                            }
+                        }
+                        
+                        try
+                        {
+                            // Vadeli ödeme işlemini gerçekleştir
+                            var creditPaymentResult = await _creditPaymentService.CreateCreditPaymentForInvoiceAsync(creditPaymentRequest);
+                            
+                            if (creditPaymentResult != null && !string.IsNullOrEmpty(creditPaymentResult.DebitHeaderId))
+                            {
+                                _logger.LogInformation("Vadeli ödeme işlemi başarıyla tamamlandı. DebitHeaderId: {DebitHeaderId}", 
+                                    creditPaymentResult.DebitHeaderId);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Vadeli ödeme işlemi tamamlandı ancak sonuç boş veya geçersiz.");
+                                // Sonuç boş olsa bile fatura oluşturma işlemine devam ediyoruz
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Vadeli ödeme oluşturma hatası fatura oluşturmayı engellemeyecek
+                            // ama detaylı log tutacağız
+                            _logger.LogError(ex, "Vadeli ödeme işlemi sırasında hata oluştu: {Message}. Fatura oluşturma işlemi devam ediyor.", ex.Message);
+                        }
+                    }
+                    catch (Exception creditEx)
+                    {
+                        _logger.LogError(creditEx, "Vadeli ödeme işlemi sırasında hata oluştu. Fatura ID: {InvoiceHeaderId}", invoice.InvoiceHeaderID);
+                        // Vadeli ödeme hatası faturanın oluşmasını engellemeyecek, sadece log'a kaydedilecek
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("Fatura vadeli ödeme tipinde değil veya fatura oluşturulamadı. Vadeli ödeme işlemi atlanıyor.");
+                }
                 
                 Console.BackgroundColor = ConsoleColor.Red;
                 Console.ForegroundColor = ConsoleColor.White;
