@@ -129,6 +129,28 @@ namespace ErpMobile.Api.Repositories.Invoice
                 // Para birimi kontrolü
                 string docCurrencyCode = !string.IsNullOrEmpty(request.DocCurrencyCode) ? request.DocCurrencyCode : "TRY";
 
+                // Ödeme tipi ayarları
+                bool isVadeli = request.IsCreditSale;
+                byte formType = 0; // FormType her durumda 0 olacak
+                
+                // PaymentTerm değerini ödeme tipine göre ayarla
+                int paymentTerm = isVadeli ? (request.FormType.HasValue ? request.FormType.Value : 30) : 0;
+                
+                // Vade tarihi hesaplama (vadeli ise)
+                DateTime? averageDueDate = null;
+                if (isVadeli && paymentTerm > 0)
+                {
+                    averageDueDate = request.InvoiceDate.AddDays(paymentTerm);
+                    _logger.LogInformation($"Vade tarihi hesaplandı: {averageDueDate.Value.ToString("yyyy-MM-dd")} (Fatura tarihi + {paymentTerm} gün)");
+                }
+                
+                _logger.LogInformation($"Ödeme tipi: {(isVadeli ? "Vadeli" : "Peşin")}, " +
+                    $"FormType: {formType}, " +
+                    $"PaymentTerm: {paymentTerm}, " +
+                    $"IsCreditSale: {isVadeli}, " +
+                    $"IsCompleted: true, " +
+                    $"AverageDueDate: {(averageDueDate.HasValue ? averageDueDate.Value.ToString("yyyy-MM-dd") : "null")}");
+                
                 // Fatura başlığı oluştur
                 var invoiceHeader = new InvoiceHeaderModel
                 {
@@ -149,8 +171,14 @@ namespace ErpMobile.Api.Repositories.Invoice
                     ShipmentMethodCode = request.ShipmentMethodCode, // Sevkiyat yöntemi kodu (opsiyonel)
                     TaxTypeCode = Convert.ToByte(request.TaxTypeCode), // Vergi tipi kodu tinyint olarak kaydedilmeli
                     Notes = request.Notes, // Using Notes instead of Description
-                    FormType = 0, // Peşin ödeme için FormType=0 olarak ayarlanıyor
-                    PaymentTerm = 0, // Peşin ödeme için PaymentTerm=0 olarak ayarlanıyor
+                    
+                    // Ödeme tipi ile ilgili alanlar
+                    FormType = 0, // Her durumda 0 olacak
+                    PaymentTerm = paymentTerm, // Vadeli için formdan gelen değer, peşin için 0
+                    IsCreditSale = isVadeli, // Vadeli için true, peşin için false
+                    IsCompleted = true, // Her durumda true olacak
+                    AverageDueDate = averageDueDate, // Vadeli ise hesaplanan vade tarihi, değilse null
+                    
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now
                     
@@ -187,6 +215,70 @@ namespace ErpMobile.Api.Repositories.Invoice
                                     await CreateInvoiceLineAsync(connection, transaction, invoiceHeaderId, detail, sortOrder);
                                     sortOrder += 1;
                                 }
+                            }
+                            
+                            // Fatura başlığı uzantısını kaydet (tpInvoiceHeaderExtension tablosu)
+                            _logger.LogInformation($"InvoiceHeaderExtension kontrol ediliyor. IsCreditSale: {request.IsCreditSale}");
+                            
+                            try {
+                                if (request.InvoiceHeaderExtension != null)
+                                {
+                                    _logger.LogInformation($"InvoiceHeaderExtension verisi mevcut: " + 
+                                        $"PaymentMeansCode={request.InvoiceHeaderExtension.PaymentMeansCode}, " +
+                                        $"PaymentChannelCode={request.InvoiceHeaderExtension.PaymentChannelCode}, " +
+                                        $"IsIndividual={request.InvoiceHeaderExtension.IsIndividual}, " +
+                                        $"DocumentDate={request.InvoiceHeaderExtension.DocumentDate}");
+                                    
+                                    bool isPesin = request.IsCreditSale == false;
+                                    // Foreign key kısıtlaması nedeniyle PaymentMeansCode ve PaymentChannelCode değerlerini boş string olarak ayarlıyoruz
+                                    string fullPaymentMeansCode = request.InvoiceHeaderExtension.PaymentMeansCode ?? (isPesin ? "CASH" : "CREDIT");
+                                    string paymentMeansCode = "";
+                                    string paymentChannelCode = "";
+                                    
+                                    _logger.LogInformation($"PaymentMeansCode değeri boş string olarak ayarlandı. Orijinal değer: {fullPaymentMeansCode}");
+                                    
+                                    _logger.LogInformation($"Ödeme bilgileri: isPesin={isPesin}, boş string değerler kullanılıyor");
+                                    
+                                    await CreateInvoiceHeaderExtensionAsync(connection, transaction, invoiceHeaderId, 
+                                        new {
+                                            PaymentMeansCode = paymentMeansCode,
+                                            PaymentChannelCode = paymentChannelCode,
+                                            IsIndividual = request.InvoiceHeaderExtension.IsIndividual,
+                                            DocumentDate = request.InvoiceHeaderExtension.DocumentDate ?? request.InvoiceDate
+                                        });
+                                    _logger.LogInformation($"Fatura başlığı uzantısı kaydedildi. Ödeme Tipi: {(isPesin ? "Peşin" : "Vadeli")}, PaymentMeansCode: {paymentMeansCode}");
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("InvoiceHeaderExtension verisi bulunamadı. Varsayılan değerlerle kayıt yapılıyor.");
+                                    
+                                    bool isPesin = request.IsCreditSale == false;
+                                    // Foreign key kısıtlaması nedeniyle PaymentMeansCode ve PaymentChannelCode değerlerini boş string olarak ayarlıyoruz
+                                    string fullPaymentMeansCode = isPesin ? "CASH" : "CREDIT";
+                                    string paymentMeansCode = "";
+                                    string paymentChannelCode = "";
+                                    
+                                    _logger.LogInformation($"PaymentMeansCode değeri boş string olarak ayarlandı. Orijinal değer: {fullPaymentMeansCode}");
+                                    
+                                    await CreateInvoiceHeaderExtensionAsync(connection, transaction, invoiceHeaderId, 
+                                        new {
+                                            PaymentMeansCode = paymentMeansCode,
+                                            PaymentChannelCode = paymentChannelCode,
+                                            IsIndividual = false,
+                                            DocumentDate = request.InvoiceDate
+                                        });
+                                    _logger.LogInformation($"Fatura başlığı uzantısı varsayılan değerlerle kaydedildi. Ödeme Tipi: {(isPesin ? "Peşin" : "Vadeli")}, PaymentMeansCode: {paymentMeansCode}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Fatura başlığı uzantısı kaydedilirken hata oluştu");
+                                _logger.LogError($"Hata detayları: {ex.Message}");
+                                if (ex.InnerException != null)
+                                {
+                                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                                }
+                                throw;
                             }
 
                             transaction.Commit();
@@ -459,7 +551,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                         CurrAccTypeCode,
                         CurrAccCode,
                         ShippingPostalAddressID,
-                        BillingPostalAddressID,");
+                        BillingPostalAddressID,
+                        IsCompleted,
+                        IsCreditSale,");
                 
                 if (includeShipmentMethodCode)
                 {
@@ -500,7 +594,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                         @CurrAccTypeCode,
                         @CurrAccCode,
                         @ShippingPostalAddressID,
-                        @BillingPostalAddressID,");
+                        @BillingPostalAddressID,
+                        @IsCompleted,
+                        @IsCreditSale,");
                 
                 if (includeShipmentMethodCode)
                 {
@@ -551,6 +647,12 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@TaxTypeCode", invoiceHeader.TaxTypeCode);
                     // IsReturn - İade faturası ise true
                     command.Parameters.AddWithValue("@IsReturn", invoiceHeader.IsReturn);
+            
+                    // IsCompleted - Tamamlanmış fatura ise true
+                    command.Parameters.AddWithValue("@IsCompleted", invoiceHeader.IsCompleted);
+                    
+                    // IsCreditSale - Vadeli fatura ise true
+                    command.Parameters.AddWithValue("@IsCreditSale", invoiceHeader.IsCreditSale);
                     
                     // Tarih ve zaman bilgileri
                     // InvoiceDate ve InvoiceTime formdan gelecek
@@ -563,24 +665,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     
                     // Form tipi belirleme
                     int formType = 0; // Varsayılan peşin ödeme
-                    if (invoiceHeader.FormType.HasValue)
-                    {
-                        formType = invoiceHeader.FormType.Value;
-                    }
-                    else
-                    {
-                        switch (invoiceHeader.ProcessCode)
-                        {
-                            case "WS":
-                            case "EP":
-                            case "BP":
-                                formType = 0; // Peşin
-                                break;
-                            default:
-                                formType = 0;
-                                break;
-                        }
-                    }
+                  
                     
                     // PaymentTerm - Peşin ödemeler için 0, vadeli ödemeler için formdan gelecek
                     // Peşin ödeme için 0, vadeli seçilirse 30/45/60/90/120/150/180 olabilir
@@ -591,17 +676,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     {
                         paymentTerm = invoiceHeader.PaymentTerm.Value;
                     }
-                    // FormType=0 (peşin) ise PaymentTerm=0 olmalı
-                    else if (formType == 0)
-                    {
-                        paymentTerm = 0;
-                    }
-                    // Diğer durumlarda varsayılan 30 gün
-                    else
-                    {
-                        paymentTerm = 30;
-                    }
-                    
+                 
                     command.Parameters.AddWithValue("@PaymentTerm", paymentTerm);
                     _logger.LogInformation($"PaymentTerm: {paymentTerm} (0=Peşin, >0=Vadeli gün sayısı) kullanılıyor.");
                     
