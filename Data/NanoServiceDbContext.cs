@@ -23,6 +23,8 @@ public class NanoServiceDbContext : IdentityDbContext<User, Role, string>
     public DbSet<TempCustomerToken> TempCustomerTokens { get; set; } = null!;
     public DbSet<UserGroup> UserGroups { get; set; } = null!;
     public DbSet<ModulePermission> ModulePermissions { get; set; } = null!;
+    public DbSet<Database> Databases { get; set; } = null!;
+    public DbSet<UserDatabase> UserDatabases { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -120,6 +122,54 @@ public class NanoServiceDbContext : IdentityDbContext<User, Role, string>
             entity.HasOne(d => d.UserGroup)
                 .WithMany(p => p.ModulePermissions)
                 .HasForeignKey(d => d.UserGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Database konfigürasyonu
+        builder.Entity<Database>(entity =>
+        {
+            entity.ToTable("Database", "dbo");
+            entity.HasKey(e => e.Id);
+            
+            entity.Property(e => e.DatabaseName)
+                .IsRequired()
+                .HasMaxLength(100);
+                
+            entity.Property(e => e.CompanyName)
+                .IsRequired()
+                .HasMaxLength(100);
+                
+            entity.Property(e => e.ConnectionString)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(100);
+        });
+
+        // UserDatabase konfigürasyonu
+        builder.Entity<UserDatabase>(entity =>
+        {
+            entity.ToTable("UserDatabase", "dbo");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Role)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Database)
+                .WithMany(p => p.UserDatabases)
+                .HasForeignKey(d => d.DatabaseId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

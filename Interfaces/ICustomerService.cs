@@ -144,9 +144,8 @@ namespace ErpMobile.Api.Interfaces
         /// <summary>
         /// Vergi dairelerini getirir
         /// </summary>
-        /// <param name="langCode">Dil kodu</param>
         /// <returns>Vergi dairesi listesi</returns>
-        Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync(string langCode = "TR");
+        Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync();
         
         // Banka hesapları artık ICustomerLocationService arayüzüne taşındı
     }

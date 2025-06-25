@@ -1504,5 +1504,119 @@ namespace ErpMobile.Api.Controllers
                 return StatusCode(500, response);
             }
         }
+        
+        /// <summary>
+        /// Token ile müşteri adres bilgilerini kaydetme endpoint'i
+        /// </summary>
+        /// <param name="token">Doğrulama token'ı</param>
+        /// <param name="request">Adres bilgilerini içeren istek</param>
+        /// <returns>Kaydedilen adres bilgileri</returns>
+        [HttpPost("Register/address")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ApiResponse<CustomerAddressResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> RegisterCustomerAddress([FromQuery] string token, [FromBody] CustomerAddressCreateRequest request)
+        {
+            try
+            {
+                // Token doğrulama
+                var tokenValidation = await _tokenValidationService.ValidateTokenAsync(token);
+                if (!tokenValidation.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, tokenValidation.Message));
+                }
+
+                // Müşteri kodu kontrolü
+                if (string.IsNullOrEmpty(request.CustomerCode))
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "Müşteri kodu boş olamaz"));
+                }
+
+                // Adres bilgilerini kaydet
+                var addressResult = await _customerServiceNew.CreateCustomerAddressAsync(request);
+                
+                if (!addressResult.Success)
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "Adres kaydedilemedi", addressResult.Message));
+                }
+
+                // Başarılı yanıt döndür
+                var response = new ApiResponse<CustomerAddressResponse>
+                {
+                    Success = true,
+                    Data = new CustomerAddressResponse
+                    {
+                        AddressId = Guid.Parse(addressResult.AddressId.ToString()),
+                        CustomerCode = request.CustomerCode
+                    },
+                    Message = "Adres başarıyla kaydedildi"
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Token ile müşteri adres kaydetme hatası");
+                return StatusCode(500, new ApiResponse<string>(null, false, "Adres kaydedilirken bir hata oluştu", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Token ile müşteri iletişim bilgilerini kaydetme endpoint'i
+        /// </summary>
+        /// <param name="token">Doğrulama token'ı</param>
+        /// <param name="request">İletişim bilgilerini içeren istek</param>
+        /// <returns>Kaydedilen iletişim bilgileri</returns>
+        [HttpPost("Register/communication")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ApiResponse<CustomerCommunicationResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> RegisterCustomerCommunication([FromQuery] string token, [FromBody] CustomerCommunicationCreateRequest request)
+        {
+            try
+            {
+                // Token doğrulama
+                var tokenValidation = await _tokenValidationService.ValidateTokenAsync(token);
+                if (!tokenValidation.IsValid)
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, tokenValidation.Message));
+                }
+
+                // Müşteri kodu kontrolü
+                if (string.IsNullOrEmpty(request.CustomerCode))
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "Müşteri kodu boş olamaz"));
+                }
+
+                // İletişim bilgilerini kaydet
+                var communicationResult = await _customerServiceNew.CreateCustomerCommunicationAsync(request);
+                
+                if (!communicationResult.Success)
+                {
+                    return BadRequest(new ApiResponse<string>(null, false, "İletişim bilgisi kaydedilemedi", communicationResult.Message));
+                }
+
+                // Başarılı yanıt döndür
+                var response = new ApiResponse<CustomerCommunicationResponse>
+                {
+                    Success = true,
+                    Data = new CustomerCommunicationResponse
+                    {
+                        CommunicationId = Guid.Parse(communicationResult.CommunicationId.ToString()),
+                        CustomerCode = request.CustomerCode
+                    },
+                    Message = "İletişim bilgisi başarıyla kaydedildi"
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Token ile müşteri iletişim bilgisi kaydetme hatası");
+                return StatusCode(500, new ApiResponse<string>(null, false, "İletişim bilgisi kaydedilirken bir hata oluştu", ex.Message));
+            }
+        }
     }
-} 
+}

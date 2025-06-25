@@ -132,7 +132,6 @@ namespace ErpMobile.Api.Controllers
         
         // GET: api/exchange-rates/cross-rates?date=2025-06-01&baseCurrency=USD
         [HttpGet("cross-rates")]
-        [Route("cross-rates")]
         [Produces("application/json")]
         public async Task<ActionResult<IEnumerable<object>>> GetCrossRates(
             [FromQuery] string baseCurrency = "USD",
@@ -164,7 +163,6 @@ namespace ErpMobile.Api.Controllers
         
         // GET: api/exchange-rates/historical?currency=USD&relationCurrency=TRY&startDate=2025-01-01&endDate=2025-06-01
         [HttpGet("historical")]
-        [Route("historical")]
         [Produces("application/json")]
         public async Task<ActionResult<IEnumerable<ExchangeRateDto>>> GetHistoricalRates(
             [FromQuery] string currency,

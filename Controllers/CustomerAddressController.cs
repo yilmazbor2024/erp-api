@@ -75,7 +75,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                _logger.LogInformation("Müşteri adresi ekleniyor: {CustomerCode}", customerCode);
+                _logger.LogInformation("[CustomerAddressController.AddCustomerAddress] - Müşteri adresi ekleme isteği alındı. CustomerCode: {CustomerCode}", customerCode);
 
                 if (request == null)
                 {
@@ -85,6 +85,16 @@ namespace ErpMobile.Api.Controllers
                         Message = "Geçersiz istek"
                     });
                 }
+
+                _logger.LogInformation("[CustomerAddressController.AddCustomerAddress] - Gelen istek parametreleri: CustomerCode={CustomerCode}, AddressTypeCode={AddressTypeCode}, Address={Address}, CountryCode={CountryCode}, CityCode={CityCode}, DistrictCode={DistrictCode}, TaxOffice={TaxOffice}, IsDefault={IsDefault}", 
+                    customerCode, 
+                    request.AddressTypeCode, 
+                    request.Address, 
+                    request.CountryCode, 
+                    request.CityCode, 
+                    request.DistrictCode, 
+                    request.TaxOffice, 
+                    request.IsDefault);
 
                 // TaxOffice alanı boş ise boş olarak kalmalıdır
                 // Dinamik SQL yaklaşımı ile boş alanlar SQL sorgusuna dahil edilmeyecek
@@ -125,12 +135,24 @@ namespace ErpMobile.Api.Controllers
                     CreatedUserName = "SYSTEM", // Oluşturan kullanıcı, NOT NULL alan
                     LastUpdatedUserName = "SYSTEM" // Son güncelleyen kullanıcı, NOT NULL alan
                 };
+                
+                _logger.LogInformation("[CustomerAddressController.AddCustomerAddress] - Dönüştürülen istek: CustomerCode={CustomerCode}, AddressTypeCode={AddressTypeCode}, Address={Address}, CountryCode={CountryCode}, CityCode={CityCode}, DistrictCode={DistrictCode}, TaxOffice={TaxOffice}, IsDefault={IsDefault}", 
+                    newRequest.CustomerCode, 
+                    newRequest.AddressTypeCode, 
+                    newRequest.Address, 
+                    newRequest.CountryCode, 
+                    newRequest.CityCode, 
+                    newRequest.DistrictCode, 
+                    newRequest.TaxOffice, 
+                    newRequest.IsDefault);
 
+                _logger.LogInformation("[CustomerAddressController.AddCustomerAddress] - CustomerAddressService.AddCustomerAddressAsync çağrılıyor. CustomerCode: {CustomerCode}", customerCode);
                 // Servis çağrısını yap
                 var success = await _customerAddressService.AddCustomerAddressAsync(newRequest);
                 
                 if (!success)
                 {
+                    _logger.LogWarning("[CustomerAddressController.AddCustomerAddress] - Müşteri adresi ekleme başarısız. CustomerCode: {CustomerCode}", customerCode);
                     return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<CustomerAddressResponse>
                     {
                         Success = false,
@@ -138,6 +160,8 @@ namespace ErpMobile.Api.Controllers
                         Error = "Veritabanı işlemi sırasında hata oluştu."
                     });
                 }
+                
+                _logger.LogInformation("[CustomerAddressController.AddCustomerAddress] - Müşteri adresi başarıyla eklendi. CustomerCode: {CustomerCode}", customerCode);
                 
                 // Eklenen adresi getir
                 var addresses = await _customerAddressService.GetCustomerAddressesAsync(customerCode);
@@ -161,7 +185,7 @@ namespace ErpMobile.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri adresi eklenirken hata oluştu. CustomerCode: {CustomerCode}", customerCode);
+                _logger.LogError(ex, "[CustomerAddressController.AddCustomerAddress] - Müşteri adresi eklenirken hata oluştu. CustomerCode: {CustomerCode}, Hata: {ErrorMessage}", customerCode, ex.Message);
                 return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<CustomerAddressResponse>
                 {
                     Success = false,

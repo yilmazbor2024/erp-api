@@ -32,5 +32,17 @@ namespace ErpMobile.Api.Models.Requests
         /// Indicates if this is the default communication method
         /// </summary>
         public bool IsDefault { get; set; }
+        
+        /// <summary>
+        /// Oluşturan kullanıcı adı - prCurrAccCommunication.CreatedUserName alanı ile eşleşir
+        /// </summary>
+        [StringLength(20)]
+        public string CreatedUserName { get; set; }
+        
+        /// <summary>
+        /// Son güncelleyen kullanıcı adı - prCurrAccCommunication.LastUpdatedUserName alanı ile eşleşir
+        /// </summary>
+        [StringLength(20)]
+        public string LastUpdatedUserName { get; set; }
     }
 } 

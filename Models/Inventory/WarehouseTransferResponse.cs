@@ -197,6 +197,16 @@ namespace ErpMobile.Api.Models.Inventory
         /// Oluşturma tarihi
         /// </summary>
         public DateTime CreatedDate { get; set; }
+        
+        /// <summary>
+        /// Transfer onaylandı mı?
+        /// </summary>
+        public bool IsTransferApproved { get; set; }
+        
+        /// <summary>
+        /// Transfer onay tarihi
+        /// </summary>
+        public DateTime? TransferApprovedDate { get; set; }
     }
 
     /// <summary>
@@ -249,6 +259,11 @@ namespace ErpMobile.Api.Models.Inventory
         /// Sevk edilen miktar
         /// </summary>
         public double Quantity { get; set; }
+        
+        /// <summary>
+        /// Birim kodu
+        /// </summary>
+        public string UnitCode { get; set; }
         
         /// <summary>
         /// Satır açıklaması

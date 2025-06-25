@@ -1,18 +1,13 @@
 using System.Text;
-
 using System.Reflection;
-
 using ErpMobile.Api.Data;
-
 using ErpMobile.Api.Services.Auth;
-
 using ErpMobile.Api.Services.Menu;
-
 using ErpMobile.Api.Services;
-
 using ErpMobile.Api.Services.ShipmentMethod;
-
 using ErpMobile.Api.Services.Email;
+using ErpApi.Services.Interfaces;
+using ErpApi.Services;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
@@ -70,11 +65,15 @@ using ErpMobile.Api.Repositories.CashTransaction;
 
 using ErpMobile.Api.Services.CashTransaction;
 
+using ErpMobile.Api.Middleware;
 
-
+// Uygulama yapılandırmasını oluştur
 var builder = WebApplication.CreateBuilder(args);
 
-
+// IConfiguration için proxy oluştur
+var originalConfiguration = builder.Configuration;
+var configurationProxy = new ConnectionStringProxy(originalConfiguration);
+builder.Services.AddSingleton<IConfiguration>(configurationProxy);
 
 // Serilog yapılandırması
 
@@ -315,16 +314,23 @@ options.UseSqlServer(nanoServiceConnectionString));
 
 
 // Register ErpDbContext
+builder.Services.AddDbContext<ErpDbContext>(options =>
+{
+    // appsettings.json'dan bağlantı dizesini al
+    var connectionString = builder.Configuration.GetConnectionString("ErpConnection");
+    
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new ArgumentException("ErpConnection string is empty or not configured.");
+    }
+    
+    Console.WriteLine($"ErpDbContext oluşturuluyor. Kullanılan bağlantı dizesi: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...");
+    
+    options.UseSqlServer(connectionString);
+});
 
-builder.Services.AddScoped<ErpDbContext>(provider =>
-
-new ErpDbContext(
-
-erpConnectionString ?? throw new ArgumentException("ErpConnection string is empty or not configured."),
-
-provider.GetRequiredService<ILogger<ErpDbContext>>()
-
-));
+// SQL bağlantı fabrikasını kaydet
+builder.Services.AddSingleton<SqlConnectionFactory>();
 
 
 
@@ -352,15 +358,7 @@ options.UseSqlServer(nanoServiceConnectionString));
 
 
 
-builder.Services.AddScoped<ErpDbContext>(provider =>
-
-new ErpDbContext(
-
-erpConnectionString ?? throw new ArgumentException("ErpConnection string is empty or not configured."),
-
-provider.GetRequiredService<ILogger<ErpDbContext>>()
-
-));
+// ErpDbContext zaten yukarıda AddDbContext ile kaydedildi
 
 }
 
@@ -552,13 +550,14 @@ builder.Services.AddHttpClient();
 
 // Fatura servisleri
 
-builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddTransient<IInvoiceRepository, InvoiceRepository>();
 
-builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddTransient<IInvoiceService, InvoiceService>();
 
+builder.Services.AddScoped<IPaymentService, PaymentService>();
 
-
-// Fatura rapor servisleri
+// Vadeli ödeme servisi
+builder.Services.AddScoped<ICreditPaymentService, CreditPaymentService>();
 
 builder.Services.AddScoped<IInvoiceReportRepository, InvoiceReportRepository>();
 
@@ -601,6 +600,9 @@ builder.Services.AddScoped<ICustomerTokenService, CustomerTokenService>();
 // DapperContext kaydı
 
 builder.Services.AddSingleton<ErpMobile.Api.Data.DapperContext>();
+
+// HttpContext'e erişim için
+builder.Services.AddHttpContextAccessor();
 
 
 
@@ -832,6 +834,9 @@ app.UseStaticFiles();
 // Routing middleware'i - UseEndpoints'ten önce olmalı
 app.UseRouting();
 
+// Veritabanı seçim middleware'i - en erken çalışması için UseRouting'den hemen sonra yerleştiriyoruz
+app.UseDatabaseSelection();
+
 // CORS politikasını uygula - UseRouting ve UseEndpoints arasında olmalı
 app.UseCors();
 
@@ -858,5 +863,8 @@ app.UseEndpoints(endpoints =>
         await context.Response.WriteAsync("Healthy");
     });
 });
+
+// ErpConnectionStringProvider'a servis sağlayıcıyı ayarla
+ErpConnectionStringProvider.SetServiceProvider(app.Services);
 
 app.Run();

@@ -103,6 +103,14 @@ namespace ErpMobile.Api.Models.Requests
         /// </summary>
         [StringLength(20, ErrorMessage = "Vergi numarası en fazla 20 karakter olabilir")]
         public string TaxNumber { get; set; }
+        
+        /// <summary>
+        /// Posta kodu - prCurrAccAddress.PostalCode alanı ile eşleşir
+        /// Kullanım amacı: Adresin posta kodunu belirtir
+        /// Veritabanında NOT NULL, varsayılan değer: boş string
+        /// </summary>
+        [StringLength(20, ErrorMessage = "Posta kodu en fazla 20 karakter olabilir")]
+        public string PostalCode { get; set; }
 
         /// <summary>
         /// Adres bloke mi? - prCurrAccPostalAddress.IsBlocked alanı ile eşleşir

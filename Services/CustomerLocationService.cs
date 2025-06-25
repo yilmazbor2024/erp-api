@@ -266,39 +266,10 @@ namespace ErpMobile.Api.Services
                 return new List<DistrictResponse>(); // Return empty on general error
             }
         }
-
-    
-        public async Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync(string langCode = "TR")
-        {
-            try
-            {
-                using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
-                {
-                    await connection.OpenAsync();
-
-                    var sql = @"
-                        SELECT 
-                            t.TaxOfficeCode,
-                            td.TaxOfficeDescription,
-                            t.CityCode,
-                            cd.CityDescription,
-                            t.IsBlocked
-                        FROM cdTaxOffice t WITH(NOLOCK)
-                        LEFT JOIN cdTaxOfficeDesc td WITH(NOLOCK) ON td.TaxOfficeCode = t.TaxOfficeCode AND td.LangCode = @LangCode
-                        LEFT JOIN cdCityDesc cd WITH(NOLOCK) ON cd.CityCode = t.CityCode AND cd.LangCode = @LangCode
-                        ORDER BY t.TaxOfficeCode";
-
-                    var result = await connection.QueryAsync<ErpMobile.Api.Models.TaxOfficeResponse>(sql, new { LangCode = langCode });
-                    return result.ToList();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error occurred while getting tax offices. LangCode: {LangCode}. Will return empty list.", langCode);
-                return new List<ErpMobile.Api.Models.TaxOfficeResponse>(); // Return empty on error
-            }
-        }
-
+        
+        /// <summary>
+        /// Banka hesaplarını getirir
+        /// </summary>
         public async Task<List<ErpMobile.Api.Models.Responses.BankAccountResponse>> GetBankAccountsAsync(string customerCode = null)
         {
             try
@@ -346,23 +317,42 @@ namespace ErpMobile.Api.Services
         {
             try
             {
+                string langCode = "TR"; // Sabit dil kodu kullan
+                _logger.LogInformation("GetTaxOfficesAsync başlatılıyor. LangCode: {LangCode}", langCode);
+                
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
+                    _logger.LogInformation("Veritabanı bağlantısı açıldı");
 
                     var sql = @"
                         SELECT 
-                            to.TaxOfficeCode,
+                            t.TaxOfficeCode,
                             tod.TaxOfficeDescription,
-                            to.CityCode,
-                            cd.CityDescription
-                        FROM cdTaxOffice to WITH(NOLOCK)
-                        LEFT JOIN cdTaxOfficeDesc tod WITH(NOLOCK) ON tod.TaxOfficeCode = to.TaxOfficeCode AND tod.LangCode = 'TR'
-                        LEFT JOIN cdCityDesc cd WITH(NOLOCK) ON cd.CityCode = to.CityCode AND cd.LangCode = 'TR'
-                        ORDER BY to.TaxOfficeCode";
+                            t.CityCode,
+                            cd.CityDescription,
+                            t.IsBlocked
+                        FROM cdTaxOffice AS t WITH (NOLOCK)
+                        LEFT JOIN cdTaxOfficeDesc AS tod WITH (NOLOCK) ON tod.TaxOfficeCode = t.TaxOfficeCode AND tod.LangCode = @LangCode
+                        LEFT JOIN cdCityDesc AS cd WITH (NOLOCK) ON cd.CityCode = t.CityCode AND cd.LangCode = @LangCode
+                        ORDER BY t.TaxOfficeCode";
 
-                    var result = await connection.QueryAsync<TaxOfficeResponse>(sql);
-                    return result.ToList();
+                    _logger.LogInformation("SQL sorgusu çalıştırılıyor: {Sql}", sql);
+                    var result = await connection.QueryAsync<TaxOfficeResponse>(sql, new { LangCode = langCode });
+                    var resultList = result.ToList();
+                    _logger.LogInformation("Vergi daireleri başarıyla alındı. Kayıt sayısı: {Count}", resultList.Count);
+                    
+                    if (resultList.Count > 0)
+                    {
+                        _logger.LogInformation("Vergi dairesi örnek kayıt: TaxOfficeCode={TaxOfficeCode}, TaxOfficeDescription={TaxOfficeDescription}", 
+                            resultList[0].TaxOfficeCode, resultList[0].TaxOfficeDescription);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Vergi dairesi kaydı bulunamadı!");
+                    }
+                    
+                    return resultList;
                 }
             }
             catch (Exception ex)

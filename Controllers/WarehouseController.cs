@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using ErpMobile.Api.Models.Common;
 using ErpMobile.Api.Services.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using ErpMobile.Api.Interfaces;
 
 namespace ErpMobile.Api.Controllers
 {
@@ -83,14 +86,17 @@ namespace ErpMobile.Api.Controllers
         /// </summary>
         /// <returns>List of tax offices</returns>
         [HttpGet("tax-offices")]
-        [ProducesResponseType(typeof(ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<List<ErpMobile.Api.Models.Responses.TaxOfficeResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetTaxOffices()
         {
             try
             {
-                var taxOffices = await _warehouseService.GetTaxOfficesAsync();
-                return Ok(new ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>(taxOffices, true, "Tax offices retrieved successfully."));
+                // WarehouseService yerine CustomerLocationService kullanarak doğru açıklamalar içeren vergi dairelerini alalım
+                var customerLocationService = HttpContext.RequestServices.GetRequiredService<ICustomerLocationService>();
+                var taxOffices = await customerLocationService.GetTaxOfficesAsync();
+                
+                return Ok(new ApiResponse<List<ErpMobile.Api.Models.Responses.TaxOfficeResponse>>(taxOffices, true, "Tax offices retrieved successfully."));
             }
             catch (Exception ex)
             {
@@ -142,9 +148,13 @@ namespace ErpMobile.Api.Controllers
                     return Unauthorized(new ApiResponse<string>(null, false, "Invalid or expired token or token not authorized for this operation."));
                 }
 
-                var taxOffices = await _warehouseService.GetTaxOfficesAsync();
-                return Ok(new ApiResponse<List<ErpMobile.Api.Models.TaxOfficeResponse>>(taxOffices, true, "Tax offices retrieved successfully."));
-            }
+                // WarehouseService yerine CustomerLocationService kullanarak doğru açıklamalar içeren vergi dairelerini alalım
+                var customerLocationService = HttpContext.RequestServices.GetRequiredService<ICustomerLocationService>();
+                var taxOffices = await customerLocationService.GetTaxOfficesAsync();
+                
+                // Doğrudan CustomerLocationService'den gelen veriyi kullan
+                return Ok(new ApiResponse<List<ErpMobile.Api.Models.Responses.TaxOfficeResponse>>(taxOffices, true, "Tax offices retrieved successfully."));
+           }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while getting tax offices with token");

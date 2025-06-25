@@ -297,7 +297,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     var priceCurrencyCode = !string.IsNullOrEmpty(detail.PriceCurrencyCode) ? detail.PriceCurrencyCode : docCurrencyCode;
                     command.Parameters.AddWithValue("@PriceCurrencyCode", priceCurrencyCode);
                     
-                    // DocCurrencyCode ile PriceCurrencyCode aynı ise PriceExchangeRate = 1 ve Price = 0 olmalı
+                    // DocCurrencyCode ile PriceCurrencyCode aynı veya farklı olsa da fiyat atanmalı
                     decimal priceExchangeRate;
                     decimal price;
                     
@@ -305,9 +305,9 @@ namespace ErpMobile.Api.Repositories.Invoice
                     {
                         // Aynı para birimi kullanıldığında kur 1 olmalı
                         priceExchangeRate = 1.0m;
-                        // Aynı para birimi kullanıldığında fiyat 0 olmalı
-                        price = 0.0m;
-                        _logger.LogInformation($"DocCurrencyCode ({docCurrencyCode}) ve PriceCurrencyCode ({priceCurrencyCode}) aynı olduğu için PriceExchangeRate=1 ve Price=0 olarak ayarlandı.");
+                        // Aynı para birimi kullanıldığında da fiyat UnitPrice olmalı
+                        price = detail.UnitPrice;
+                        _logger.LogInformation($"DocCurrencyCode ({docCurrencyCode}) ve PriceCurrencyCode ({priceCurrencyCode}) aynı olduğu için PriceExchangeRate=1 ve Price={price} olarak ayarlandı.");
                     }
                     else
                     {
@@ -352,8 +352,8 @@ namespace ErpMobile.Api.Repositories.Invoice
                     command.Parameters.AddWithValue("@DOVCode", "");
 
                     // Oluşturma ve güncelleme bilgileri
-                    command.Parameters.AddWithValue("@CreatedUserName", "API");
-                    command.Parameters.AddWithValue("@LastUpdatedUserName", "API");
+                    command.Parameters.AddWithValue("@CreatedUserName", "UZK  Uzak");
+                    command.Parameters.AddWithValue("@LastUpdatedUserName", "UZK  Uzak");
 
                     // SQL sorgusunu logla
                     _logger.LogInformation("===== REPOSITORY: CreateInvoiceLineAsync SQL QUERY =====\n\n" + sql);
@@ -472,6 +472,213 @@ namespace ErpMobile.Api.Repositories.Invoice
                         
                         // Sorguyu çalıştır
                         await currencyCommand.ExecuteNonQueryAsync();
+                        
+                        // Stok işlemleri - trStock tablosuna kayıt ekle
+                        var stockSql = @"
+                        INSERT INTO [trStock]
+                        ([trStock].[StockID]                                                             
+                        ,[trStock].[CompanyCode]                                                         
+                        ,[trStock].[TransTypeCode]                                                       
+                        ,[trStock].[ProcessCode]                                                         
+                        ,[trStock].[InnerProcessCode]                                                    
+                        ,[trStock].[IsReturn]                                                            
+                        ,[trStock].[DocumentDate]                                                        
+                        ,[trStock].[DocumentTime]                                                        
+                        ,[trStock].[OperationDate]                                                       
+                        ,[trStock].[OperationTime]                                                       
+                        ,[trStock].[DocumentNumber]                                                      
+                        ,[trStock].[ItemCode]                                                            
+                        ,[trStock].[ItemTypeCode]                                                        
+                        ,[trStock].[ColorCode]                                                           
+                        ,[trStock].[ItemDim1Code]                                                        
+                        ,[trStock].[ItemDim2Code]                                                        
+                        ,[trStock].[ItemDim3Code]                                                        
+                        ,[trStock].[CurrAccTypeCode]                                                     
+                        ,[trStock].[CurrAccCode]                                                         
+                        ,[trStock].[SubCurrAccID]                                                        
+                        ,[trStock].[OfficeCode]                                                          
+                        ,[trStock].[WarehouseCode]                                                       
+                        ,[trStock].[In_Qty1]                                                             
+                        ,[trStock].[In_Qty2]                                                             
+                        ,[trStock].[Out_Qty1]                                                            
+                        ,[trStock].[Out_Qty2]                                                            
+                        ,[trStock].[FromOfficeCode]                                                      
+                        ,[trStock].[FromWarehouseCode]                                                   
+                        ,[trStock].[LineDescription]                                                     
+                        ,[trStock].[ApplicationCode]                                                     
+                        ,[trStock].[ApplicationID]                                                       
+                        ,[trStock].[LocalCurrencyCode]                                                   
+                        ,[trStock].[DocCurrencyCode]                                                     
+                        ,[trStock].[StoreCode]                                                           
+                        ,[trStock].[StoreTypeCode]                                                       
+                        ,[trStock].[FromStoreCode]                                                       
+                        ,[trStock].[FromStoreTypeCode]                                                   
+                        ,[trStock].[BatchCode]                                                           
+                        ,[trStock].[SectionCode]                                                         
+                        ,[trStock].[ManufactureDate]                                                     
+                        ,[trStock].[ExpiryDate]                                                          
+                        ,[trStock].[CreatedUserName]                                                     
+                        ,[trStock].[CreatedDate]                                                         
+                        ,[trStock].[LastUpdatedUserName]                                                 
+                        ,[trStock].[LastUpdatedDate]                                                     
+                        )
+                        VALUES (@StockID
+                        , @CompanyCode
+                        , @TransTypeCode
+                        , @ProcessCode
+                        , @InnerProcessCode
+                        , @IsReturn
+                        , @DocumentDate
+                        , @DocumentTime
+                        , @OperationDate
+                        , @OperationTime
+                        , @DocumentNumber
+                        , @ItemCode
+                        , @ItemTypeCode
+                        , @ColorCode
+                        , @ItemDim1Code
+                        , @ItemDim2Code
+                        , @ItemDim3Code
+                        , @CurrAccTypeCode
+                        , @CurrAccCode
+                        , NULL -- SubCurrAccID
+                        , @OfficeCode
+                        , @WarehouseCode
+                        , @In_Qty1
+                        , @In_Qty2
+                        , @Out_Qty1
+                        , @Out_Qty2
+                        , @FromOfficeCode
+                        , @FromWarehouseCode
+                        , @LineDescription
+                        , @ApplicationCode
+                        , @ApplicationID
+                        , @LocalCurrencyCode
+                        , @DocCurrencyCode
+                        , @StoreCode
+                        , @StoreTypeCode
+                        , @FromStoreCode
+                        , @FromStoreTypeCode
+                        , @BatchCode
+                        , NULL -- SectionCode
+                        , @ManufactureDate
+                        , @ExpiryDate
+                        , @CreatedUserName
+                        , GETDATE() -- CreatedDate
+                        , @LastUpdatedUserName
+                        , GETDATE() -- LastUpdatedDate
+                        )";
+                        
+                        using (var stockCommand = new SqlCommand(stockSql, connection, transaction))
+                        {
+                            // Stok kaydı için gerekli parametreler
+                            var stockId = Guid.NewGuid();
+                            
+                            // Fatura başlığından gerekli bilgileri al
+                            string documentNumber = "";
+                            string processCode = "";
+                            byte currAccTypeCode = 0;
+                            string currAccCode = "";
+                            DateTime documentDate = DateTime.Now;
+                            
+                            using (var cmd = new SqlCommand("SELECT InvoiceNumber, ProcessCode, CurrAccTypeCode, CurrAccCode, InvoiceDate FROM trInvoiceHeader WHERE InvoiceHeaderID = @InvoiceHeaderID", connection, transaction))
+                            {
+                                cmd.Parameters.AddWithValue("@InvoiceHeaderID", invoiceHeaderId);
+                                using (var reader = await cmd.ExecuteReaderAsync())
+                                {
+                                    if (await reader.ReadAsync())
+                                    {
+                                        documentNumber = reader["InvoiceNumber"].ToString();
+                                        processCode = reader["ProcessCode"].ToString();
+                                        currAccTypeCode = Convert.ToByte(reader["CurrAccTypeCode"]);
+                                        currAccCode = reader["CurrAccCode"].ToString();
+                                        documentDate = Convert.ToDateTime(reader["InvoiceDate"]);
+                                    }
+                                }
+                            }
+                            
+                            // Stok parametrelerini ayarla
+                            stockCommand.Parameters.AddWithValue("@StockID", stockId);
+                            stockCommand.Parameters.AddWithValue("@CompanyCode", 1);
+                            stockCommand.Parameters.AddWithValue("@TransTypeCode", 2); // Çıkış işlemi
+                            stockCommand.Parameters.AddWithValue("@ProcessCode", processCode);
+                            stockCommand.Parameters.AddWithValue("@InnerProcessCode", "");
+                            stockCommand.Parameters.AddWithValue("@IsReturn", false);
+                            stockCommand.Parameters.AddWithValue("@DocumentDate", documentDate);
+                            stockCommand.Parameters.AddWithValue("@DocumentTime", DateTime.Now.TimeOfDay);
+                            stockCommand.Parameters.AddWithValue("@OperationDate", documentDate);
+                            stockCommand.Parameters.AddWithValue("@OperationTime", DateTime.Now.TimeOfDay);
+                            stockCommand.Parameters.AddWithValue("@DocumentNumber", documentNumber);
+                            stockCommand.Parameters.AddWithValue("@ItemCode", detail.ItemCode);
+                            stockCommand.Parameters.AddWithValue("@ItemTypeCode", detail.ItemTypeCode ?? 1); // ItemTypeCode null ise varsayılan olarak 1 atanır
+                            stockCommand.Parameters.AddWithValue("@ColorCode", detail.ColorCode);
+                            stockCommand.Parameters.AddWithValue("@ItemDim1Code", detail.ItemDim1Code ?? "");
+                            stockCommand.Parameters.AddWithValue("@ItemDim2Code", detail.ItemDim2Code ?? "");
+                            stockCommand.Parameters.AddWithValue("@ItemDim3Code", detail.ItemDim3Code ?? "");
+                            stockCommand.Parameters.AddWithValue("@CurrAccTypeCode", currAccTypeCode);
+                            stockCommand.Parameters.AddWithValue("@CurrAccCode", currAccCode);
+                            stockCommand.Parameters.AddWithValue("@OfficeCode", "M"); // Merkez ofis
+                            stockCommand.Parameters.AddWithValue("@WarehouseCode", "101"); // Varsayılan depo
+                            stockCommand.Parameters.AddWithValue("@In_Qty1", 0); // Giriş miktarı
+                            stockCommand.Parameters.AddWithValue("@In_Qty2", 0); // Giriş miktarı 2
+                            stockCommand.Parameters.AddWithValue("@Out_Qty1", detail.Qty); // Çıkış miktarı
+                            stockCommand.Parameters.AddWithValue("@Out_Qty2", 0); // Çıkış miktarı 2
+                            stockCommand.Parameters.AddWithValue("@FromOfficeCode", "");
+                            stockCommand.Parameters.AddWithValue("@FromWarehouseCode", "");
+                            stockCommand.Parameters.AddWithValue("@LineDescription", "");
+                            stockCommand.Parameters.AddWithValue("@ApplicationCode", "Invoi");
+                            stockCommand.Parameters.AddWithValue("@ApplicationID", invoiceLineId);
+                            stockCommand.Parameters.AddWithValue("@LocalCurrencyCode", "");
+                            stockCommand.Parameters.AddWithValue("@DocCurrencyCode", "");
+                            stockCommand.Parameters.AddWithValue("@StoreCode", "");
+                            stockCommand.Parameters.AddWithValue("@StoreTypeCode", 5); // Mağaza tipi
+                            stockCommand.Parameters.AddWithValue("@FromStoreCode", "");
+                            stockCommand.Parameters.AddWithValue("@FromStoreTypeCode", 5); // Mağaza tipi
+                            stockCommand.Parameters.AddWithValue("@BatchCode", "");
+                            stockCommand.Parameters.AddWithValue("@ManufactureDate", new DateTime(1900, 1, 1));
+                            stockCommand.Parameters.AddWithValue("@ExpiryDate", new DateTime(1900, 1, 1));
+                            stockCommand.Parameters.AddWithValue("@CreatedUserName", "UZK  Uzak");
+                            stockCommand.Parameters.AddWithValue("@LastUpdatedUserName", "UZK  Uzak");
+                            
+                            // Stok kaydını oluştur
+                            await stockCommand.ExecuteNonQueryAsync();
+                            _logger.LogInformation("Stok kaydı oluşturuldu. StockID: {0}", stockId);
+                        }
+                        
+                        // Fatura satır uzantısı kaydı - tpInvoiceLineExtension tablosuna kayıt ekle
+                        var invoiceLineExtensionSql = @"
+                        INSERT INTO [tpInvoiceLineExtension]
+                        ([tpInvoiceLineExtension].[InvoiceLineID]                                                            
+                        ,[tpInvoiceLineExtension].[ItemDeliveryStatus]                                                       
+                        ,[tpInvoiceLineExtension].[CreatedUserName]                                                          
+                        ,[tpInvoiceLineExtension].[CreatedDate]                                                              
+                        ,[tpInvoiceLineExtension].[LastUpdatedUserName]                                                      
+                        ,[tpInvoiceLineExtension].[LastUpdatedDate]                                                          
+                        )
+                        VALUES (@p0 -- InvoiceLineID
+                        , @p1 -- ItemDeliveryStatus
+                        , @p2 -- CreatedUserName
+                        , GETDATE() -- CreatedDate
+                        , @p3 -- LastUpdatedUserName
+                        , GETDATE() -- LastUpdatedDate
+                        )
+                        SELECT @@ROWCOUNT";
+                        
+                        using (var extensionCommand = new SqlCommand("sp_executesql", connection, transaction))
+                        {
+                            extensionCommand.CommandType = CommandType.StoredProcedure;
+                            
+                            extensionCommand.Parameters.AddWithValue("@stmt", invoiceLineExtensionSql);
+                            extensionCommand.Parameters.AddWithValue("@params", "@p0 uniqueidentifier,@p1 tinyint,@p2 nvarchar(9),@p3 nvarchar(9)");
+                            extensionCommand.Parameters.AddWithValue("@p0", invoiceLineId);
+                            extensionCommand.Parameters.AddWithValue("@p1", (byte)0); // Teslim durumu
+                            extensionCommand.Parameters.AddWithValue("@p2", "UZK  Uzak");
+                            extensionCommand.Parameters.AddWithValue("@p3", "UZK  Uzak");
+                            
+                            // Fatura satır uzantısı kaydını oluştur
+                            var rowCount = await extensionCommand.ExecuteScalarAsync();
+                            _logger.LogInformation("Fatura satır uzantısı kaydı oluşturuldu. InvoiceLineID: {0}, Etkilenen Kayıt Sayısı: {1}", invoiceLineId, rowCount);
+                        }
                     }
                 }
             }

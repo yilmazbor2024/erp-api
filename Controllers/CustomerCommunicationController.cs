@@ -75,7 +75,7 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
-                _logger.LogInformation("Müşteri iletişim bilgisi ekleniyor: {CustomerCode}", customerCode);
+                _logger.LogInformation("[CustomerCommunicationController.AddCustomerCommunication] - Müşteri iletişim bilgisi ekleme isteği alındı. CustomerCode: {CustomerCode}", customerCode);
 
                 if (request == null)
                 {
@@ -85,6 +85,12 @@ namespace ErpMobile.Api.Controllers
                         Message = "Geçersiz istek"
                     });
                 }
+
+                _logger.LogInformation("[CustomerCommunicationController.AddCustomerCommunication] - Gelen istek parametreleri: CustomerCode={CustomerCode}, CommunicationTypeCode={CommunicationTypeCode}, Communication={Communication}, IsDefault={IsDefault}", 
+            customerCode, 
+            request.CommunicationTypeCode, 
+            request.Communication, 
+            request.IsDefault);
 
                 // CustomerCommunicationCreateRequest'i CustomerCommunicationCreateRequestNew'e dönüştür
                 var newRequest = new CustomerCommunicationCreateRequestNew
@@ -98,11 +104,23 @@ namespace ErpMobile.Api.Controllers
                     IsDefault = request.IsDefault
                 };
 
+                _logger.LogInformation("[CustomerCommunicationController.AddCustomerCommunication] - Dönüştürülen istek: CustomerCode={CustomerCode}, CommunicationTypeCode={CommunicationTypeCode}, CommAddress={CommAddress}, CanSendAdvert={CanSendAdvert}, IsBlocked={IsBlocked}, IsConfirmed={IsConfirmed}, IsDefault={IsDefault}", 
+            newRequest.CustomerCode, 
+            newRequest.CommunicationTypeCode, 
+            newRequest.CommAddress, 
+            newRequest.CanSendAdvert, 
+            newRequest.IsBlocked, 
+            newRequest.IsConfirmed, 
+            newRequest.IsDefault);
+
+                _logger.LogInformation("[CustomerCommunicationController.AddCustomerCommunication] - CustomerCommunicationService.AddCustomerCommunicationAsync çağrılıyor. CustomerCode: {CustomerCode}", customerCode);
+
                 // Servis çağrısını yap
                 var success = await _customerCommunicationService.AddCustomerCommunicationAsync(newRequest);
                 
                 if (!success)
                 {
+                    _logger.LogWarning("[CustomerCommunicationController.AddCustomerCommunication] - Müşteri iletişim bilgisi ekleme başarısız. CustomerCode: {CustomerCode}", customerCode);
                     return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<CustomerCommunicationResponse>
                     {
                         Success = false,
@@ -111,6 +129,8 @@ namespace ErpMobile.Api.Controllers
                     });
                 }
                 
+                _logger.LogInformation("[CustomerCommunicationController.AddCustomerCommunication] - Müşteri iletişim bilgisi başarıyla eklendi. CustomerCode: {CustomerCode}", customerCode);
+
                 // Eklenen iletişim bilgisini getir
                 var communications = await _customerCommunicationService.GetCustomerCommunicationsAsync(customerCode);
                 var result = communications.FirstOrDefault(c => c.CommunicationTypeCode == newRequest.CommunicationTypeCode && c.CommAddress == newRequest.CommAddress);
@@ -133,7 +153,7 @@ namespace ErpMobile.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Müşteri iletişim bilgisi eklenirken hata oluştu. CustomerCode: {CustomerCode}", customerCode);
+                _logger.LogError(ex, "[CustomerCommunicationController.AddCustomerCommunication] - Müşteri iletişim bilgisi eklenirken hata oluştu. CustomerCode: {CustomerCode}, Hata: {ErrorMessage}", customerCode, ex.Message);
                 return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<CustomerCommunicationResponse>
                 {
                     Success = false,

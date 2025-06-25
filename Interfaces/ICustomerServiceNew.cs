@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using ErpMobile.Api.Models.Requests;
 using ErpMobile.Api.Models.Responses;
+using ErpMobile.Api.Models.Results;
 
 namespace ErpMobile.Api.Interfaces
 {
@@ -43,5 +44,19 @@ namespace ErpMobile.Api.Interfaces
         /// <param name="request">Müşteri kişi bilgisi ekleme isteği</param>
         /// <returns>Eklenen kişi bilgisi</returns>
         Task<CustomerContactResponse> AddCustomerContactAsync(CustomerContactCreateRequestNew request);
+        
+        /// <summary>
+        /// Token ile müşteri adres bilgilerini kaydeder
+        /// </summary>
+        /// <param name="request">Müşteri adres bilgisi ekleme isteği</param>
+        /// <returns>Adres kaydetme sonucu</returns>
+        Task<CustomerAddressResult> CreateCustomerAddressAsync(CustomerAddressCreateRequest request);
+        
+        /// <summary>
+        /// Token ile müşteri iletişim bilgilerini kaydeder
+        /// </summary>
+        /// <param name="request">Müşteri iletişim bilgisi ekleme isteği</param>
+        /// <returns>İletişim kaydetme sonucu</returns>
+        Task<CustomerCommunicationResult> CreateCustomerCommunicationAsync(CustomerCommunicationCreateRequest request);
     }
 }

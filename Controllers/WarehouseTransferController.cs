@@ -36,31 +36,38 @@ namespace ErpMobile.Api.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<ActionResult<ApiResponse<List<WarehouseTransferResponse>>>> GetWarehouseTransfers(
-            [FromQuery] string sourceWarehouseCode = null,
-            [FromQuery] string targetWarehouseCode = null,
+        public async Task<ActionResult<ApiResponse<IEnumerable<WarehouseTransferResponse>>>> GetWarehouseTransfers(
             [FromQuery] DateTime? startDate = null,
-            [FromQuery] DateTime? endDate = null)
+            [FromQuery] DateTime? endDate = null,
+            [FromQuery] string warehouseCode = null,
+            [FromQuery] string targetWarehouseCode = null)
         {
             try
             {
+                _logger.LogInformation("GetWarehouseTransfers çağrıldı: startDate={startDate}, endDate={endDate}, warehouseCode={warehouseCode}, targetWarehouseCode={targetWarehouseCode}",
+                    startDate, endDate, warehouseCode, targetWarehouseCode);
+                    
                 var transfers = await _warehouseTransferRepository.GetWarehouseTransfersAsync(
-                    sourceWarehouseCode, targetWarehouseCode, startDate, endDate);
+                    startDate, endDate, warehouseCode, targetWarehouseCode);
                 
-                return Ok(new ApiResponse<List<WarehouseTransferResponse>>
+                var transfersList = transfers.ToList();
+                
+                _logger.LogInformation("GetWarehouseTransfers başarılı: {count} kayıt döndü", transfersList.Count);
+                
+                return Ok(new ApiResponse<IEnumerable<WarehouseTransferResponse>>
                 {
                     Success = true,
-                    Data = transfers,
+                    Data = transfersList,
                     Message = "Depolar arası sevk listesi başarıyla getirildi."
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Depolar arası sevk listesi getirilirken hata oluştu");
-                return BadRequest(new ApiResponse<List<WarehouseTransferResponse>>
+                return BadRequest(new ApiResponse<IEnumerable<WarehouseTransferResponse>>
                 {
                     Success = false,
-                    Message = "Depolar arası sevk listesi getirilirken bir hata oluştu."
+                    Message = "Depolar arası sevk listesi getirilirken bir hata oluştu: " + ex.Message
                 });
             }
         }
@@ -106,6 +113,52 @@ namespace ErpMobile.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Belirli bir sevk kaydının satır detaylarını getirir
+        /// </summary>
+        /// <param name="transferNumber">Sevk fiş numarası</param>
+        [HttpGet("{transferNumber}/items")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<ApiResponse<List<WarehouseTransferItemResponse>>>> GetWarehouseTransferItems(string transferNumber)
+        {
+            try
+            {
+                _logger.LogInformation("GetWarehouseTransferItems çağrıldı: transferNumber={TransferNumber}", transferNumber);
+                
+                var items = await _warehouseTransferRepository.GetWarehouseTransferItemsAsync(transferNumber);
+                
+                if (items == null || !items.Any())
+                {
+                    _logger.LogWarning("Sevk satırları bulunamadı. Fiş No: {TransferNumber}", transferNumber);
+                    return NotFound(new ApiResponse<List<WarehouseTransferItemResponse>>
+                    {
+                        Success = false,
+                        Message = $"Sevk satırları bulunamadı. Fiş No: {transferNumber}"
+                    });
+                }
+                
+                _logger.LogInformation("GetWarehouseTransferItems başarılı: {Count} satır döndü", items.Count());
+                return Ok(new ApiResponse<List<WarehouseTransferItemResponse>>
+                {
+                    Success = true,
+                    Data = items.ToList(),
+                    Message = "Sevk satırları başarıyla getirildi."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sevk satırları getirilirken hata oluştu. Fiş No: {TransferNumber}", transferNumber);
+                return BadRequest(new ApiResponse<List<WarehouseTransferItemResponse>>
+                {
+                    Success = false,
+                    Message = "Sevk satırları getirilirken bir hata oluştu."
+                });
+            }
+        }
+        
         /// <summary>
         /// Yeni bir sevk fiş numarası oluşturur
         /// </summary>

@@ -875,12 +875,14 @@ namespace ErpMobile.Api.Controllers
                 
                 try
                 {
-                    using (var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection")))
+                    // Doğrudan SQL bağlantısı kullanarak veritabanı işlemlerini yap
+                    string connectionString = _configuration.GetConnectionString("ErpConnection");
+                    string debugQuery = "SELECT ProcessCode, COUNT(*) as Count FROM trInvoiceHeader GROUP BY ProcessCode";
+                    
+                    using (var connection = new SqlConnection(connectionString))
                     {
                         await connection.OpenAsync();
-                        string debugQuery = "SELECT ProcessCode, COUNT(*) as Count FROM trInvoiceHeader GROUP BY ProcessCode";
-                        var command = new SqlCommand(debugQuery, connection);
-                        
+                        using (var command = new SqlCommand(debugQuery, connection))
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             Console.WriteLine("Available ProcessCode values in database:");

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ErpMobile.Api.Models.Common
 {
@@ -27,6 +28,11 @@ namespace ErpMobile.Api.Models.Common
         /// An optional error message, typically provided when Success is false
         /// </summary>
         public string Error { get; set; }
+        
+        /// <summary>
+        /// Validation error messages list, typically provided when model validation fails
+        /// </summary>
+        public List<string> ValidationErrors { get; set; }
         
         /// <summary>
         /// Creates a new instance of ApiResponse

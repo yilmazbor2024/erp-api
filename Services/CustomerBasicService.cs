@@ -1486,10 +1486,26 @@ namespace ErpMobile.Api.Services
             }
         }
 
-        public async Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync(string langCode = "TR")
+        public async Task<List<ErpMobile.Api.Models.TaxOfficeResponse>> GetTaxOfficesAsync()
         {
-            _logger.LogInformation("[CustomerBasicService.GetTaxOfficesAsync] - Vergi daireleri getirme isteği alındı: {LangCode}", langCode);
-            return await _locationService.GetTaxOfficesAsync(langCode);
+            _logger.LogInformation("[CustomerBasicService.GetTaxOfficesAsync] - Vergi daireleri getirme isteği alındı");
+            var taxOffices = await _locationService.GetTaxOfficesAsync();
+            
+            // Responses namespace'indeki TaxOfficeResponse tipini Models namespace'indeki TaxOfficeResponse tipine dönüştür
+            var result = new List<ErpMobile.Api.Models.TaxOfficeResponse>();
+            foreach (var office in taxOffices)
+            {
+                result.Add(new ErpMobile.Api.Models.TaxOfficeResponse
+                {
+                    TaxOfficeCode = office.TaxOfficeCode,
+                    TaxOfficeDescription = office.TaxOfficeDescription,
+                    CityCode = office.CityCode,
+                    CityDescription = null, // Models.Responses.TaxOfficeResponse'da CityDescription yok
+                    IsBlocked = office.IsBlocked
+                });
+            }
+            
+            return result;
         }
 
         // GetBankAccountsAsync metodu artık CustomerLocationService sınıfına taşındı

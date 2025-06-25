@@ -134,11 +134,11 @@ namespace ErpMobile.Api.Repositories.Invoice
                 byte formType = 0; // FormType her durumda 0 olacak
                 
                 // PaymentTerm değerini ödeme tipine göre ayarla
-                int paymentTerm = isVadeli ? (request.FormType.HasValue ? request.FormType.Value : 30) : 0;
+                int paymentTerm =  request.PaymentTerm;
                 
                 // Vade tarihi hesaplama (vadeli ise)
                 DateTime? averageDueDate = null;
-                if (isVadeli && paymentTerm > 0)
+                if (isVadeli)
                 {
                     averageDueDate = request.InvoiceDate.AddDays(paymentTerm);
                     _logger.LogInformation($"Vade tarihi hesaplandı: {averageDueDate.Value.ToString("yyyy-MM-dd")} (Fatura tarihi + {paymentTerm} gün)");
@@ -188,7 +188,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                 _logger.LogInformation($"DocCurrencyCode: {docCurrencyCode}, LocalCurrencyCode: {request.LocalCurrencyCode}, ExchangeRate: {request.ExchangeRate}");
 
                 // Ödeme bilgilerini logla
-                _logger.LogInformation($"FormType: {invoiceHeader.FormType} (0=Peşin, 1=Normal), PaymentTerm: {invoiceHeader.PaymentTerm} (0=Peşin, >0=Vadeli gün sayısı)");
+                _logger.LogInformation($"Ödeme Tipi: {request.IsCreditSale} (0=Peşin, 1=Normal), PaymentTerm: {request.PaymentTerm} (0=Peşin, >0=Vadeli gün sayısı)");
 
                 // Adres bilgilerini logla
                 _logger.LogInformation($"Fatura için müşteri teslimat adresi ID: {request.ShippingPostalAddressID}");
@@ -391,7 +391,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     CurrAccTypeCode = 1, // Tedarikçi
                     TaxTypeCode = Convert.ToByte(request.TaxTypeCode), // Vergi tipi kodu string olarak kaydedilmeli
                     Notes = request.Notes, // Using Notes instead of Description
-                    FormType = 0, // Peşin ödeme için FormType=0 olarak ayarlanıyor
+                    FormType = 0, //  HEr zaman 0
                     PaymentTerm = 0, // Peşin ödeme için PaymentTerm=0 olarak ayarlanıyor
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now  
@@ -465,7 +465,7 @@ namespace ErpMobile.Api.Repositories.Invoice
                     CurrAccCode = request.VendorCode, // CurrAccCode parametresi için VendorCode kullanılıyor
                     CurrAccTypeCode = 1, // Tedarikçi
                     Notes = request.Notes, // Using Notes instead of Description
-                    FormType = 0, // Peşin ödeme için FormType=0 olarak ayarlanıyor
+                    FormType = 0, // HEr zaman 0
                     PaymentTerm = 0, // Peşin ödeme için PaymentTerm=0 olarak ayarlanıyor
                     CreatedBy = "System", // CreatedBy property does not exist in CreateInvoiceRequest
                     CreatedDate = DateTime.Now

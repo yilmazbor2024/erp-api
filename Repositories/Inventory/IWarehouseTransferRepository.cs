@@ -14,16 +14,16 @@ namespace ErpMobile.Api.Repositories.Inventory
         /// <summary>
         /// Depolar arası sevk listesini getirir
         /// </summary>
-        /// <param name="sourceWarehouseCode">Kaynak depo kodu (opsiyonel)</param>
-        /// <param name="targetWarehouseCode">Hedef depo kodu (opsiyonel)</param>
         /// <param name="startDate">Başlangıç tarihi (opsiyonel)</param>
         /// <param name="endDate">Bitiş tarihi (opsiyonel)</param>
+        /// <param name="warehouseCode">Kaynak depo kodu (opsiyonel)</param>
+        /// <param name="targetWarehouseCode">Hedef depo kodu (opsiyonel)</param>
         /// <returns>Depolar arası sevk listesi</returns>
-        Task<List<WarehouseTransferResponse>> GetWarehouseTransfersAsync(
-            string sourceWarehouseCode = null, 
-            string targetWarehouseCode = null, 
+        Task<IEnumerable<WarehouseTransferResponse>> GetWarehouseTransfersAsync(
             DateTime? startDate = null, 
-            DateTime? endDate = null);
+            DateTime? endDate = null, 
+            string warehouseCode = null, 
+            string targetWarehouseCode = null);
 
         /// <summary>
         /// Belirli bir sevk kaydını getirir
@@ -62,6 +62,13 @@ namespace ErpMobile.Api.Repositories.Inventory
         /// <returns>Oluşturulan fiş numarası</returns>
         Task<string> GenerateTransferNumberAsync();
         
+        /// <summary>
+        /// Belirli bir depolar arası sevk kaydının satır detaylarını getirir
+        /// </summary>
+        /// <param name="transferNumber">Sevk fiş numarası</param>
+        /// <returns>Sevk satır detayları listesi</returns>
+        Task<List<WarehouseTransferItemResponse>> GetWarehouseTransferItemsAsync(string transferNumber);
+
         /// <summary>
         /// Depolar arası sevk işlemlerinde kullanılacak depo listesini getirir
         /// </summary>

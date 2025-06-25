@@ -105,9 +105,9 @@ namespace ErpMobile.Api.Services
                 int cashHeaderCount = 0;
                 int lineNumber = 0;
         
-                // Tüm para birimi grupları için tek bir CashTransNumber kullan
-                // Bu ERP'nin davranışına uygun olacak
+                // Ana CashTransNumber'i sakla
                 string commonCashNumber = cashNumber;
+                _logger.LogInformation("Ana CashTransNumber oluşturuldu: {CashNumber}", commonCashNumber);
         
                 // Her para birimi grubu için ayrı bir CashHeader oluştur
                 foreach (var currencyGroup in paymentRowsByCurrency)
@@ -120,9 +120,9 @@ namespace ErpMobile.Api.Services
                     // İlk para birimi grubu için orijinal cashHeaderId'yi kullan, diğerleri için yeni oluştur
                     var currencyCashHeaderId = cashHeaderCount == 0 ? cashHeaderId : Guid.NewGuid();
             
-                    // Tüm para birimleri için aynı CashTransNumber kullan
-                    // Bu ERP ile tutarlılık sağlayacak
-                    string currencyCashNumber = commonCashNumber;
+                    // Her para birimi için benzersiz bir CashTransNumber oluştur
+                    string currencyCashNumber = await GetCashNumberAsync(connection, transaction, currencyCode);
+                    _logger.LogInformation("Para birimi {CurrencyCode} için benzersiz CashTransNumber oluşturuldu: {CashNumber}", currencyCode, currencyCashNumber);
             
                     // Bu para birimi için Cash Header ekle
                     await InsertCashHeaderAsync(connection, transaction, currencyCashHeaderId, request, currencyCashNumber, currencyCode);
@@ -225,7 +225,7 @@ namespace ErpMobile.Api.Services
             }
         }
 
-        private async Task<string> GetCashNumberAsync(SqlConnection connection, SqlTransaction transaction)
+        private async Task<string> GetCashNumberAsync(SqlConnection connection, SqlTransaction transaction, string currencyCode = null)
         {
             try
             {
@@ -237,16 +237,31 @@ namespace ErpMobile.Api.Services
                 // Bu stored procedure doğrudan sonuç döndürüyor, çıkış parametresi yok
                 var result = await connection.QueryFirstOrDefaultAsync<string>("sp_LastRefNumCashTrans", parameters, transaction, commandType: CommandType.StoredProcedure);
                 
-                Console.WriteLine($"[SP CALL] sp_LastRefNumCashTrans - Generated CashTransNumber: {result}");
+                // Eğer para birimi kodu varsa, benzersiz bir numara oluştur
+                if (!string.IsNullOrEmpty(currencyCode))
+                {
+                    // Timestamp ekleyerek benzersizliği garanti et
+                    string uniqueNumber = $"{result}-{currencyCode}-{DateTime.Now.ToString("yyyyMMddHHmmss")}";
+                    Console.WriteLine($"[SP CALL] sp_LastRefNumCashTrans - Generated Unique CashTransNumber: {uniqueNumber} for currency {currencyCode}");
+                    return uniqueNumber;
+                }
                 
+                Console.WriteLine($"[SP CALL] sp_LastRefNumCashTrans - Generated CashTransNumber: {result}");
                 return result;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] Failed to generate CashTransNumber: {ex.Message}");
                 // Hata durumunda manuel bir numara oluştur
-                var fallbackNumber = $"";
+                var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+                var fallbackNumber = $"MANUAL-{timestamp}";
                 
+                if (!string.IsNullOrEmpty(currencyCode))
+                {
+                    fallbackNumber = $"{fallbackNumber}-{currencyCode}";
+                }
+                
+                Console.WriteLine($"[ERROR] Using fallback CashTransNumber: {fallbackNumber}");
                 return fallbackNumber;
             }
         }

@@ -10,6 +10,7 @@ using ErpMobile.Api.Models.Common;
 using Microsoft.Extensions.Logging;
 using Dapper;
 using Microsoft.Extensions.Configuration;
+using System.Data;
 
 namespace ErpMobile.Api.Services
 {
@@ -18,12 +19,14 @@ namespace ErpMobile.Api.Services
         private readonly ILogger<CustomerFinancialService> _logger;
         private readonly IConfiguration _configuration;
         private readonly string _connectionString;
+        private readonly ErpDbContext _erpDbContext;
 
-        public CustomerFinancialService(ILogger<CustomerFinancialService> logger, IConfiguration configuration)
+        public CustomerFinancialService(ILogger<CustomerFinancialService> logger, IConfiguration configuration, ErpDbContext erpDbContext)
         {
             _logger = logger;
             _configuration = configuration;
-            _connectionString = _configuration.GetConnectionString("DefaultConnection");
+            _connectionString = configuration.GetConnectionString("DefaultConnection");
+            _erpDbContext = erpDbContext;
         }
 
         /// <summary>
@@ -109,31 +112,25 @@ namespace ErpMobile.Api.Services
                     WHERE cdCurrAcc.CurrAccCode = @CustomerCode
                       AND cdCurrAcc.CurrAccTypeCode = 3";
 
-                var parameters = new List<SqlParameter>
-                {
-                    new SqlParameter("@CustomerCode", customerCode)
-                };
+                var parameters = new SqlParameter[] { new SqlParameter("@CustomerCode", customerCode) };
 
                 CustomerCreditInfoResponse creditInfo = null;
 
-                using (var connection = new SqlConnection(_connectionString))
-                using (var reader = await connection.ExecuteReaderAsync(query, parameters.ToArray()))
+                var result = await _erpDbContext.ExecuteReaderAsync(query, parameters);
+                if (result.Read())
                 {
-                    if (await reader.ReadAsync())
+                    creditInfo = new CustomerCreditInfoResponse
                     {
-                        creditInfo = new CustomerCreditInfoResponse
-                        {
-                            CustomerCode = reader["CurrAccCode"].ToString(),
-                            CustomerDescription = reader["CurrAccDescription"].ToString(),
-                            CreditLimit = Convert.ToDecimal(reader["CreditLimit"]),
-                            Debit = Convert.ToDecimal(reader["Debit"]),
-                            Credit = Convert.ToDecimal(reader["Credit"]),
-                            Balance = Convert.ToDecimal(reader["Balance"]),
-                            OpenRisk = Convert.ToDecimal(reader["OpenRisk"]),
-                            BalanceAndRisk = Convert.ToDecimal(reader["BalanceAndRisk"]),
-                            RemainingCreditLimit = Convert.ToDecimal(reader["RemainingCreditLimit"])
-                        };
-                    }
+                        CustomerCode = result["CurrAccCode"].ToString(),
+                        CustomerDescription = result["CurrAccDescription"].ToString(),
+                        CreditLimit = Convert.ToDecimal(result["CreditLimit"]),
+                        Debit = Convert.ToDecimal(result["Debit"]),
+                        Credit = Convert.ToDecimal(result["Credit"]),
+                        Balance = Convert.ToDecimal(result["Balance"]),
+                        OpenRisk = Convert.ToDecimal(result["OpenRisk"]),
+                        BalanceAndRisk = Convert.ToDecimal(result["BalanceAndRisk"]),
+                        RemainingCreditLimit = Convert.ToDecimal(result["RemainingCreditLimit"])
+                    };
                 }
 
                 return creditInfo;
@@ -210,7 +207,7 @@ namespace ErpMobile.Api.Services
                     await connection.OpenAsync();
                     var rowsAffected = await connection.ExecuteAsync(updateQuery, updateParams);
 
-                    if (rowsAffected > 0)
+                        if (rowsAffected > 0)
                     {
                         return new CustomerFinancialUpdateResponse
                         {
