@@ -387,11 +387,19 @@ namespace ErpMobile.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Depolar arası sevk kaydı oluşturulurken hata oluştu");
+                _logger.LogError(ex, "Depolar arası sevk kaydı oluşturulurken hata oluştu: {ErrorMessage}", ex.Message);
+        
+                // İç hata mesajlarını da logla
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError("İç hata: {InnerErrorMessage}", ex.InnerException.Message);
+                }
+        
                 return BadRequest(new ApiResponse<string>
                 {
                     Success = false,
-                    Message = "Depolar arası sevk kaydı oluşturulurken bir hata oluştu."
+                    Message = $"Depolar arası sevk kaydı oluşturulurken bir hata oluştu: {ex.Message}",
+                    Error = ex.InnerException?.Message
                 });
             }
         }

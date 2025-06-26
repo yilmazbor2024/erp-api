@@ -81,7 +81,25 @@ namespace ErpMobile.Api.Data
                 using var connection = await GetConnectionAsync();
 
                 using var command = new SqlCommand(query, connection);
+                
+                // Tüm parametreleri logla
+                _logger.LogInformation("SQL sorgusu çalıştırılıyor: {Query}", query);
+                _logger.LogInformation("Toplam {Count} parametre var", parameters.Length);
+                foreach (var param in parameters)
+                {
+                    _logger.LogInformation("SQL Parametresi: {ParamName} = {ParamValue}, Tip: {ParamType}", 
+                        param.ParameterName, param.Value, param.Value?.GetType().Name ?? "null");
+                }
+                
                 command.Parameters.AddRange(parameters);
+                
+                // Komut çalıştırılmadan önce son kontrol
+                _logger.LogInformation("Komut parametreleri kontrol ediliyor. Toplam: {Count}", command.Parameters.Count);
+                foreach (SqlParameter param in command.Parameters)
+                {
+                    _logger.LogInformation("Komut Parametresi: {ParamName} = {ParamValue}", 
+                        param.ParameterName, param.Value);
+                }
 
                 return await command.ExecuteNonQueryAsync();
             }
