@@ -71,6 +71,11 @@ namespace ErpMobile.Api.Models.Responses
         public string OfficeCountryCode { get; set; }
         
         /// <summary>
+        /// Gets or sets the country description.
+        /// </summary>
+        public string CountryDescription { get; set; }
+        
+        /// <summary>
         /// Gets or sets the city description.
         /// </summary>
         public string CityDescription { get; set; }

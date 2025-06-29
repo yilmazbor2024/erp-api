@@ -120,6 +120,7 @@ namespace ErpMobile.Api.Services
                             , cdCurrAcc.OfficeCode
                             , OfficeDescription = ISNULL((SELECT OfficeDescription FROM cdOfficeDesc WITH(NOLOCK) WHERE cdOfficeDesc.OfficeCode = cdCurrAcc.OfficeCode AND cdOfficeDesc.LangCode = N'TR'),SPACE(0))
                             , OfficeCountryCode = ISNULL((SELECT CountryCode FROM dfOfficeDefault WITH(NOLOCK) WHERE cdCurrAcc.OfficeCode = dfOfficeDefault.OfficeCode), SPACE(0))
+                            , CountryDescription = ISNULL((SELECT CountryDescription FROM cdCountryDesc WITH(NOLOCK) WHERE cdCountryDesc.CountryCode = prCurrAccPostalAddress.CountryCode AND cdCountryDesc.LangCode = N'TR') , N'Türkiye')
                             , CityDescription = ISNULL((SELECT CityDescription FROM cdCityDesc WITH(NOLOCK) WHERE cdCityDesc.CityCode = prCurrAccPostalAddress.CityCode AND cdCityDesc.LangCode = N'TR') , SPACE(0))
                             , DistrictDescription = ISNULL((SELECT DistrictDescription FROM cdDistrictDesc WITH(NOLOCK) WHERE cdDistrictDesc.DistrictCode = prCurrAccPostalAddress.DistrictCode AND cdDistrictDesc.LangCode = N'TR') , SPACE(0))
                             , IdentityNum = cdCurrAcc.IdentityNum
