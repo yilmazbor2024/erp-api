@@ -72,7 +72,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<List<WarehouseTransferItemResponse>> GetWarehouseTransferItemsAsync(string transferNumber)
+        public async Task<List<WarehouseTransferItemResponse>> GetWarehouseTransferItemsAsync(string transferNumber, string innerProcessCode = "WT")
         {
             try
             {
@@ -83,7 +83,8 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                 var parameters = new List<SqlParameter>
                 {
-                    new SqlParameter("@TransferNumber", transferNumber)
+                    new SqlParameter("@TransferNumber", transferNumber),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
                 };
 
                 var query = $@"
@@ -135,7 +136,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                     ON InnerITAttributesFilter.InnerLineID = trInnerLine.InnerLineID
                 LEFT OUTER JOIN rpTransferApproved WITH(NOLOCK)
                     ON rpTransferApproved.ApplicationCode		= N'Inner'
-                    AND rpTransferApproved.InnerProcessCode		= 'WT'
+                    AND rpTransferApproved.InnerProcessCode		= @InnerProcessCode
                     AND rpTransferApproved.ApplicationID		= trInnerLine.InnerHeaderID
                     AND rpTransferApproved.ApplicationLineID	= trInnerLine.InnerLineID
                     GROUP BY  CASE WHEN 1 = 1 AND 1 = 1 THEN trInnerLine.SortOrder ELSE 0 END
@@ -199,7 +200,7 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                     , InnerHeaderID				= trInnerHeader.InnerHeaderID
                 FROM trInnerHeader WITH(NOLOCK)
-                WHERE trInnerHeader.InnerProcessCode = 'WT'
+                WHERE trInnerHeader.InnerProcessCode = @InnerProcessCode
                 AND trInnerHeader.InnerNumber = @TransferNumber
                 ) Query WHERE CompanyCode = 1
                 ) ReportTable 
@@ -242,12 +243,17 @@ namespace ErpMobile.Api.Repositories.Inventory
             DateTime? startDate = null,
             DateTime? endDate = null,
             string warehouseCode = null,
-            string targetWarehouseCode = null)
+            string targetWarehouseCode = null,
+            string innerProcessCode = "WT")
         {
             try
             {
                 var whereConditions = new List<string>();
                 var parameters = new List<SqlParameter>();
+                
+                // İşlem kodu parametresi ekleniyor
+                _logger.LogInformation("GetWarehouseTransfersAsync: İşlem kodu parametresi ekleniyor: {InnerProcessCode}", innerProcessCode);
+                parameters.Add(new SqlParameter("@InnerProcessCode", innerProcessCode));
 
                 if (startDate.HasValue)
                 {
@@ -321,7 +327,7 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                         , InnerHeaderID				= trInnerHeader.InnerHeaderID
                 FROM trInnerHeader WITH(NOLOCK)
-                WHERE trInnerHeader.InnerProcessCode = 'WT'
+                WHERE trInnerHeader.InnerProcessCode = @InnerProcessCode
                 {whereClause}
                 ) Query WHERE CompanyCode = 1
                 ORDER BY OperationDate DESC, OperationTime DESC
@@ -388,11 +394,17 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<WarehouseTransferDetailResponse> GetWarehouseTransferByNumberAsync(string transferNumber)
+        public async Task<WarehouseTransferDetailResponse> GetWarehouseTransferByNumberAsync(string transferNumber, string innerProcessCode = "WT")
         {
             try
             {
                 // Önce başlık bilgilerini getir
+                var parameters = new List<SqlParameter>
+                {
+                    new SqlParameter("@TransferNumber", transferNumber),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
+                };
+                
                 var headerQuery = @"
                     SELECT InnerNumber = h.InnerNumber
                         , OperationDate = h.OperationDate
@@ -440,14 +452,13 @@ namespace ErpMobile.Api.Repositories.Inventory
                                 FROM trInnerLine WITH(NOLOCK)
                                 GROUP BY InnerHeaderID) AS InnerLines
                             ON InnerLines.InnerHeaderID = h.InnerHeaderID
-                    WHERE h.InnerNumber = @TransferNumber AND h.InnerProcessCode = 'WT'
+                    WHERE h.InnerNumber = @TransferNumber AND h.InnerProcessCode = @InnerProcessCode
                 ";
 
-                var parameters = new[] { new SqlParameter("@TransferNumber", transferNumber) };
                 WarehouseTransferDetailResponse transfer = null;
                 Guid innerHeaderId = Guid.Empty;
 
-                using (var reader = await _context.ExecuteReaderAsync(headerQuery, parameters))
+                using (var reader = await _context.ExecuteReaderAsync(headerQuery, parameters.ToArray()))
                 {
                     if (await reader.ReadAsync())
                     {
@@ -543,12 +554,22 @@ namespace ErpMobile.Api.Repositories.Inventory
         /// <inheritdoc/>
         public async Task<string> GenerateTransferNumberAsync()
         {
+            return await GenerateTransferNumberAsync("WT");
+        }
+
+        /// <summary>
+        /// Yeni bir sevk veya üretim siparişi fiş numarası oluşturur
+        /// </summary>
+        /// <param name="innerProcessCode">Fiş türü kodu (WT: Depolar arası sevk, OP: Üretim siparişi)</param>
+        /// <returns>Oluşturulan fiş numarası</returns>
+        public async Task<string> GenerateTransferNumberAsync(string innerProcessCode = "WT")
+        {
             try
             {
-                _logger.LogInformation("Yeni depo transferi fiş numarası oluşturuluyor...");
+                _logger.LogInformation("Yeni fiş numarası oluşturuluyor... İşlem Kodu: {InnerProcessCode}", innerProcessCode);
 
                 // Sadece sp_LastRefNumInnerProcess stored procedure'ünü kullanarak numara oluştur
-                var query = "exec sp_LastRefNumInnerProcess @CompanyCode=1,@InnerProcessCode=N'WT'";
+                var query = $"exec sp_LastRefNumInnerProcess @CompanyCode=1,@InnerProcessCode=N'{innerProcessCode}'";
 
                 string newNumber = null;
                 using (var reader = await _context.ExecuteReaderAsync(query))
@@ -583,7 +604,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<string> CreateWarehouseTransferAsync(WarehouseTransferRequest request, string userName)
+        public async Task<string> CreateWarehouseTransferAsync(WarehouseTransferRequest request, string userName, string innerProcessCode = "WT")
         {
             try
             {
@@ -597,24 +618,28 @@ namespace ErpMobile.Api.Repositories.Inventory
                 _logger.LogInformation("İstek hash değeri: {RequestHash}", requestHash);
                 
                 // İşlem için kilit anahtarı oluştur
-                string lockKey = $"WT_{requestHash}_{userName}";
+                string lockKey = $"{innerProcessCode}_{requestHash}_{userName}";
                 string existingTransfer = null;
                 
                 var checkQuery = @"
                     SELECT TOP 1 InnerNumber
                     FROM trInnerHeader WITH (NOLOCK)
-                    WHERE InnerProcessCode = 'WT'
-                      AND WarehouseCode = @SourceWarehouseCode
+                    WHERE InnerProcessCode = @InnerProcessCode
+                      AND (@InnerProcessCode = 'OP' OR WarehouseCode = @SourceWarehouseCode)
                       AND ToWarehouseCode = @TargetWarehouseCode
                       AND CreatedUserName = @UserName
                       AND DATEDIFF(MINUTE, CreatedDate, GETDATE()) < 5
                     ORDER BY CreatedDate DESC
                 ";
                 
+                _logger.LogInformation("İşlem kodu: {InnerProcessCode}, Kaynak depo kontrolü: {SourceWarehouseCheck}", 
+                    innerProcessCode, innerProcessCode == "OP" ? "Opsiyonel" : "Zorunlu");
+                
                 var checkParams1 = new[] { 
-                    new SqlParameter("@SourceWarehouseCode", request.SourceWarehouseCode),
+                    new SqlParameter("@SourceWarehouseCode", string.IsNullOrEmpty(request.SourceWarehouseCode) ? DBNull.Value : (object)request.SourceWarehouseCode),
                     new SqlParameter("@TargetWarehouseCode", request.TargetWarehouseCode),
-                    new SqlParameter("@UserName", userName)
+                    new SqlParameter("@UserName", userName),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
                 };
 
                 // Kilidi kontrol et ve ayarla
@@ -638,9 +663,10 @@ namespace ErpMobile.Api.Repositories.Inventory
                     
                     // Tekrar kontrol et
                     var checkParams2 = new[] { 
-                        new SqlParameter("@SourceWarehouseCode", request.SourceWarehouseCode),
+                        new SqlParameter("@SourceWarehouseCode", string.IsNullOrEmpty(request.SourceWarehouseCode) ? DBNull.Value : (object)request.SourceWarehouseCode),
                         new SqlParameter("@TargetWarehouseCode", request.TargetWarehouseCode),
-                        new SqlParameter("@UserName", userName)
+                        new SqlParameter("@UserName", userName),
+                        new SqlParameter("@InnerProcessCode", innerProcessCode)
                     };
                     
                     using (var reader = await _context.ExecuteReaderAsync(checkQuery, checkParams2))
@@ -662,9 +688,10 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                 // Son bir kez daha kontrol et
                 var checkParams3 = new[] { 
-                    new SqlParameter("@SourceWarehouseCode", request.SourceWarehouseCode),
+                    new SqlParameter("@SourceWarehouseCode", string.IsNullOrEmpty(request.SourceWarehouseCode) ? DBNull.Value : (object)request.SourceWarehouseCode),
                     new SqlParameter("@TargetWarehouseCode", request.TargetWarehouseCode),
-                    new SqlParameter("@UserName", userName)
+                    new SqlParameter("@UserName", userName),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
                 };
                 
                 using (var reader = await _context.ExecuteReaderAsync(checkQuery, checkParams3))
@@ -679,7 +706,7 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                 // Yeni fiş numarası oluştur
                 _logger.LogInformation("Yeni fiş numarası oluşturuluyor...");
-                string transferNumber = await GenerateTransferNumberAsync();
+                string transferNumber = await GenerateTransferNumberAsync(innerProcessCode);
                 _logger.LogInformation("Fiş numarası oluşturuldu: {TransferNumber}", transferNumber);
 
                 // InnerHeader için ID oluştur
@@ -691,8 +718,54 @@ namespace ErpMobile.Api.Repositories.Inventory
                 var minDate = new DateTime(1900, 1, 1);
                 _logger.LogInformation("İşlem tarihi: {OperationDate}", request.OperationDate ?? now);
 
-                // trInnerHeader tablosuna kayıt ekle
-                var headerQuery = @"
+                // TransTypeCode değerini innerProcessCode'a göre belirle
+                int transTypeCode = innerProcessCode == "OP" ? 1 : 3;
+                _logger.LogInformation("InnerProcessCode: {InnerProcessCode}, TransTypeCode: {TransTypeCode}", innerProcessCode, transTypeCode);
+                
+                // Üretim siparişi (OP) ve depo transferi (WT) için farklı sorgular oluştur
+                string headerQuery;
+                
+                if (innerProcessCode == "OP")
+                {
+                    // Üretim siparişi için - hedef depo WarehouseCode alanına yazılır, ToWarehouseCode kullanılmaz
+                    headerQuery = @"
+                    INSERT INTO trInnerHeader (
+                        InnerHeaderID, TransTypeCode, InnerProcessCode,
+                        InnerNumber, OperationDate, OperationTime,
+                        Description, StoreTypeCode, StoreCode,
+                        WarehouseCode,
+                        ImportFileNumber, ExportFileNumber,
+                        CurrAccTypeCode, CurrAccCode, SubCurrAccID,
+                        Series, SeriesNumber, IsTransferApproved,
+                        TransferApprovedDate, IsPostingJournal, JournalDate,
+                        RoundsmanCode, ServicemanCode, IsReturn,
+                        CustomsDocumentNumber, IsInnerOrderBase, IsSectionTransfer,
+                        OfficeCode, ApplicationCode, ApplicationID,
+                        IsCompleted, IsPrinted, IsLocked,
+                        CompanyCode, CreatedUserName, CreatedDate,
+                        LastUpdatedUserName, LastUpdatedDate
+                    ) VALUES (
+                        @InnerHeaderID, @TransTypeCode, @InnerProcessCode,
+                        @InnerNumber, @OperationDate, @OperationTime,
+                        @Description, 5, '',
+                        @TargetWarehouseCode,
+                        '', '',
+                        3, '', NULL,
+                        '', 0, 0,
+                        @MinDate, 0, @MinDate,
+                        '', '', 0,
+                        '', 0, 0,
+                        'M', 'Inner', @InnerHeaderID,
+                        0, 0, 0,
+                        1, @UserName, GETDATE(),
+                        @UserName, GETDATE()
+                    )
+                    ";
+                }
+                else
+                {
+                    // Depo transferi için - tüm alanlar dahil
+                    headerQuery = @"
                     INSERT INTO trInnerHeader (
                         InnerHeaderID, TransTypeCode, InnerProcessCode,
                         InnerNumber, OperationDate, OperationTime,
@@ -709,7 +782,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                         CompanyCode, CreatedUserName, CreatedDate,
                         LastUpdatedUserName, LastUpdatedDate
                     ) VALUES (
-                        @InnerHeaderID, 3, 'WT',
+                        @InnerHeaderID, @TransTypeCode, @InnerProcessCode,
                         @InnerNumber, @OperationDate, @OperationTime,
                         @Description, 5, '',
                         '', @SourceWarehouseCode, @TargetWarehouseCode,
@@ -724,14 +797,17 @@ namespace ErpMobile.Api.Repositories.Inventory
                         1, @UserName, GETDATE(),
                         @UserName, GETDATE()
                     )
-                ";
+                    ";
+                }
 
                 // minDate değişkeni yukarıda tanımlandı
                 var headerParameters = new[]
                 {
                     new SqlParameter("@InnerHeaderID", innerHeaderId),
                     new SqlParameter("@InnerNumber", transferNumber),
-                    new SqlParameter("@SourceWarehouseCode", request.SourceWarehouseCode),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode),
+                    new SqlParameter("@TransTypeCode", transTypeCode),  // Yeni eklenen TransTypeCode parametresi
+                    new SqlParameter("@SourceWarehouseCode", string.IsNullOrEmpty(request.SourceWarehouseCode) ? DBNull.Value : (object)request.SourceWarehouseCode),
                     new SqlParameter("@TargetWarehouseCode", request.TargetWarehouseCode),
                     new SqlParameter("@OperationDate", request.OperationDate),
                     new SqlParameter("@OperationTime", (request.OperationDate ?? DateTime.Now).TimeOfDay),
@@ -739,6 +815,9 @@ namespace ErpMobile.Api.Repositories.Inventory
                     new SqlParameter("@MinDate", minDate),
                     new SqlParameter("@UserName", userName)
                 };
+                
+                _logger.LogInformation("İşlem kodu: {InnerProcessCode}, Kaynak depo: {SourceWarehouse}", 
+                    innerProcessCode, string.IsNullOrEmpty(request.SourceWarehouseCode) ? "<Boş>" : request.SourceWarehouseCode);
 
                 _logger.LogInformation("trInnerHeader tablosuna kayıt ekleniyor... InnerHeaderID: {InnerHeaderID}, TransferNumber: {TransferNumber}", innerHeaderId, transferNumber);
                 await _context.ExecuteNonQueryAsync(headerQuery, headerParameters);
@@ -784,14 +863,15 @@ namespace ErpMobile.Api.Repositories.Inventory
                 _logger.LogInformation("tpInnerHeaderExtension tablosuna kayıt eklendi.");
 
                 // Ürün satırlarını ekle
-                _logger.LogInformation("Ürün satırları ekleniyor. Toplam {ItemCount} satır.", request.Items.Count);
+                _logger.LogInformation("Ürün satırları ekleniyor. Toplam {ItemCount} satır. Toplam miktar: {TotalQuantity}", 
+                    request.Items.Count, request.Items.Sum(i => i.Quantity));
                 int sortOrder = 1;
                 foreach (var item in request.Items)
                 {
                     // Her satır için benzersiz ID oluştur
                     Guid innerLineId = Guid.NewGuid();
-                    _logger.LogInformation("Satır {SortOrder} için InnerLineID oluşturuldu: {InnerLineID}, Ürün: {ItemCode}, Miktar: {Quantity}",
-                        sortOrder, innerLineId, item.ItemCode, item.Quantity);
+                    _logger.LogInformation("Satır {SortOrder} için InnerLineID oluşturuldu: {InnerLineID}, Ürün: {ItemCode}, Renk: {ColorCode}, Beden: {ItemDim1Code}, Miktar: {Quantity}",
+                        sortOrder, innerLineId, item.ItemCode, item.ColorCode ?? "<Yok>", item.ItemDim1Code ?? "<Yok>", item.Quantity);
 
                     // trInnerLine tablosuna kayıt ekle
                     var lineQuery = @"
@@ -867,97 +947,115 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                     // Stok hareketlerini oluştur
                     // 1. Kaynak depodan çıkış hareketi
-                    Guid sourceStockId = Guid.NewGuid();
-                    _logger.LogInformation("Kaynak depo çıkış hareketi için StockID oluşturuldu: {StockID}", sourceStockId);
-                    var sourceStockQuery = @"
-                        INSERT INTO trStock (
-                            StockID, CompanyCode, TransTypeCode,
-                            ProcessCode, InnerProcessCode, IsReturn,
-                            DocumentDate, DocumentTime, OperationDate,
-                            OperationTime, DocumentNumber, ItemCode,
-                            ItemTypeCode, ColorCode, ItemDim1Code,
-                            ItemDim2Code, ItemDim3Code, CurrAccTypeCode,
-                            CurrAccCode, SubCurrAccID, OfficeCode,
-                            WarehouseCode, In_Qty1, In_Qty2,
-                            Out_Qty1, Out_Qty2, FromOfficeCode,
-                            FromWarehouseCode, LineDescription, ApplicationCode,
-                            ApplicationID, LocalCurrencyCode, DocCurrencyCode,
-                            StoreCode, StoreTypeCode, FromStoreCode,
-                            FromStoreTypeCode, BatchCode, SectionCode,
-                            ManufactureDate, ExpiryDate, CreatedUserName,
-                            CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                        ) VALUES (
-                            @StockID, 1, 2,
-                            '', 'WT', 0,
-                            @OperationDate, @OperationTime, @OperationDate,
-                            @OperationTime, @DocumentNumber, @ItemCode,
-                            @ItemTypeCode, @ColorCode, @ItemDim1Code,
-                            @ItemDim2Code, @ItemDim3Code, 3,
-                            '', NULL, 'M',
-                            @WarehouseCode, 0, 0,
-                            @Out_Qty1, 0, 'M',
-                            @FromWarehouseCode, @LineDescription, 'Inner',
-                            @ApplicationID, '', '',
-                            '', 5, '',
-                            5, @BatchCode, NULL,
-                            @ManufactureDate, @ExpiryDate, @UserName,
-                            GETDATE(), @UserName, GETDATE()
-                        )
-                    ";
-
-                    var sourceStockParams = new[]
+                    Guid sourceStockId = Guid.Empty; // Varsayılan olarak boş, sadece WT için kullanılacak
+                    // İşlem koduna göre stok hareketlerini oluştur
+                    if (innerProcessCode == "WT" && !string.IsNullOrEmpty(request.SourceWarehouseCode))
                     {
-                        new SqlParameter("@StockID", sourceStockId),
-                        new SqlParameter("@CompanyCode", SqlDbType.Decimal) { Value = 1 },
-                        new SqlParameter("@TransTypeCode", SqlDbType.TinyInt) { Value = 2 },
-                        new SqlParameter("@ProcessCode", string.Empty),
-                        new SqlParameter("@InnerProcessCode", "WT"),
-                        new SqlParameter("@IsReturn", SqlDbType.Bit) { Value = 0 },
-                        new SqlParameter("@DocumentDate", request.OperationDate ?? DateTime.Now),
-                        new SqlParameter("@DocumentTime", (request.OperationDate ?? DateTime.Now).TimeOfDay),
-                        new SqlParameter("@OperationDate", request.OperationDate ?? DateTime.Now),
-                        new SqlParameter("@OperationTime", (request.OperationDate ?? DateTime.Now).TimeOfDay),
-                        new SqlParameter("@DocumentNumber", transferNumber),
-                        new SqlParameter("@ItemCode", item.ItemCode),
-                        new SqlParameter("@ItemTypeCode", SqlDbType.TinyInt) { Value = 1 }, // Varsayılan ürün tipi
-                        new SqlParameter("@ColorCode", item.ColorCode ?? string.Empty),
-                        new SqlParameter("@ItemDim1Code", item.ItemDim1Code ?? string.Empty),
-                        new SqlParameter("@ItemDim2Code", string.Empty),
-                        new SqlParameter("@ItemDim3Code", string.Empty),
-                        new SqlParameter("@CurrAccTypeCode", SqlDbType.TinyInt) { Value = 3 },
-                        new SqlParameter("@CurrAccCode", string.Empty),
-                        new SqlParameter("@OfficeCode", "M"),
-                        new SqlParameter("@WarehouseCode", request.SourceWarehouseCode),
-                        new SqlParameter("@In_Qty1", SqlDbType.Float) { Value = 0 },
-                        new SqlParameter("@In_Qty2", SqlDbType.Float) { Value = 0 },
-                        new SqlParameter("@Out_Qty1", SqlDbType.Float) { Value = item.Quantity },
-                        new SqlParameter("@Out_Qty2", SqlDbType.Float) { Value = 0 },
-                        new SqlParameter("@FromOfficeCode", "M"),
-                        new SqlParameter("@FromWarehouseCode", request.TargetWarehouseCode),
-                        new SqlParameter("@LineDescription", item.LineDescription ?? string.Empty),
-                        new SqlParameter("@ApplicationCode", "Inner"),
-                        new SqlParameter("@ApplicationID", innerLineId),
-                        new SqlParameter("@LocalCurrencyCode", string.Empty),
-                        new SqlParameter("@DocCurrencyCode", string.Empty),
-                        new SqlParameter("@StoreCode", string.Empty),
-                        new SqlParameter("@StoreTypeCode", SqlDbType.TinyInt) { Value = 5 },
-                        new SqlParameter("@FromStoreCode", string.Empty),
-                        new SqlParameter("@FromStoreTypeCode", SqlDbType.TinyInt) { Value = 5 },
-                        new SqlParameter("@BatchCode", string.Empty),
-                        new SqlParameter("@ManufactureDate", minDate),
-                        new SqlParameter("@ExpiryDate", minDate),
-                        new SqlParameter("@UserName", userName)
-                    };
+                        // Kaynak depodan çıkış hareketi
+                        _logger.LogInformation("Kaynak depo çıkış hareketi oluşturuluyor. Ürün: {ItemCode}, Depo: {SourceWarehouse}, Miktar: {Quantity}",
+                            item.ItemCode, request.SourceWarehouseCode, item.Quantity);
 
-                    _logger.LogInformation("Kaynak depo çıkış hareketi ekleniyor... StockID: {StockID}, Depo: {WarehouseCode}, Ürün: {ItemCode}, Miktar: {Quantity}",
-                        sourceStockId, request.SourceWarehouseCode, item.ItemCode, item.Quantity);
-                    await _context.ExecuteNonQueryAsync(sourceStockQuery, sourceStockParams);
-                    _logger.LogInformation("Kaynak depo çıkış hareketi eklendi.");
+                        sourceStockId = Guid.NewGuid();
+                        _logger.LogInformation("Kaynak depo çıkış hareketi için StockID oluşturuldu: {StockID}", sourceStockId);
 
-                    // 2. Hedef depoya giriş hareketi
-                    Guid targetStockId = Guid.NewGuid();
-                    _logger.LogInformation("Hedef depo giriş hareketi için StockID oluşturuldu: {StockID}", targetStockId);
-                    var targetStockQuery = @"
+                        var outStockQuery = @"
+                            INSERT INTO trStock (
+                                StockID, CompanyCode, TransTypeCode,
+                                ProcessCode, InnerProcessCode, IsReturn,
+                                DocumentDate, DocumentTime, OperationDate,
+                                OperationTime, DocumentNumber, ItemCode,
+                                ItemTypeCode, ColorCode, ItemDim1Code,
+                                ItemDim2Code, ItemDim3Code, CurrAccTypeCode,
+                                CurrAccCode, SubCurrAccID, OfficeCode,
+                                WarehouseCode, In_Qty1, In_Qty2,
+                                Out_Qty1, Out_Qty2, FromOfficeCode,
+                                FromWarehouseCode, LineDescription, ApplicationCode,
+                                ApplicationID, LocalCurrencyCode, DocCurrencyCode,
+                                StoreCode, StoreTypeCode, FromStoreCode,
+                                FromStoreTypeCode, BatchCode, SectionCode,
+                                ManufactureDate, ExpiryDate, CreatedUserName,
+                                CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                            ) VALUES (
+                                @StockID, 1, 2,
+                                '', @InnerProcessCode, 0,
+                                @OperationDate, @OperationTime, @OperationDate,
+                                @OperationTime, @DocumentNumber, @ItemCode,
+                                @ItemTypeCode, @ColorCode, @ItemDim1Code,
+                                @ItemDim2Code, @ItemDim3Code, 3,
+                                '', NULL, 'M',
+                                @WarehouseCode, 0, 0,
+                                @Out_Qty1, 0, 'M',
+                                @FromWarehouseCode, @LineDescription, 'Inner',
+                                @ApplicationID, '', '',
+                                '', 5, '',
+                                5, @BatchCode, NULL,
+                                @ManufactureDate, @ExpiryDate, @UserName,
+                                GETDATE(), @UserName, GETDATE()
+                            )
+                        ";
+
+                        var outStockParameters = new[]
+                        {
+                            new SqlParameter("@StockID", sourceStockId),
+                            new SqlParameter("@CompanyCode", SqlDbType.Decimal) { Value = 1 },
+                            new SqlParameter("@TransTypeCode", SqlDbType.TinyInt) { Value = 2 },
+                            new SqlParameter("@ProcessCode", string.Empty),
+                            new SqlParameter("@InnerProcessCode", innerProcessCode),
+                            new SqlParameter("@IsReturn", SqlDbType.Bit) { Value = 0 },
+                            new SqlParameter("@DocumentDate", request.OperationDate ?? DateTime.Now),
+                            new SqlParameter("@DocumentTime", (request.OperationDate ?? DateTime.Now).TimeOfDay),
+                            new SqlParameter("@OperationDate", request.OperationDate ?? DateTime.Now),
+                            new SqlParameter("@OperationTime", (request.OperationDate ?? DateTime.Now).TimeOfDay),
+                            new SqlParameter("@DocumentNumber", transferNumber),
+                            new SqlParameter("@ItemCode", item.ItemCode),
+                            new SqlParameter("@ItemTypeCode", SqlDbType.TinyInt) { Value = 1 }, // Varsayılan ürün tipi
+                            new SqlParameter("@ColorCode", item.ColorCode ?? string.Empty),
+                            new SqlParameter("@ItemDim1Code", item.ItemDim1Code ?? string.Empty),
+                            new SqlParameter("@ItemDim2Code", string.Empty),
+                            new SqlParameter("@ItemDim3Code", string.Empty),
+                            new SqlParameter("@CurrAccTypeCode", SqlDbType.TinyInt) { Value = 3 },
+                            new SqlParameter("@CurrAccCode", string.Empty),
+                            new SqlParameter("@OfficeCode", "M"),
+                            new SqlParameter("@WarehouseCode", request.SourceWarehouseCode ?? string.Empty),
+                            new SqlParameter("@In_Qty1", SqlDbType.Float) { Value = 0 },
+                            new SqlParameter("@In_Qty2", SqlDbType.Float) { Value = 0 },
+                            new SqlParameter("@Out_Qty1", SqlDbType.Float) { Value = item.Quantity },
+                            new SqlParameter("@Out_Qty2", SqlDbType.Float) { Value = 0 },
+                            new SqlParameter("@FromOfficeCode", "M"),
+                            new SqlParameter("@FromWarehouseCode", request.TargetWarehouseCode ?? string.Empty),
+                            new SqlParameter("@LineDescription", item.LineDescription ?? string.Empty),
+                            new SqlParameter("@ApplicationCode", "Inner"),
+                            new SqlParameter("@ApplicationID", innerLineId),
+                            new SqlParameter("@LocalCurrencyCode", string.Empty),
+                            new SqlParameter("@DocCurrencyCode", string.Empty),
+                            new SqlParameter("@StoreCode", string.Empty),
+                            new SqlParameter("@StoreTypeCode", SqlDbType.TinyInt) { Value = 5 },
+                            new SqlParameter("@FromStoreCode", string.Empty),
+                            new SqlParameter("@FromStoreTypeCode", SqlDbType.TinyInt) { Value = 5 },
+                            new SqlParameter("@BatchCode", string.Empty),
+                            new SqlParameter("@ManufactureDate", minDate),
+                            new SqlParameter("@ExpiryDate", minDate),
+                            new SqlParameter("@UserName", userName)
+                        };
+
+                        _logger.LogInformation("Kaynak depo çıkış hareketi ekleniyor... StockID: {StockID}, Depo: {WarehouseCode}, Ürün: {ItemCode}, Miktar: {Quantity}",
+                            sourceStockId, request.SourceWarehouseCode, item.ItemCode, item.Quantity);
+                        await _context.ExecuteNonQueryAsync(outStockQuery, outStockParameters);
+                        _logger.LogInformation("Kaynak depo çıkış hareketi eklendi.");
+                    }
+                    else if (innerProcessCode == "OP" || string.IsNullOrEmpty(request.SourceWarehouseCode))
+                    {
+                        _logger.LogInformation("Üretim siparişi (OP) veya kaynak depo boş olduğu için çıkış hareketi atlanıyor. İşlem Kodu: {InnerProcessCode}, Ürün: {ItemCode}", 
+                            innerProcessCode, item.ItemCode);
+                    }
+
+                    // Hedef depoya giriş hareketi
+                    _logger.LogInformation("Hedef depo giriş hareketi oluşturuluyor. Ürün: {ItemCode}, Depo: {TargetWarehouse}, Miktar: {Quantity}",
+                        item.ItemCode, request.TargetWarehouseCode, item.Quantity);
+
+                    Guid inStockId = Guid.NewGuid();
+                    _logger.LogInformation("Hedef depo giriş hareketi için StockID oluşturuldu: {StockID}", inStockId);
+                    var inStockQuery = @"
                         INSERT INTO trStock (
                             StockID, CompanyCode, TransTypeCode,
                             ProcessCode, InnerProcessCode, IsReturn,
@@ -976,7 +1074,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                             CreatedDate, LastUpdatedUserName, LastUpdatedDate
                         ) VALUES (
                             @StockID, 1, 1,
-                            '', 'WT', 0,
+                            '', @InnerProcessCode, 0,
                             @OperationDate, @OperationTime, @OperationDate,
                             @OperationTime, @DocumentNumber, @ItemCode,
                             @ItemTypeCode, @ColorCode, @ItemDim1Code,
@@ -993,13 +1091,13 @@ namespace ErpMobile.Api.Repositories.Inventory
                         )
                     ";
 
-                    var targetStockParams = new[]
+                    var inStockParameters = new[]
                     {
-                        new SqlParameter("@StockID", targetStockId),
+                        new SqlParameter("@StockID", inStockId),
                         new SqlParameter("@CompanyCode", SqlDbType.Decimal) { Value = 1 },
                         new SqlParameter("@TransTypeCode", SqlDbType.TinyInt) { Value = 1 },
                         new SqlParameter("@ProcessCode", string.Empty),
-                        new SqlParameter("@InnerProcessCode", "WT"),
+                        new SqlParameter("@InnerProcessCode", innerProcessCode),
                         new SqlParameter("@IsReturn", SqlDbType.Bit) { Value = 0 },
                         new SqlParameter("@DocumentDate", request.OperationDate ?? DateTime.Now),
                         new SqlParameter("@DocumentTime", (request.OperationDate ?? DateTime.Now).TimeOfDay),
@@ -1015,13 +1113,13 @@ namespace ErpMobile.Api.Repositories.Inventory
                         new SqlParameter("@CurrAccTypeCode", SqlDbType.TinyInt) { Value = 3 },
                         new SqlParameter("@CurrAccCode", string.Empty),
                         new SqlParameter("@OfficeCode", "M"),
-                        new SqlParameter("@WarehouseCode", request.TargetWarehouseCode),
+                        new SqlParameter("@WarehouseCode", request.TargetWarehouseCode ?? string.Empty),
                         new SqlParameter("@In_Qty1", SqlDbType.Float) { Value = item.Quantity },
                         new SqlParameter("@In_Qty2", SqlDbType.Float) { Value = 0 },
                         new SqlParameter("@Out_Qty1", SqlDbType.Float) { Value = 0 },
                         new SqlParameter("@Out_Qty2", SqlDbType.Float) { Value = 0 },
                         new SqlParameter("@FromOfficeCode", "M"),
-                        new SqlParameter("@FromWarehouseCode", request.SourceWarehouseCode),
+                        new SqlParameter("@FromWarehouseCode", request.SourceWarehouseCode ?? string.Empty),
                         new SqlParameter("@LineDescription", item.LineDescription ?? string.Empty),
                         new SqlParameter("@ApplicationCode", "Inner"),
                         new SqlParameter("@ApplicationID", innerLineId),
@@ -1038,65 +1136,61 @@ namespace ErpMobile.Api.Repositories.Inventory
                     };
 
                     _logger.LogInformation("Hedef depo giriş hareketi ekleniyor... StockID: {StockID}, Depo: {WarehouseCode}, Ürün: {ItemCode}, Miktar: {Quantity}",
-                        targetStockId, request.TargetWarehouseCode, item.ItemCode, item.Quantity);
-                    await _context.ExecuteNonQueryAsync(targetStockQuery, targetStockParams);
+                        inStockId, request.TargetWarehouseCode, item.ItemCode, item.Quantity);
+                    await _context.ExecuteNonQueryAsync(inStockQuery, inStockParameters);
                     _logger.LogInformation("Hedef depo giriş hareketi eklendi.");
 
-                    // 3. Stok hareketleri arasındaki ilişkiyi oluştur
-                    _logger.LogInformation("Stok hareketleri arasındaki ilişki oluşturuluyor... Kaynak: {SourceStockID}, Hedef: {TargetStockID}",
-                        sourceStockId, targetStockId);
-                    var stockCrossQuery = @"
-                        INSERT INTO tpStockCross (
-                            StockID, CrossStockID, CreatedUserName,
-                            CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                        ) VALUES (
-                            @StockID, @CrossStockID, @UserName,
-                            GETDATE(), @UserName, GETDATE()
-                        )
-                    ";
-
-                    var stockCrossParams = new[]
+                    // Stok hareketleri arasındaki ilişkiyi kur (sadece WT için)
+                    if (innerProcessCode == "WT" && !string.IsNullOrEmpty(request.SourceWarehouseCode))
                     {
-                        new SqlParameter("@StockID", sourceStockId),
-                        new SqlParameter("@CrossStockID", targetStockId),
-                        new SqlParameter("@UserName", userName)
-                    };
+                        // outStockId değişkeni sadece WT işlem kodunda ve kaynak depo varsa tanımlanır
+                        // Bu nedenle bu blok içinde güvenle kullanabiliriz
+                        _logger.LogInformation("Stok hareketleri arasındaki ilişki oluşturuluyor. Çıkış StockID: {OutStockID}, Giriş StockID: {InStockID}",
+                            sourceStockId, inStockId);
+                        var crossQuery = @"
+                            INSERT INTO tpStockCross (
+                                StockID, CrossStockID,
+                                CreatedUserName, CreatedDate,
+                                LastUpdatedUserName, LastUpdatedDate
+                            ) VALUES (
+                                @StockID, @CrossStockID,
+                                @UserName, GETDATE(),
+                                @UserName, GETDATE()
+                            )
+                        ";
 
-                    await _context.ExecuteNonQueryAsync(stockCrossQuery, stockCrossParams);
-                    _logger.LogInformation("Stok hareketleri arasındaki ilişki oluşturuldu.");
+                        var crossParameters = new[]
+                        {
+                            new SqlParameter("@StockID", sourceStockId),
+                            new SqlParameter("@CrossStockID", inStockId),
+                            new SqlParameter("@UserName", userName)
+                        };
+
+                        await _context.ExecuteNonQueryAsync(crossQuery, crossParameters);
+                        _logger.LogInformation("Stok hareketleri arasındaki ilişki oluşturuldu. Çıkış StockID: {OutStockID}, Giriş StockID: {InStockID}",
+                            sourceStockId, inStockId);
+                    }
                 }
 
-                _logger.LogInformation("Depo transferi başarıyla oluşturuldu. Fiş No: {TransferNumber}", transferNumber);
-                
-                // İşlem tamamlandı, kilidi serbest bırak
-                ReleaseLock(lockKey);
-                
+                _logger.LogInformation("Tüm stok hareketleri başarıyla oluşturuldu. Fiş No: {TransferNumber}", transferNumber);
                 return transferNumber;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Depolar arası sevk oluşturulurken hata oluştu. Kaynak Depo: {SourceWarehouse}, Hedef Depo: {TargetWarehouse}",
-                    request.SourceWarehouseCode, request.TargetWarehouseCode);
-                
-                // Hata durumunda da kilidi serbest bırak
-                try
+                _logger.LogError(ex, "Stok hareketleri oluşturulurken hata oluştu. Hata: {ErrorMessage}",
+                    ex.Message);
+
+                if (ex.InnerException != null)
                 {
-                    // Kilit anahtarını yeniden oluştur
-                    string errorLockKey = $"WT_{request.SourceWarehouseCode}_{request.TargetWarehouseCode}_{request.OperationDate?.ToString("yyyyMMdd") ?? ""}_{
-                        string.Join("_", request.Items?.Select(i => $"{i.ItemCode}_{i.ColorCode}_{i.ItemDim1Code}_{i.Quantity}") ?? Array.Empty<string>())}".GetHashCode().ToString() + "_" + userName;
-                    ReleaseLock(errorLockKey);
+                    _logger.LogError("Inner Exception: {InnerErrorMessage}", ex.InnerException.Message);
                 }
-                catch (Exception lockEx)
-                {
-                    _logger.LogWarning(lockEx, "Hata durumunda kilit serbest bırakılırken sorun oluştu.");
-                }
-                
+
                 throw;
             }
         }
 
         /// <inheritdoc/>
-        public async Task<bool> ApproveWarehouseTransferAsync(string transferNumber, string userName)
+        public async Task<bool> ApproveWarehouseTransferAsync(string transferNumber, string userName, string innerProcessCode = "WT")
         {
             try
             {
@@ -1105,138 +1199,94 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                 // Önce sevk kaydını kontrol et
                 var checkQuery = @"
-                    SELECT h.InnerHeaderID, h.IsTransferApproved, h.SourceWarehouseCode, h.TargetWarehouseCode
+                    SELECT h.InnerHeaderID, h.IsLocked, h.Status
                     FROM trInnerHeader h WITH (NOLOCK)
                     WHERE h.InnerNumber = @TransferNumber 
-                      AND h.InnerProcessCode = 'WT'
+                      AND h.InnerProcessCode = @InnerProcessCode
                 ";
-
-                var checkParameters = new[] { new SqlParameter("@TransferNumber", transferNumber) };
-                _logger.LogInformation("Sevk kaydı kontrol ediliyor. Fiş No: {TransferNumber}", transferNumber);
-
+                
+                var checkParameters = new[] { 
+                    new SqlParameter("@TransferNumber", transferNumber),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
+                };
                 Guid? innerHeaderId = null;
-                bool isAlreadyApproved = false;
-                string sourceWarehouseCode = null;
-                string targetWarehouseCode = null;
-
+                bool isLocked = false;
+                int status = 0;
+                
+                _logger.LogInformation("Sevk kaydı sorgusu çalıştırılıyor. Fiş No: {TransferNumber}", transferNumber);
+                
                 using (var reader = await _context.ExecuteReaderAsync(checkQuery, checkParameters))
                 {
                     if (await reader.ReadAsync())
                     {
                         innerHeaderId = (Guid)reader["InnerHeaderID"];
-                        isAlreadyApproved = Convert.ToBoolean(reader["IsTransferApproved"]);
-                        sourceWarehouseCode = reader["SourceWarehouseCode"].ToString();
-                        targetWarehouseCode = reader["TargetWarehouseCode"].ToString();
-
-                        _logger.LogInformation("Sevk kaydı bulundu. InnerHeaderID: {InnerHeaderID}, Onay Durumu: {IsApproved}, Kaynak Depo: {SourceWarehouse}, Hedef Depo: {TargetWarehouse}",
-                            innerHeaderId, isAlreadyApproved, sourceWarehouseCode, targetWarehouseCode);
+                        isLocked = Convert.ToBoolean(reader["IsLocked"]);
+                        status = Convert.ToInt32(reader["Status"]);
+                        
+                        _logger.LogInformation("Sevk kaydı bulundu. InnerHeaderID: {InnerHeaderID}, Kilit Durumu: {IsLocked}, Durum: {Status}",
+                            innerHeaderId, isLocked, status);
                     }
                     else
                     {
                         _logger.LogWarning("Belirtilen fiş numarasına ait sevk kaydı bulunamadı. Fiş No: {TransferNumber}", transferNumber);
                     }
                 }
-
+                
                 if (innerHeaderId == null)
                 {
                     _logger.LogWarning("Onaylanacak sevk kaydı bulunamadı. Fiş No: {TransferNumber}", transferNumber);
                     return false;
                 }
-
-                if (isAlreadyApproved)
+                
+                if (status > 1)
                 {
-                    _logger.LogWarning("Sevk kaydı zaten onaylanmış. Fiş No: {TransferNumber}", transferNumber);
-                    return true; // Zaten onaylanmış, başarılı kabul et
+                    _logger.LogWarning("Sevk kaydı zaten onaylanmış durumda, iptal edilemez. Fiş No: {TransferNumber}, Durum: {Status}", 
+                        transferNumber, status);
+                    return false;
                 }
-
-                // Sevk kalemlerini al
-                _logger.LogInformation("Sevk kalemleri alınıyor. InnerHeaderID: {InnerHeaderID}", innerHeaderId);
-
-                var linesQuery = @"
-                    SELECT ItemCode, ColorCode, ItemDim1Code, Qty1 as Quantity
-                    FROM trInnerLine WITH (NOLOCK)
+                
+                if (isLocked)
+                {
+                    var lockStatusResult = await CheckWarehouseTransferLockStatusAsync(transferNumber, innerProcessCode);
+                    
+                    if (lockStatusResult.IsLocked && lockStatusResult.LockedByUser != userName)
+                    {
+                        _logger.LogWarning("Sevk kaydı başka bir kullanıcı tarafından kilitlenmiş, iptal edilemez. Fiş No: {TransferNumber}, Kilitleyen: {LockedByUser}", 
+                            transferNumber, lockStatusResult.LockedByUser);
+                        return false;
+                    }
+                }
+                
+                // trInnerHeader tablosunda Status alanını güncelle (3 = İptal)
+                _logger.LogInformation("trInnerHeader tablosunda Status alanı güncelleniyor. InnerHeaderID: {InnerHeaderID}", innerHeaderId);
+                
+                var updateHeaderQuery = @"
+                    UPDATE trInnerHeader 
+                    SET Status = 3,
+                        LastUpdatedUserName = @UserName,
+                        LastUpdatedDate = GETDATE()
                     WHERE InnerHeaderID = @InnerHeaderID
                 ";
-
-                var linesParameters = new[] { new SqlParameter("@InnerHeaderID", innerHeaderId) };
-                var items = new List<(string ItemCode, string ColorCode, string ItemDim1Code, double Quantity)>();
-
-                using (var reader = await _context.ExecuteReaderAsync(linesQuery, linesParameters))
+                
+                var updateHeaderParameters = new[]
                 {
-                    while (await reader.ReadAsync())
-                    {
-                        var itemCode = reader["ItemCode"].ToString();
-                        var colorCode = reader["ColorCode"].ToString();
-                        var itemDim1Code = reader["ItemDim1Code"].ToString();
-                        var quantity = Convert.ToDouble(reader["Quantity"]);
-
-                        items.Add((itemCode, colorCode, itemDim1Code, quantity));
-
-                        _logger.LogInformation("Sevk kalemi bulundu. Ürün: {ItemCode}, Renk: {ColorCode}, Boyut: {ItemDim1Code}, Miktar: {Quantity}",
-                            itemCode, colorCode, itemDim1Code, quantity);
-                    }
-                }
-
-                _logger.LogInformation("Toplam {ItemCount} adet sevk kalemi bulundu.", items.Count);
-
-                // Kaynak depodaki stok bakiyelerini kontrol et
-                _logger.LogInformation("Kaynak depodaki stok bakiyeleri kontrol ediliyor. Depo: {SourceWarehouse}", sourceWarehouseCode);
-                foreach (var item in items)
-                {
-                    // qry_GetItemBalance stored procedure ile stok bakiyesini kontrol et
-                    var stockQuery = @"
-                        DECLARE @Balance decimal(18,6);
-                        
-                        EXEC sp_executesql N'qry_GetItemBalance @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14, @p15, @p16, @p17, @p18',
-                        N'@p0 nvarchar(2),@p1 decimal(1,0),@p2 nvarchar(1),@p3 nvarchar(4000),@p4 nvarchar(3),@p5 bit,@p6 tinyint,@p7 nvarchar(3),@p8 nvarchar(3),@p9 nvarchar(3),@p10 nvarchar(4000),@p11 nvarchar(4000),@p12 datetime,@p13 bit,@p14 tinyint,@p15 nvarchar(4000),@p16 uniqueidentifier,@p17 tinyint,@p18 bit',
-                        @p0=N'WS',@p1=1,@p2=N'M',@p3=@ItemCode,@p4=@SourceWarehouse,@p5=1,@p6=1,@p7=@ColorCode,@p8=@ItemDim1Code,@p9=N'STN',@p10=N'',@p11=N'',@p12=@Date,@p13=1,@p14=0,@p15=N'',@p16='00000000-0000-0000-0000-000000000000',@p17=6,@p18=0;
-                        
-                        SELECT @Balance as StockBalance;
-                    ";
-
-                    var stockParameters = new[]
-                    {
-                        new SqlParameter("@ItemCode", item.ItemCode),
-                        new SqlParameter("@SourceWarehouse", sourceWarehouseCode),
-                        new SqlParameter("@ColorCode", string.IsNullOrEmpty(item.ColorCode) ? DBNull.Value : (object)item.ColorCode),
-                        new SqlParameter("@ItemDim1Code", string.IsNullOrEmpty(item.ItemDim1Code) ? DBNull.Value : (object)item.ItemDim1Code),
-                        new SqlParameter("@Date", DateTime.Today)
-                    };
-
-                    _logger.LogInformation("Ürün stok bakiyesi kontrol ediliyor. Ürün: {ItemCode}, Depo: {SourceWarehouse}",
-                        item.ItemCode, sourceWarehouseCode);
-
-                    double stockBalance = 0;
-                    using (var reader = await _context.ExecuteReaderAsync(stockQuery, stockParameters))
-                    {
-                        if (await reader.ReadAsync() && reader["StockBalance"] != DBNull.Value)
-                        {
-                            stockBalance = Convert.ToDouble(reader["StockBalance"]);
-                            _logger.LogInformation("Ürün stok bakiyesi: {StockBalance}, Gerekli Miktar: {RequiredQuantity}",
-                                stockBalance, item.Quantity);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Ürün stok bakiyesi bulunamadı. Ürün: {ItemCode}, Depo: {SourceWarehouse}",
-                                item.ItemCode, sourceWarehouseCode);
-                        }
-                    }
-
-                    // Stok miktarı yetersizse hata fırlat
-                    if (stockBalance < item.Quantity)
-                    {
-                        var errorMessage = $"Yetersiz stok: Ürün {item.ItemCode}, Depo {sourceWarehouseCode}, Mevcut {stockBalance}, Gerekli {item.Quantity}";
-                        _logger.LogError("Stok yetersiz! {ErrorMessage}", errorMessage);
-                        throw new InvalidOperationException(errorMessage);
-                    }
-
-                    _logger.LogInformation("Stok bakiyesi yeterli. Ürün: {ItemCode}, Stok: {StockBalance}, Gerekli: {RequiredQuantity}",
-                        item.ItemCode, stockBalance, item.Quantity);
-                }
-
-                // Şimdi sevk kaydını onayla - kullanıcının paylaştığı kapsamlı güncelleme sorgusu
+                    new SqlParameter("@InnerHeaderID", innerHeaderId),
+                    new SqlParameter("@UserName", userName)
+                };
+                
+                _logger.LogInformation("trInnerHeader tablosu güncelleniyor. InnerHeaderID: {InnerHeaderID}, Kullanıcı: {UserName}",
+                    innerHeaderId, userName);
+                
+                await _context.ExecuteNonQueryAsync(updateHeaderQuery, updateHeaderParameters);
+                _logger.LogInformation("trInnerHeader tablosu güncellendi.");
+                
+                // Stok hareketlerini oluştur
+                _logger.LogInformation("Stok hareketleri oluşturuluyor. InnerHeaderID: {InnerHeaderID}", innerHeaderId);
+                await CreateStockMovementsAsync(innerHeaderId.Value, userName, innerProcessCode);
+                
+                // Stok hareketleri oluşturulduktan sonra sevk kaydını onayla ve tamamla
                 _logger.LogInformation("Sevk onaylama işlemi yapılıyor. InnerHeaderID: {InnerHeaderID}", innerHeaderId);
-
+                
                 var updateQuery = @"
                     UPDATE trInnerHeader 
                     SET 
@@ -1258,12 +1308,48 @@ namespace ErpMobile.Api.Repositories.Inventory
 
                 _logger.LogInformation("Sevk onay güncellemesi yapılıyor. InnerHeaderID: {InnerHeaderID}, Onay Tarihi: {ApprovalDate}, Kullanıcı: {UserName}",
                     innerHeaderId, now, userName);
+                
                 await _context.ExecuteNonQueryAsync(updateQuery, updateParameters);
                 _logger.LogInformation("Sevk onay güncellemesi tamamlandı.");
+                
+                // auTransactionCheckInOutTrace tablosunu güncelle
+                _logger.LogInformation("auTransactionCheckInOutTrace tablosu güncelleniyor. InnerHeaderID: {InnerHeaderID}", innerHeaderId);
+                
+                var traceQuery = @"
+                    UPDATE auTransactionCheckInOutTrace 
+                    SET 
+                    TableName = 'trInnerHeader',
+                    HeaderID = @HeaderID,
+                    UserName = @UserName,
+                    CheckOutDate = @CheckOutDate,
+                    Comment = '',
+                    CheckInDate = @CheckInDate,
+                    CheckOutReasonCode = ''
+                    WHERE TransactionID = (
+                        SELECT TOP 1 TransactionID 
+                        FROM auTransactionCheckInOutTrace 
+                        WHERE HeaderID = @HeaderID 
+                        ORDER BY TransactionID DESC
+                    )
+                ";
 
-                // Stok hareketlerini oluştur
-                _logger.LogInformation("Onaylanan sevk için stok hareketleri oluşturuluyor. InnerHeaderID: {InnerHeaderID}", innerHeaderId);
-                await CreateStockMovementsAsync(innerHeaderId.Value, userName);
+                var traceParameters = new[]
+                {
+                    new SqlParameter("@HeaderID", innerHeaderId),
+                    new SqlParameter("@UserName", userName),
+                    new SqlParameter("@CheckOutDate", now),
+                    new SqlParameter("@CheckInDate", now.AddSeconds(1))
+                };
+
+                try
+                {
+                    await _context.ExecuteNonQueryAsync(traceQuery, traceParameters);
+                    _logger.LogInformation("auTransactionCheckInOutTrace tablosu güncellendi.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "auTransactionCheckInOutTrace tablosu güncellenirken hata oluştu. Bu kritik bir hata değil, işleme devam ediliyor.");
+                }
 
                 _logger.LogInformation("Sevk onaylama işlemi başarıyla tamamlandı. Fiş No: {TransferNumber}", transferNumber);
                 return true;
@@ -1285,7 +1371,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         /// <summary>
         /// Onaylanan sevk için stok hareketlerini oluşturur
         /// </summary>
-        private async Task CreateStockMovementsAsync(Guid innerHeaderId, string userName)
+        private async Task CreateStockMovementsAsync(Guid innerHeaderId, string userName, string innerProcessCode = "WT")
         {
             try
             {
@@ -1299,7 +1385,8 @@ namespace ErpMobile.Api.Repositories.Inventory
                         h.InnerNumber,
                         h.WarehouseCode AS SourceWarehouseCode,
                         h.ToWarehouseCode AS TargetWarehouseCode,
-                        h.OperationDate
+                        h.OperationDate,
+                        h.InnerProcessCode
                     FROM trInnerHeader h WITH (NOLOCK)
                     WHERE h.InnerHeaderID = @InnerHeaderID
                 ";
@@ -1318,9 +1405,16 @@ namespace ErpMobile.Api.Repositories.Inventory
                         sourceWarehouseCode = reader["SourceWarehouseCode"].ToString();
                         targetWarehouseCode = reader["TargetWarehouseCode"].ToString();
                         operationDate = Convert.ToDateTime(reader["OperationDate"]);
+                        // Veritabanından okunan InnerProcessCode değerini kullan
+                        string dbInnerProcessCode = reader["InnerProcessCode"].ToString();
+                        // Eğer parametre olarak gelen innerProcessCode boşsa, veritabanından okunan değeri kullan
+                        if (string.IsNullOrEmpty(innerProcessCode))
+                        {
+                            innerProcessCode = dbInnerProcessCode;
+                        }
 
-                        _logger.LogInformation("Sevk başlık bilgileri alındı. Fiş No: {TransferNumber}, Kaynak Depo: {SourceWarehouse}, Hedef Depo: {TargetWarehouse}, İşlem Tarihi: {OperationDate}",
-                            transferNumber, sourceWarehouseCode, targetWarehouseCode, operationDate);
+                        _logger.LogInformation("Fiş başlık bilgileri alındı. Fiş No: {TransferNumber}, Kaynak Depo: {SourceWarehouse}, Hedef Depo: {TargetWarehouse}, İşlem Tarihi: {OperationDate}, İşlem Kodu: {InnerProcessCode}",
+                            transferNumber, sourceWarehouseCode, targetWarehouseCode, operationDate, innerProcessCode);
                     }
                     else
                     {
@@ -1367,68 +1461,86 @@ namespace ErpMobile.Api.Repositories.Inventory
                 _logger.LogInformation("Toplam {LineCount} adet sevk satırı bulundu.", lines.Count);
 
                 // Her satır için stok hareketlerini oluştur
-                _logger.LogInformation("Her satır için stok hareketleri oluşturuluyor. Toplam Satır Sayısı: {LineCount}", lines.Count);
+                _logger.LogInformation("Her satır için stok hareketleri oluşturuluyor. Toplam Satır Sayısı: {LineCount}, İşlem Kodu: {InnerProcessCode}", lines.Count, innerProcessCode);
+                
+                // Tüm stok hareketleri için ortak değişkenler
+                var now = DateTime.Now;
+                var minDate = new DateTime(1900, 1, 1);
+                
                 foreach (var line in lines)
                 {
-                    // Kaynak depodan çıkış hareketi
-                    _logger.LogInformation("Kaynak depo çıkış hareketi oluşturuluyor. Ürün: {ItemCode}, Depo: {SourceWarehouse}, Miktar: {Quantity}",
-                        line.ItemCode, sourceWarehouseCode, line.Quantity);
-
-                    Guid outStockId = Guid.NewGuid();
-                    _logger.LogInformation("Kaynak depo çıkış hareketi için StockID oluşturuldu: {StockID}", outStockId);
-
-                    var outStockQuery = @"
-                        INSERT INTO trStock (
-                            StockID, CompanyCode, TransTypeCode, ProcessCode, InnerProcessCode,
-                            IsReturn, DocumentDate, DocumentTime, OperationDate, OperationTime,
-                            DocumentNumber, ItemCode, ItemTypeCode, ColorCode, ItemDim1Code,
-                            ItemDim2Code, ItemDim3Code, CurrAccTypeCode, CurrAccCode, SubCurrAccID,
-                            OfficeCode, WarehouseCode, In_Qty1, In_Qty2, Out_Qty1, Out_Qty2,
-                            FromOfficeCode, FromWarehouseCode, LineDescription, ApplicationCode,
-                            ApplicationID, LocalCurrencyCode, DocCurrencyCode, StoreCode,
-                            StoreTypeCode, FromStoreCode, FromStoreTypeCode, BatchCode,
-                            SectionCode, ManufactureDate, ExpiryDate, CreatedUserName,
-                            CreatedDate, LastUpdatedUserName, LastUpdatedDate
-                        ) VALUES (
-                            @StockID, 1, 2, '', @InnerProcessCode, 0,
-                            @DocumentDate, @DocumentTime, @OperationDate, @OperationTime,
-                            @DocumentNumber, @ItemCode, 1, @ColorCode, @ItemDim1Code,
-                            '', '', 3, '', NULL,
-                            @OfficeCode, @WarehouseCode, 0, 0, @Quantity, 0,
-                            @OfficeCode, @FromWarehouseCode, '', 'Inner',
-                            @ApplicationID, '', '', '',
-                            5, '', 5, '',
-                            NULL, @MinDate, @MinDate, @UserName,
-                            GETDATE(), @UserName, GETDATE()
-                        )
-                    ";
-
-                    var now = DateTime.Now;
-                    var minDate = new DateTime(1900, 1, 1);
-                    var outStockParameters = new[]
+                    // Her satır için stok hareketi ID'leri
+                    Guid outStockId = Guid.Empty; // Varsayılan olarak boş, sadece WT için kullanılacak
+                    // İşlem koduna göre stok hareketlerini oluştur
+                    if (innerProcessCode == "WT" && !string.IsNullOrEmpty(sourceWarehouseCode))
                     {
-                        new SqlParameter("@StockID", outStockId),
-                        new SqlParameter("@InnerProcessCode", "WT"),
-                        new SqlParameter("@DocumentDate", operationDate.Date),
-                        new SqlParameter("@DocumentTime", operationDate.TimeOfDay),
-                        new SqlParameter("@OperationDate", operationDate.Date),
-                        new SqlParameter("@OperationTime", operationDate.TimeOfDay),
-                        new SqlParameter("@DocumentNumber", transferNumber),
-                        new SqlParameter("@ItemCode", line.ItemCode),
-                        new SqlParameter("@ColorCode", line.ColorCode),
-                        new SqlParameter("@ItemDim1Code", line.ItemDim1Code),
-                        new SqlParameter("@OfficeCode", "M"), // Varsayılan ofis kodu
-                        new SqlParameter("@WarehouseCode", sourceWarehouseCode),
-                        new SqlParameter("@Quantity", line.Quantity),
-                        new SqlParameter("@FromWarehouseCode", targetWarehouseCode),
-                        new SqlParameter("@ApplicationID", innerHeaderId),
-                        new SqlParameter("@MinDate", minDate),
-                        new SqlParameter("@UserName", userName)
-                    };
+                        // Kaynak depodan çıkış hareketi
+                        _logger.LogInformation("Kaynak depo çıkış hareketi oluşturuluyor. Ürün: {ItemCode}, Depo: {SourceWarehouse}, Miktar: {Quantity}",
+                            line.ItemCode, sourceWarehouseCode, line.Quantity);
 
-                    await _context.ExecuteNonQueryAsync(outStockQuery, outStockParameters);
-                    _logger.LogInformation("Kaynak depo çıkış hareketi eklendi. StockID: {StockID}, Ürün: {ItemCode}, Depo: {SourceWarehouse}",
-                        outStockId, line.ItemCode, sourceWarehouseCode);
+                        outStockId = Guid.NewGuid();
+                        _logger.LogInformation("Kaynak depo çıkış hareketi için StockID oluşturuldu: {StockID}", outStockId);
+
+                        var outStockQuery = @"
+                            INSERT INTO trStock (
+                                StockID, CompanyCode, TransTypeCode, ProcessCode, InnerProcessCode,
+                                IsReturn, DocumentDate, DocumentTime, OperationDate, OperationTime,
+                                DocumentNumber, ItemCode, ItemTypeCode, ColorCode, ItemDim1Code,
+                                ItemDim2Code, ItemDim3Code, CurrAccTypeCode, CurrAccCode, SubCurrAccID,
+                                OfficeCode, WarehouseCode, In_Qty1, In_Qty2, Out_Qty1, Out_Qty2,
+                                FromOfficeCode, FromWarehouseCode, LineDescription, ApplicationCode,
+                                ApplicationID, LocalCurrencyCode, DocCurrencyCode, StoreCode,
+                                StoreTypeCode, FromStoreCode, FromStoreTypeCode, BatchCode,
+                                SectionCode, ManufactureDate, ExpiryDate, CreatedUserName,
+                                CreatedDate, LastUpdatedUserName, LastUpdatedDate
+                            ) VALUES (
+                                @StockID, 1, 2, '', @InnerProcessCode, 0,
+                                @DocumentDate, @DocumentTime, @OperationDate, @OperationTime,
+                                @DocumentNumber, @ItemCode, 1, @ColorCode, @ItemDim1Code,
+                                '', '', 3, '', NULL,
+                                @OfficeCode, @WarehouseCode, 0, 0, @Quantity, 0,
+                                @OfficeCode, @FromWarehouseCode, '', 'Inner',
+                                @ApplicationID, '', '',
+                                '', 5, '',
+                                5, @BatchCode, NULL,
+                                @ManufactureDate, @ExpiryDate, @UserName,
+                                GETDATE(), @UserName, GETDATE()
+                            )
+                        ";
+
+                        var outStockParameters = new[]
+                        {
+                            new SqlParameter("@StockID", outStockId),
+                            new SqlParameter("@InnerProcessCode", innerProcessCode),
+                            new SqlParameter("@DocumentDate", operationDate.Date),
+                            new SqlParameter("@DocumentTime", operationDate.TimeOfDay),
+                            new SqlParameter("@OperationDate", operationDate.Date),
+                            new SqlParameter("@OperationTime", operationDate.TimeOfDay),
+                            new SqlParameter("@DocumentNumber", transferNumber),
+                            new SqlParameter("@ItemCode", line.ItemCode),
+                            new SqlParameter("@ColorCode", line.ColorCode),
+                            new SqlParameter("@ItemDim1Code", line.ItemDim1Code),
+                            new SqlParameter("@OfficeCode", "M"), // Varsayılan ofis kodu
+                            new SqlParameter("@WarehouseCode", sourceWarehouseCode),
+                            new SqlParameter("@Quantity", line.Quantity),
+                            new SqlParameter("@FromWarehouseCode", targetWarehouseCode),
+                            new SqlParameter("@ApplicationID", innerHeaderId),
+                            new SqlParameter("@BatchCode", string.Empty),
+                            new SqlParameter("@ManufactureDate", minDate),
+                            new SqlParameter("@ExpiryDate", minDate),
+                            new SqlParameter("@UserName", userName)
+                        };
+
+                        _logger.LogInformation("Kaynak depo çıkış hareketi ekleniyor... StockID: {StockID}, Depo: {WarehouseCode}, Ürün: {ItemCode}, Miktar: {Quantity}",
+                            outStockId, sourceWarehouseCode, line.ItemCode, line.Quantity);
+                        await _context.ExecuteNonQueryAsync(outStockQuery, outStockParameters);
+                        _logger.LogInformation("Kaynak depo çıkış hareketi eklendi.");
+                    }
+                    else if (innerProcessCode == "OP" || string.IsNullOrEmpty(sourceWarehouseCode))
+                    {
+                        _logger.LogInformation("Üretim siparişi (OP) veya kaynak depo boş olduğu için çıkış hareketi atlanıyor. İşlem Kodu: {InnerProcessCode}, Ürün: {ItemCode}", 
+                            innerProcessCode, line.ItemCode);
+                    }
 
                     // Hedef depoya giriş hareketi
                     _logger.LogInformation("Hedef depo giriş hareketi oluşturuluyor. Ürün: {ItemCode}, Depo: {TargetWarehouse}, Miktar: {Quantity}",
@@ -1449,7 +1561,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                             SectionCode, ManufactureDate, ExpiryDate, CreatedUserName,
                             CreatedDate, LastUpdatedUserName, LastUpdatedDate
                         ) VALUES (
-                            @StockID, 1, 1, '', @InnerProcessCode, 0,
+                            @StockID, 1, 2, '', @InnerProcessCode, 0,
                             @DocumentDate, @DocumentTime, @OperationDate, @OperationTime,
                             @DocumentNumber, @ItemCode, 1, @ColorCode, @ItemDim1Code,
                             '', '', 3, '', NULL,
@@ -1465,7 +1577,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                     var inStockParameters = new[]
                     {
                         new SqlParameter("@StockID", inStockId),
-                        new SqlParameter("@InnerProcessCode", "WT"),
+                        new SqlParameter("@InnerProcessCode", innerProcessCode),
                         new SqlParameter("@DocumentDate", operationDate.Date),
                         new SqlParameter("@DocumentTime", operationDate.TimeOfDay),
                         new SqlParameter("@OperationDate", operationDate.Date),
@@ -1487,39 +1599,44 @@ namespace ErpMobile.Api.Repositories.Inventory
                     _logger.LogInformation("Hedef depo giriş hareketi eklendi. StockID: {StockID}, Ürün: {ItemCode}, Depo: {TargetWarehouse}",
                         inStockId, line.ItemCode, targetWarehouseCode);
 
-                    // Stok hareketleri arasındaki bağlantıyı kur
-                    _logger.LogInformation("Stok hareketleri arasındaki bağlantı oluşturuluyor. Çıkış StockID: {OutStockID}, Giriş StockID: {InStockID}",
-                        outStockId, inStockId);
-                    var crossQuery = @"
-                        INSERT INTO tpStockCross (
-                            StockID, CrossStockID,
-                            CreatedUserName, CreatedDate,
-                            LastUpdatedUserName, LastUpdatedDate
-                        ) VALUES (
-                            @StockID, @CrossStockID,
-                            @UserName, GETDATE(),
-                            @UserName, GETDATE()
-                        )
-                    ";
-
-                    var crossParameters = new[]
+                    // Stok hareketleri arasındaki bağlantıyı kur (sadece WT için)
+                    if (innerProcessCode == "WT" && !string.IsNullOrEmpty(sourceWarehouseCode))
                     {
-                        new SqlParameter("@StockID", outStockId),
-                        new SqlParameter("@CrossStockID", inStockId),
-                        new SqlParameter("@UserName", userName)
-                    };
+                        // outStockId değişkeni sadece WT işlem kodunda ve kaynak depo varsa tanımlanır
+                        // Bu nedenle bu blok içinde güvenle kullanabiliriz
+                        _logger.LogInformation("Stok hareketleri arasındaki bağlantıyı kuruyor. Çıkış StockID: {OutStockID}, Giriş StockID: {InStockID}",
+                            outStockId, inStockId);
+                        var crossQuery = @"
+                            INSERT INTO tpStockCross (
+                                StockID, CrossStockID,
+                                CreatedUserName, CreatedDate,
+                                LastUpdatedUserName, LastUpdatedDate
+                            ) VALUES (
+                                @StockID, @CrossStockID,
+                                @UserName, GETDATE(),
+                                @UserName, GETDATE()
+                            )
+                        ";
 
-                    await _context.ExecuteNonQueryAsync(crossQuery, crossParameters);
-                    _logger.LogInformation("Stok hareketleri arasındaki bağlantı oluşturuldu. Çıkış StockID: {OutStockID}, Giriş StockID: {InStockID}",
-                        outStockId, inStockId);
+                        var crossParameters = new[]
+                        {
+                            new SqlParameter("@StockID", outStockId),
+                            new SqlParameter("@CrossStockID", inStockId),
+                            new SqlParameter("@UserName", userName)
+                        };
+
+                        await _context.ExecuteNonQueryAsync(crossQuery, crossParameters);
+                        _logger.LogInformation("Stok hareketleri arasındaki bağlantıyı kuruldu. Çıkış StockID: {OutStockID}, Giriş StockID: {InStockID}",
+                            outStockId, inStockId);
+                    }
                 }
 
                 _logger.LogInformation("Tüm stok hareketleri başarıyla oluşturuldu. Fiş No: {TransferNumber}", transferNumber);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Stok hareketleri oluşturulurken hata oluştu. InnerHeaderID: {InnerHeaderID}, Hata: {ErrorMessage}",
-                    innerHeaderId, ex.Message);
+                _logger.LogError(ex, "Stok hareketleri oluşturulurken hata oluştu. Hata: {ErrorMessage}",
+                    ex.Message);
 
                 if (ex.InnerException != null)
                 {
@@ -1531,7 +1648,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<bool> CancelWarehouseTransferAsync(string transferNumber, string userName)
+        public async Task<bool> CancelWarehouseTransferAsync(string transferNumber, string userName, string innerProcessCode = "WT")
         {
             try
             {
@@ -1543,10 +1660,13 @@ namespace ErpMobile.Api.Repositories.Inventory
                     SELECT h.InnerHeaderID, h.IsLocked, h.Status
                     FROM trInnerHeader h WITH (NOLOCK)
                     WHERE h.InnerNumber = @TransferNumber 
-                      AND h.InnerProcessCode = 'WT'
+                      AND h.InnerProcessCode = @InnerProcessCode
                 ";
                 
-                var checkParameters = new[] { new SqlParameter("@TransferNumber", transferNumber) };
+                var checkParameters = new[] { 
+                    new SqlParameter("@TransferNumber", transferNumber),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
+                };
                 Guid? innerHeaderId = null;
                 bool isLocked = false;
                 int status = 0;
@@ -1585,7 +1705,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                 
                 if (isLocked)
                 {
-                    var lockStatusResult = await CheckWarehouseTransferLockStatusAsync(transferNumber);
+                    var lockStatusResult = await CheckWarehouseTransferLockStatusAsync(transferNumber, innerProcessCode);
                     
                     if (lockStatusResult.IsLocked && lockStatusResult.LockedByUser != userName)
                     {
@@ -1637,7 +1757,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
         
         /// <inheritdoc/>
-        public async Task<bool> LockWarehouseTransferAsync(string transferNumber, string userName, string comment = null)
+        public async Task<bool> LockWarehouseTransferAsync(string transferNumber, string userName, string comment = null, string innerProcessCode = "WT")
         {
             try
             {
@@ -1649,12 +1769,15 @@ namespace ErpMobile.Api.Repositories.Inventory
                     SELECT h.InnerHeaderID, h.IsLocked
                     FROM trInnerHeader h WITH (NOLOCK)
                     WHERE h.InnerNumber = @TransferNumber 
-                      AND h.InnerProcessCode = 'WT'
+                      AND h.InnerProcessCode = @InnerProcessCode
                 ";
 
-                _logger.LogInformation("Sevk kaydı kontrol ediliyor. Fiş No: {TransferNumber}", transferNumber);
+                _logger.LogInformation("Fiş kaydı kontrol ediliyor. Fiş No: {TransferNumber}, İşlem Kodu: {InnerProcessCode}", transferNumber, innerProcessCode);
 
-                var checkParameters = new[] { new SqlParameter("@TransferNumber", transferNumber) };
+                var checkParameters = new[] { 
+                    new SqlParameter("@TransferNumber", transferNumber),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
+                };
                 Guid? innerHeaderId = null;
                 bool isAlreadyLocked = false;
 
@@ -1685,7 +1808,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                     // Kilit durumunu kontrol et
                     _logger.LogInformation("Sevk kaydı zaten kilitli, kilit durumu kontrol ediliyor. Fiş No: {TransferNumber}", transferNumber);
 
-                    var lockStatusResult = await CheckWarehouseTransferLockStatusAsync(transferNumber);
+                    var lockStatusResult = await CheckWarehouseTransferLockStatusAsync(transferNumber, innerProcessCode);
 
                     if (lockStatusResult.IsLocked)
                     {
@@ -1770,7 +1893,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<bool> UnlockWarehouseTransferAsync(string transferNumber, string userName)
+        public async Task<bool> UnlockWarehouseTransferAsync(string transferNumber, string userName, string innerProcessCode = "WT")
         {
             try
             {
@@ -1782,10 +1905,13 @@ namespace ErpMobile.Api.Repositories.Inventory
                     SELECT h.InnerHeaderID, h.IsLocked
                     FROM trInnerHeader h WITH (NOLOCK)
                     WHERE h.InnerNumber = @TransferNumber 
-                      AND h.InnerProcessCode = 'WT'
+                      AND h.InnerProcessCode = @InnerProcessCode
                 ";
 
-                var checkParameters = new[] { new SqlParameter("@TransferNumber", transferNumber) };
+                var checkParameters = new[] { 
+                    new SqlParameter("@TransferNumber", transferNumber),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
+                };
                 Guid? innerHeaderId = null;
                 bool isLocked = false;
 
@@ -1821,7 +1947,7 @@ namespace ErpMobile.Api.Repositories.Inventory
                 // Kilit durumunu kontrol et
                 _logger.LogInformation("Sevk kaydı kilit durumu detaylı kontrol ediliyor. Fiş No: {TransferNumber}", transferNumber);
 
-                var lockStatusResult = await CheckWarehouseTransferLockStatusAsync(transferNumber);
+                var lockStatusResult = await CheckWarehouseTransferLockStatusAsync(transferNumber, innerProcessCode);
 
                 if (lockStatusResult.IsLocked)
                 {
@@ -1911,7 +2037,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<(bool IsLocked, string LockedByUser, DateTime? LockDate)> CheckWarehouseTransferLockStatusAsync(string transferNumber)
+        public async Task<(bool IsLocked, string LockedByUser, DateTime? LockDate)> CheckWarehouseTransferLockStatusAsync(string transferNumber, string innerProcessCode = "WT")
         {
             try
             {
@@ -1920,10 +2046,13 @@ namespace ErpMobile.Api.Repositories.Inventory
                     SELECT h.InnerHeaderID, h.IsLocked
                     FROM trInnerHeader h WITH (NOLOCK)
                     WHERE h.InnerNumber = @TransferNumber 
-                      AND h.InnerProcessCode = 'WT'
+                      AND h.InnerProcessCode = @InnerProcessCode
                 ";
 
-                var headerParameters = new[] { new SqlParameter("@TransferNumber", transferNumber) };
+                var headerParameters = new[] { 
+                    new SqlParameter("@TransferNumber", transferNumber),
+                    new SqlParameter("@InnerProcessCode", innerProcessCode)
+                };
                 Guid? innerHeaderId = null;
                 bool isLocked = false;
 
@@ -1974,7 +2103,7 @@ namespace ErpMobile.Api.Repositories.Inventory
         }
 
         /// <inheritdoc/>
-        public async Task<List<WarehouseResponse>> GetWarehousesAsync()
+        public async Task<List<WarehouseResponse>> GetWarehousesAsync(string innerProcessCode = "WT")
         {
             try
             {
