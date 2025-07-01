@@ -40,15 +40,16 @@ namespace ErpMobile.Api.Controllers
             [FromQuery] DateTime? startDate = null,
             [FromQuery] DateTime? endDate = null,
             [FromQuery] string warehouseCode = null,
-            [FromQuery] string targetWarehouseCode = null)
+            [FromQuery] string targetWarehouseCode = null,
+            [FromQuery] string innerProcessCode = "WT")
         {
             try
             {
-                _logger.LogInformation("GetWarehouseTransfers çağrıldı: startDate={startDate}, endDate={endDate}, warehouseCode={warehouseCode}, targetWarehouseCode={targetWarehouseCode}",
-                    startDate, endDate, warehouseCode, targetWarehouseCode);
+                _logger.LogInformation("GetWarehouseTransfers çağrıldı: startDate={startDate}, endDate={endDate}, warehouseCode={warehouseCode}, targetWarehouseCode={targetWarehouseCode}, innerProcessCode={innerProcessCode}",
+                    startDate, endDate, warehouseCode, targetWarehouseCode, innerProcessCode);
                     
                 var transfers = await _warehouseTransferRepository.GetWarehouseTransfersAsync(
-                    startDate, endDate, warehouseCode, targetWarehouseCode);
+                    startDate, endDate, warehouseCode, targetWarehouseCode, innerProcessCode);
                 
                 var transfersList = transfers.ToList();
                 
@@ -80,11 +81,13 @@ namespace ErpMobile.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<ApiResponse<WarehouseTransferDetailResponse>>> GetWarehouseTransferByNumber(string transferNumber)
+        public async Task<ActionResult<ApiResponse<WarehouseTransferDetailResponse>>> GetWarehouseTransferByNumber(string transferNumber, [FromQuery] string innerProcessCode = "WT")
         {
             try
             {
-                var transfer = await _warehouseTransferRepository.GetWarehouseTransferByNumberAsync(transferNumber);
+                _logger.LogInformation("GetWarehouseTransferByNumber çağrıldı: transferNumber={transferNumber}, innerProcessCode={innerProcessCode}", transferNumber, innerProcessCode);
+                
+                var transfer = await _warehouseTransferRepository.GetWarehouseTransferByNumberAsync(transferNumber, innerProcessCode);
                 
                 if (transfer == null)
                 {
@@ -117,18 +120,19 @@ namespace ErpMobile.Api.Controllers
         /// Belirli bir sevk kaydının satır detaylarını getirir
         /// </summary>
         /// <param name="transferNumber">Sevk fiş numarası</param>
+        /// <param name="innerProcessCode">Sevk türü kodu (WT: Depo Transferi, OP: Üretim Siparişi)</param>
         [HttpGet("{transferNumber}/items")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<ApiResponse<List<WarehouseTransferItemResponse>>>> GetWarehouseTransferItems(string transferNumber)
+        public async Task<ActionResult<ApiResponse<List<WarehouseTransferItemResponse>>>> GetWarehouseTransferItems(string transferNumber, [FromQuery] string innerProcessCode = "WT")
         {
             try
             {
-                _logger.LogInformation("GetWarehouseTransferItems çağrıldı: transferNumber={TransferNumber}", transferNumber);
+                _logger.LogInformation("GetWarehouseTransferItems çağrıldı: transferNumber={TransferNumber}, innerProcessCode={InnerProcessCode}", transferNumber, innerProcessCode);
                 
-                var items = await _warehouseTransferRepository.GetWarehouseTransferItemsAsync(transferNumber);
+                var items = await _warehouseTransferRepository.GetWarehouseTransferItemsAsync(transferNumber, innerProcessCode);
                 
                 if (items == null || !items.Any())
                 {
@@ -359,16 +363,45 @@ namespace ErpMobile.Api.Controllers
         {
             try
             {
+                _logger.LogInformation("CreateWarehouseTransfer çağrıldı: {@Request}", request);
+                
+                // İşlem kodunu belirle (WT: Warehouse Transfer, OP: Production Order)
+                string innerProcessCode = request.InnerProcessCode ?? "WT";
+                _logger.LogInformation("İşlem kodu: {InnerProcessCode}", innerProcessCode);
+                
+                // Özel doğrulama: Kaynak depo kodu sadece WT (warehouse transfer) için zorunlu
+                if (innerProcessCode == "WT" && string.IsNullOrEmpty(request.SourceWarehouseCode))
+                {
+                    ModelState.AddModelError("SourceWarehouseCode", "Kaynak depo kodu zorunludur");
+                }
+                
+                // Hedef depo kodu her zaman zorunlu
+                if (string.IsNullOrEmpty(request.TargetWarehouseCode))
+                {
+                    ModelState.AddModelError("TargetWarehouseCode", "Hedef depo kodu zorunludur");
+                }
+                
+                // Ürün listesi her zaman zorunlu
+                if (request.Items == null || request.Items.Count == 0)
+                {
+                    ModelState.AddModelError("Items", "En az bir ürün eklenmelidir");
+                }
+                
+                // Model doğrulama kontrolü
                 if (!ModelState.IsValid)
                 {
+                    var errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToList();
+                    
+                    _logger.LogWarning("Model doğrulama hatası: {@ValidationErrors}", errors);
+                    
                     return BadRequest(new ApiResponse<string>
                     {
                         Success = false,
                         Message = "Geçersiz veri formatı.",
-                        ValidationErrors = ModelState.Values
-                            .SelectMany(v => v.Errors)
-                            .Select(e => e.ErrorMessage)
-                            .ToList()
+                        ValidationErrors = errors
                     });
                 }
                 
@@ -376,7 +409,7 @@ namespace ErpMobile.Api.Controllers
                 var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? "System";
                 
                 // Sevk kaydını oluştur
-                var transferNumber = await _warehouseTransferRepository.CreateWarehouseTransferAsync(request, userName);
+                var transferNumber = await _warehouseTransferRepository.CreateWarehouseTransferAsync(request, userName, innerProcessCode);
                 
                 return CreatedAtAction(nameof(GetWarehouseTransferByNumber), new { transferNumber }, new ApiResponse<string>
                 {
