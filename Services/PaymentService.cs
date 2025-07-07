@@ -2296,140 +2296,57 @@ namespace ErpMobile.Api.Services
         }
         
         public async Task<ApiResponse<IEnumerable<CashSummaryResponse>>> GetCashSummaryAsync(
-            string startDate,
-            string endDate,
             string cashAccountCode = null,
             string userName = null)
         {
             try
             {
-                // Tarih formatını kontrol et
-                DateTime parsedStartDate;
-                if (!DateTime.TryParseExact(startDate, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out parsedStartDate))
-                {
-                    return new ApiResponse<IEnumerable<CashSummaryResponse>>(null, false, "Başlangıç tarihi formatı geçersiz. Format: yyyyMMdd olmalıdır.");
-                }
-
-                DateTime parsedEndDate;
-                if (!DateTime.TryParseExact(endDate, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out parsedEndDate))
-                {
-                    return new ApiResponse<IEnumerable<CashSummaryResponse>>(null, false, "Bitiş tarihi formatı geçersiz. Format: yyyyMMdd olmalıdır.");
-                }
-
                 using (var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection")))
                 {
                     await connection.OpenAsync();
                     
-                    // Kasa özet bilgilerini almak için SQL sorgusu
+                    // Kasa özet bilgilerini almak için SQL sorgusu - AllCashs view kullanarak
                     var query = @"
                     SELECT 
                         c.CurrAccCode AS CashAccountCode,
                         cd.CurrAccDescription AS CashAccountDescription,
                         c.CurrencyCode,
+                        0 AS LocalOpeningBalance,
+                        0 AS DocumentOpeningBalance,
                         
-                        -- Yerel para açılış bakiyesi
-                        ISNULL(SUM(CASE WHEN ch.DocumentDate < @StartDate THEN 
-                            CASE 
-                                WHEN ch.CashTransTypeCode = 1 THEN clc.Credit - clc.Debit  -- Giriş
-                                WHEN ch.CashTransTypeCode = 2 THEN clc.Debit - clc.Credit  -- Çıkış
-                                ELSE 0 
-                            END
-                        ELSE 0 END), 0) AS LocalOpeningBalance,
+                        -- Yerel para birimi toplamları
+                        ISNULL(SUM(ac.Loc_Debit), 0) AS LocalTotalDebit,
+                        ISNULL(SUM(ac.Loc_Credit), 0) AS LocalTotalCredit,
                         
-                        -- Belge para açılış bakiyesi
-                        ISNULL(SUM(CASE WHEN ch.DocumentDate < @StartDate THEN 
-                            CASE 
-                                WHEN ch.CashTransTypeCode = 1 THEN cl.ForeignCredit - cl.ForeignDebit  -- Giriş
-                                WHEN ch.CashTransTypeCode = 2 THEN cl.ForeignDebit - cl.ForeignCredit  -- Çıkış
-                                ELSE 0 
-                            END
-                        ELSE 0 END), 0) AS DocumentOpeningBalance,
+                        -- Belge para birimi toplamları
+                        ISNULL(SUM(ac.Doc_Debit), 0) AS DocumentTotalDebit,
+                        ISNULL(SUM(ac.Doc_Credit), 0) AS DocumentTotalCredit,
                         
-                        -- Yerel para toplamları
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 1 THEN clc.Credit - clc.Debit  -- Giriş
-                            ELSE 0 
-                        END), 0) AS LocalTotalDebit,
+                        -- Tahsilat, tediye ve virman toplamları
+                        ISNULL(SUM(CASE WHEN ac.CashTransTypeCode = 1 AND ac.ApplicationCode <> 'Cash' THEN ac.Loc_Debit ELSE 0 END), 0) AS TotalReceipt,
+                        ISNULL(SUM(CASE WHEN ac.CashTransTypeCode = 2 AND ac.ApplicationCode <> 'Cash' THEN ac.Loc_Credit ELSE 0 END), 0) AS TotalPayment,
+                        ISNULL(SUM(CASE WHEN ac.CashTransTypeCode = 1 AND ac.ApplicationCode = 'Cash' THEN ac.Loc_Debit ELSE 0 END), 0) AS TotalTransferIn,
+                        ISNULL(SUM(CASE WHEN ac.CashTransTypeCode = 2 AND ac.ApplicationCode = 'Cash' THEN ac.Loc_Credit ELSE 0 END), 0) AS TotalTransferOut,
                         
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 2 THEN clc.Debit - clc.Credit  -- Çıkış
-                            ELSE 0 
-                        END), 0) AS LocalTotalCredit,
-                        
-                        -- Belge para toplamları
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 1 THEN cl.ForeignCredit - cl.ForeignDebit  -- Giriş
-                            ELSE 0 
-                        END), 0) AS DocumentTotalDebit,
-                        
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 2 THEN cl.ForeignDebit - cl.ForeignCredit  -- Çıkış
-                            ELSE 0 
-                        END), 0) AS DocumentTotalCredit,
-                        
-                        -- Fiş toplamları
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 1 AND ch.CashVoucherTypeCode = 1 THEN clc.Credit - clc.Debit  -- Tahsilat
-                            ELSE 0 
-                        END), 0) AS TotalReceipt,
-                        
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 2 AND ch.CashVoucherTypeCode = 2 THEN clc.Debit - clc.Credit  -- Tediye
-                            ELSE 0 
-                        END), 0) AS TotalPayment,
-                        
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 1 AND ch.CashVoucherTypeCode = 3 THEN clc.Credit - clc.Debit  -- Virman Giriş
-                            ELSE 0 
-                        END), 0) AS TotalTransferIn,
-                        
-                        ISNULL(SUM(CASE 
-                            WHEN ch.DocumentDate >= @StartDate AND ch.DocumentDate <= @EndDate 
-                            AND ch.CashTransTypeCode = 2 AND ch.CashVoucherTypeCode = 3 THEN clc.Debit - clc.Credit  -- Virman Çıkış
-                            ELSE 0 
-                        END), 0) AS TotalTransferOut,
-                        
-                        -- Yerel para kapanış bakiyesi
-                        ISNULL(SUM(CASE 
-                            WHEN ch.CashTransTypeCode = 1 THEN clc.Credit - clc.Debit  -- Giriş
-                            WHEN ch.CashTransTypeCode = 2 THEN clc.Debit - clc.Credit  -- Çıkış
-                            ELSE 0 
-                        END), 0) AS LocalClosingBalance,
-                        
-                        -- Belge para kapanış bakiyesi
-                        ISNULL(SUM(CASE 
-                            WHEN ch.CashTransTypeCode = 1 THEN cl.ForeignCredit - cl.ForeignDebit  -- Giriş
-                            WHEN ch.CashTransTypeCode = 2 THEN cl.ForeignDebit - cl.ForeignCredit  -- Çıkış
-                            ELSE 0 
-                        END), 0) AS DocumentClosingBalance
+                        -- Kapanış bakiyeleri
+                        ISNULL(SUM(ac.Loc_Debit - ac.Loc_Credit), 0) AS LocalClosingBalance,
+                        ISNULL(SUM(ac.Doc_Debit - ac.Doc_Credit), 0) AS DocumentClosingBalance
                     FROM 
                         cdCurrAcc c
                         INNER JOIN cdCurrAccDesc cd ON c.CurrAccTypeCode = cd.CurrAccTypeCode AND c.CurrAccCode = cd.CurrAccCode AND cd.LangCode = 'TR'
-                        LEFT JOIN trCashHeader ch ON c.CurrAccCode = ch.CashCurrAccCode
-                        LEFT JOIN trCashLine cl ON ch.CashHeaderID = cl.CashHeaderID
-                        LEFT JOIN trCashLineCurrency clc ON cl.CashLineID = clc.CashLineID AND clc.CurrencyCode = ch.LocalCurrencyCode
+                        LEFT JOIN AllCashs ac ON c.CurrAccCode = ac.CashCurrAccCode
                     WHERE 
                         c.CurrAccTypeCode = 7 -- Sadece kasa hesaplarını getir (7: Kasa hesap tipi)
                         AND (@CashAccountCode IS NULL OR c.CurrAccCode = @CashAccountCode)
-                        AND (ch.DocumentDate IS NULL OR ch.DocumentDate <= @EndDate)
-                    GROUP BY 
-                        c.CurrAccCode, 
-                        cd.CurrAccDescription, 
+                    GROUP BY
+                        c.CurrAccCode,
+                        cd.CurrAccDescription,
                         c.CurrencyCode
                     ORDER BY 
-                        c.CurrAccCode";
+                        CashAccountCode";
                     
                     var parameters = new 
                     { 
-                        StartDate = parsedStartDate,
-                        EndDate = parsedEndDate,
                         CashAccountCode = !string.IsNullOrEmpty(cashAccountCode) ? cashAccountCode : null
                     };
                     
