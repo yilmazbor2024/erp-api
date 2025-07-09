@@ -61,11 +61,10 @@ using ErpMobile.Api.Repositories.CashAccount;
 
 using ErpMobile.Api.Services.CashAccount;
 
-using ErpMobile.Api.Repositories.CashTransaction;
-
-using ErpMobile.Api.Services.CashTransaction;
+// CashTransaction namespace'leri kaldırıldı
 
 using ErpMobile.Api.Middleware;
+using Erp.Services;
 
 // Uygulama yapılandırmasını oluştur
 var builder = WebApplication.CreateBuilder(args);
@@ -123,27 +122,27 @@ builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 // Add services to the container.
 
-// CORS yapılandırması - tüm kaynaklara izin ver
-
+// CORS yapılandırması - edikravat.tr domain'ine ve geliştirme ortamına izin ver
 builder.Services.AddCors(options =>
-
 {
-
-options.AddDefaultPolicy(policy =>
-
-{
-
-policy.SetIsOriginAllowed(_ => true) // Tüm kaynaklara izin ver
-
-.AllowAnyHeader()
-
-.AllowAnyMethod()
-
-.AllowCredentials()
-
-.WithExposedHeaders("Content-Disposition", "Content-Length");
-
-});
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins(
+                "https://edikravat.tr",
+                "http://edikravat.tr",
+                "https://www.edikravat.tr",
+                "http://www.edikravat.tr",
+                // Geliştirme ortamı için localhost adreslerini ekle
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials()
+            .WithExposedHeaders("Content-Disposition", "Content-Length");
+    });
 
 });
 
@@ -532,7 +531,10 @@ builder.Services.AddScoped<ILocationService, LocationService>();
 
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 
-builder.Services.AddScoped<ICashService, CashService>();
+// Ayarlar servisi
+builder.Services.AddScoped<ISettingsService, SettingsService>();
+
+// CashService kayıtı kaldırıldı
 
 builder.Services.AddScoped<ICustomerCreditService, CustomerCreditService>();
 
@@ -541,10 +543,21 @@ builder.Services.AddScoped<ICustomerCreditService, CustomerCreditService>();
 // Döviz kuru servisi
 
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
+builder.Services.AddScoped<TcmbExchangeRateService>();
 
 // Tüm gereksiz referanslar kaldırıldı çünkü ERP veritabanına yazma işlemi yapmıyoruz
 
 builder.Services.AddHttpClient();
+
+// Audit log servisi
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+
+// Temp Customer Token servisi
+builder.Services.AddScoped<TempCustomerTokenService>();
+builder.Services.AddScoped<ITokenValidationService, TempCustomerTokenService>();
+
+// Customer Token servisi
+builder.Services.AddScoped<ICustomerTokenService, CustomerTokenService>();
 
 
 
@@ -612,11 +625,9 @@ builder.Services.AddScoped<ICashAccountRepository, CashAccountRepository>();
 
 builder.Services.AddScoped<ICashAccountService, CashAccountService>();
 
-builder.Services.AddScoped<ICashTransactionRepository, CashTransactionRepository>();
+// CashTransaction servis ve repository kayıtları kaldırıldı
 
-builder.Services.AddScoped<ICashTransactionService, CashTransactionService>();
-
-builder.Services.AddScoped<ICashService, CashService>();
+// CashService kayıtı kaldırıldı
 
 
 
