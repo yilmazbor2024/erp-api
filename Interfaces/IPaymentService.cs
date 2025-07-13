@@ -44,5 +44,22 @@ namespace ErpMobile.Api.Interfaces
         /// Kasa özet bilgilerini getirir (bugünün tarihi için)
         /// </summary>
         Task<ApiResponse<IEnumerable<CashSummaryResponse>>> GetCashSummaryAsync(string cashAccountCode = null, string userName = null);
+        
+        /// <summary>
+        /// Kasa hareketini günceller
+        /// </summary>
+        /// <param name="request">Güncelleme isteği</param>
+        /// <param name="userName">Kullanıcı adı</param>
+        /// <returns>Güncelleme sonucu</returns>
+        Task<ApiResponse<bool>> UpdateCashTransactionAsync(CashUpdateRequest request, string userName);
+        
+        /// <summary>
+        /// Kasa hareketini siler
+        /// </summary>
+        /// <param name="cashHeaderId">Kasa başlık ID'si</param>
+        /// <param name="cashNumber">Kasa hareket numarası</param>
+        /// <param name="userName">Kullanıcı adı</param>
+        /// <returns>Silme sonucu</returns>
+        Task<ApiResponse<bool>> DeleteCashTransactionAsync(string cashHeaderId, string cashNumber, string userName);
     }
 }

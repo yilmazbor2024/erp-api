@@ -458,6 +458,80 @@ namespace ErpMobile.Api.Controllers
                 });
             }
         }
+        
+        /// <summary>
+        /// Kasa hareketini günceller
+        /// </summary>
+        [HttpPut("cash-transaction")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), 200)]
+        public async Task<IActionResult> UpdateCashTransaction([FromBody] CashUpdateRequest request)
+        {
+            _logger.LogInformation("API Request received: PUT /api/v1/payment/cash-transaction");
+            _logger.LogInformation($"Request Body: CashHeaderId={request.CashHeaderId}, CashTransNumber={request.CashTransNumber}");
+            
+            try
+            {
+                var userName = User.Identity.Name;
+                _logger.LogInformation($"Calling PaymentService.UpdateCashTransactionAsync with parameters: request={request}, userName={userName}");
+                var result = await _paymentService.UpdateCashTransactionAsync(request, userName);
+                
+                if (!result.Success)
+                {
+                    _logger.LogWarning($"UpdateCashTransactionAsync returned unsuccessful result: {result.Message}");
+                    return BadRequest(result);
+                }
+                
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kasa hareketi güncellenirken hata oluştu");
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Kasa hareketi güncellenirken bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
+        
+        /// <summary>
+        /// Kasa hareketini siler
+        /// </summary>
+        [HttpDelete("cash-transaction/{cashHeaderId}")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), 200)]
+        public async Task<IActionResult> DeleteCashTransaction(
+            [FromRoute] string cashHeaderId,
+            [FromQuery] string cashNumber)
+        {
+            _logger.LogInformation("API Request received: DELETE /api/v1/payment/cash-transaction/{cashHeaderId}");
+            _logger.LogInformation($"Route Parameters: cashHeaderId={cashHeaderId}, Query Parameters: cashNumber={cashNumber}");
+            
+            try
+            {
+                var userName = User.Identity.Name;
+                _logger.LogInformation($"Calling PaymentService.DeleteCashTransactionAsync with parameters: cashHeaderId={cashHeaderId}, cashNumber={cashNumber}, userName={userName}");
+                var result = await _paymentService.DeleteCashTransactionAsync(cashHeaderId, cashNumber, userName);
+                
+                if (!result.Success)
+                {
+                    _logger.LogWarning($"DeleteCashTransactionAsync returned unsuccessful result: {result.Message}");
+                    return BadRequest(result);
+                }
+                
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kasa hareketi silinirken hata oluştu");
+                return StatusCode(500, new ApiResponse<string>
+                {
+                    Success = false,
+                    Message = "Kasa hareketi silinirken bir hata oluştu",
+                    Data = ex.Message
+                });
+            }
+        }
 
         /// <summary>
         /// Kasa hareketlerini getirir

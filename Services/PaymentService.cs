@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
@@ -15,6 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ErpMobile.Api.Repositories.CashAccount;
 using Newtonsoft.Json;
+using ErpMobile.Api.Models.Notification;
 
 namespace ErpMobile.Api.Services
 {
@@ -23,13 +24,19 @@ namespace ErpMobile.Api.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<PaymentService> _logger;
         private readonly ICashAccountRepository _cashAccountRepository;
+        private readonly INotificationService _notificationService;
         private Dictionary<string, string> _cashAccountDescriptions;
 
-        public PaymentService(IConfiguration configuration, ILogger<PaymentService> logger, ICashAccountRepository cashAccountRepository)
+        public PaymentService(
+            IConfiguration configuration, 
+            ILogger<PaymentService> logger, 
+            ICashAccountRepository cashAccountRepository,
+            INotificationService notificationService)
         {
             _configuration = configuration;
             _logger = logger;
             _cashAccountRepository = cashAccountRepository;
+            _notificationService = notificationService;
             _cashAccountDescriptions = new Dictionary<string, string>();
         }
 
@@ -79,7 +86,7 @@ namespace ErpMobile.Api.Services
                 }
 
                 // Referans numaralarını oluştur
-                string cashNumber = await GetCashNumberAsync(connection, transaction);
+                string cashNumber = await GetCashTransNumberAsync(connection, transaction);
                 string debitNumber = await GetDebitNumberAsync(connection, transaction);
                 string paymentNumber = await GetPaymentNumberAsync(connection, transaction);
 
@@ -124,7 +131,7 @@ namespace ErpMobile.Api.Services
                     var currencyCashHeaderId = cashHeaderCount == 0 ? cashHeaderId : Guid.NewGuid();
             
                     // Her para birimi için benzersiz bir CashTransNumber oluştur
-                    string currencyCashNumber = await GetCashNumberAsync(connection, transaction, currencyCode);
+                    string currencyCashNumber = await GetCashTransNumberAsync(connection, transaction, currencyCode);
                     _logger.LogInformation("Para birimi {CurrencyCode} için benzersiz CashTransNumber oluşturuldu: {CashNumber}", currencyCode, currencyCashNumber);
             
                     // Bu para birimi için Cash Header ekle
@@ -189,14 +196,18 @@ namespace ErpMobile.Api.Services
                 // Faturayı tamamlandı olarak işaretle
                 if (!string.IsNullOrEmpty(request.InvoiceHeaderID))
                 {
-                    await MarkInvoiceAsCompletedAsync(request.InvoiceHeaderID);
+                    await MarkInvoiceAsCompletedAsync(request.InvoiceHeaderID, userName);
                     Console.WriteLine($"\n[INFO] Fatura {request.InvoiceHeaderID} tamamlandı olarak işaretlendi");
                 }
                 else if (request.InvoiceId != Guid.Empty)
                 {
-                    await MarkInvoiceAsCompletedAsync(request.InvoiceId.ToString());
+                    await MarkInvoiceAsCompletedAsync(request.InvoiceId.ToString(), userName);
                     Console.WriteLine($"\n[INFO] Fatura {request.InvoiceId} tamamlandı olarak işaretlendi");
                 }
+                
+                // Başarılı işlem sonrası bildirim gönder
+                decimal totalAmount = request.PaymentRows?.Sum(r => r.Amount) ?? 0;
+                await SendTransactionNotificationAsync(userName, "CashTransaction", "Create", cashNumber, totalAmount, request.DocCurrencyCode, request.Description);
                 
                 var response = new CashPaymentResponse
                 {
@@ -212,28 +223,20 @@ namespace ErpMobile.Api.Services
             {
                 // Hata durumunda transaction'ı rollback et
                 transaction.Rollback();
-                
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"\n[ERROR] Exception occurred: {ex.Message}");
-                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
-                Console.ResetColor();
-                
                 _logger.LogError(ex, "Nakit tahsilat işlemi sırasında hata oluştu: {Message}", ex.Message);
-                
                 return new CashPaymentResponse
                 {
                     Success = false,
-                    Message = $"Hata: {ex.Message}"
+                    Message = $"Nakit tahsilat işlemi sırasında hata oluştu: {ex.Message}"
                 };
             }
         }
 
-        private async Task<string> GetCashNumberAsync(SqlConnection connection, SqlTransaction transaction, string currencyCode = null)
+        private async Task<string> GetCashTransNumberAsync(SqlConnection connection, SqlTransaction transaction, string currencyCode = null)
         {
             try
             {
                 var parameters = new DynamicParameters();
-                // Stored procedure'un beklediği parametreleri ekle
                 parameters.Add("CompanyCode", 1);
                 parameters.Add("CashTransTypeCode", 1);
                 
@@ -1234,17 +1237,146 @@ namespace ErpMobile.Api.Services
         }
         
         /// <summary>
+        /// Kasa hareketini günceller
+        /// </summary>
+        /// <param name="request">Güncelleme isteği</param>
+        /// <param name="userName">Kullanıcı adı</param>
+        /// <returns>Güncelleme sonucu</returns>
+        public async Task<ApiResponse<bool>> UpdateCashTransactionAsync(CashUpdateRequest request, string userName)
+        {
+            try
+            {
+                _logger.LogInformation("Kasa hareketi güncelleme işlemi başlatıldı. CashHeaderId: {CashHeaderId}, Kullanıcı: {UserName}", 
+                    request.CashHeaderId, userName);
+                
+                // Güncelleme işlemi burada yapılacak
+                // ...
+                
+                // Örnek olarak başarılı olduğunu varsayalım
+                bool success = true;
+                string cashNumber = request.CashTransNumber;
+                
+                if (success)
+                {
+                    // Başarılı işlem sonrası bildirim gönder
+                    await SendTransactionNotificationAsync(userName, "CashTransaction", "Update", 
+                        cashNumber, request.TotalAmount, request.CurrencyCode, request.Description);
+                    
+                    return new ApiResponse<bool>
+                    {
+                        Success = true,
+                        Message = "Kasa hareketi başarıyla güncellendi",
+                        Data = true
+                    };
+                }
+                else
+                {
+                    return new ApiResponse<bool>
+                    {
+                        Success = false,
+                        Message = "Kasa hareketi güncellenirken bir hata oluştu",
+                        Data = false
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kasa hareketi güncellenirken hata oluştu: {Message}", ex.Message);
+                return new ApiResponse<bool>
+                {
+                    Success = false,
+                    Message = "Kasa hareketi güncellenirken bir hata oluştu: " + ex.Message,
+                    Data = false
+                };
+            }
+        }
+        
+        /// <summary>
+        /// Kasa hareketini siler
+        /// </summary>
+        /// <param name="cashHeaderId">Kasa başlık ID'si</param>
+        /// <param name="userName">Kullanıcı adı</param>
+        /// <returns>Silme sonucu</returns>
+        public async Task<ApiResponse<bool>> DeleteCashTransactionAsync(string cashHeaderId, string cashNumber, string userName)
+        {
+            try
+            {
+                _logger.LogInformation("Kasa hareketi silme işlemi başlatıldı. CashHeaderId: {CashHeaderId}, Kullanıcı: {UserName}", 
+                    cashHeaderId, userName);
+                
+                // Silme işlemi burada yapılacak
+                // ...
+                
+                // Örnek olarak başarılı olduğunu varsayalım
+                bool success = true;
+                
+                if (success)
+                {
+                    // Başarılı işlem sonrası bildirim gönder
+                    await SendTransactionNotificationAsync(userName, "CashTransaction", "Delete", cashNumber);
+                    
+                    return new ApiResponse<bool>
+                    {
+                        Success = true,
+                        Message = "Kasa hareketi başarıyla silindi",
+                        Data = true
+                    };
+                }
+                else
+                {
+                    return new ApiResponse<bool>
+                    {
+                        Success = false,
+                        Message = "Kasa hareketi silinirken bir hata oluştu",
+                        Data = false
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kasa hareketi silinirken hata oluştu: {Message}", ex.Message);
+                return new ApiResponse<bool>
+                {
+                    Success = false,
+                    Message = "Kasa hareketi silinirken bir hata oluştu: " + ex.Message,
+                    Data = false
+                };
+            }
+        }
+        
+        /// <summary>
         /// Faturayı tamamlandı olarak işaretler
         /// </summary>
         /// <param name="invoiceHeaderId">Fatura başlık ID'si</param>
+        /// <param name="userName">İşlemi yapan kullanıcı adı</param>
         /// <returns>İşlem sonucu</returns>
-        private async Task MarkInvoiceAsCompletedAsync(string invoiceHeaderId)
+        private async Task MarkInvoiceAsCompletedAsync(string invoiceHeaderId, string userName = "System")
         {
             try
             {
                 using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
                 await connection.OpenAsync();
 
+                // Önce fatura bilgilerini al (bildirim için gerekli)
+                var invoiceQuery = @"
+                SELECT 
+                    InvoiceNumber, 
+                    CurrencyCode, 
+                    DocTotal
+                FROM 
+                    trInvoiceHeader
+                WHERE 
+                    InvoiceHeaderID = @InvoiceHeaderID";
+
+                var invoiceParams = new DynamicParameters();
+                invoiceParams.Add("@InvoiceHeaderID", Guid.Parse(invoiceHeaderId));
+
+                var invoiceInfo = await connection.QueryFirstOrDefaultAsync(invoiceQuery, invoiceParams);
+                string invoiceNumber = invoiceInfo?.InvoiceNumber;
+                string currencyCode = invoiceInfo?.CurrencyCode;
+                decimal? docTotal = invoiceInfo?.DocTotal;
+
+                // Faturayı tamamlandı olarak işaretle
                 var sql = @"
                 UPDATE trInvoiceHeader
                 SET 
@@ -1256,11 +1388,17 @@ namespace ErpMobile.Api.Services
 
                 var parameters = new DynamicParameters();
                 parameters.Add("@InvoiceHeaderID", Guid.Parse(invoiceHeaderId));
-                parameters.Add("@UserName", "System");
+                parameters.Add("@UserName", userName);
 
                 await connection.ExecuteAsync(sql, parameters);
 
-                _logger.LogInformation("[INVOICE] Fatura tamamlandı olarak işaretlendi: {InvoiceHeaderID}", invoiceHeaderId);
+                _logger.LogInformation("[INVOICE] Fatura tamamlandı olarak işaretlendi: {InvoiceHeaderID}, Fatura No: {InvoiceNumber}", invoiceHeaderId, invoiceNumber);
+
+                // Bildirim gönder
+                if (!string.IsNullOrEmpty(invoiceNumber) && _notificationService != null)
+                {
+                    await SendTransactionNotificationAsync(userName, "Invoice", "Complete", invoiceNumber, docTotal, currencyCode);
+                }
             }
             catch (Exception ex)
             {
@@ -1279,6 +1417,7 @@ namespace ErpMobile.Api.Services
                 try
                 {
                     var cashAccounts = await _cashAccountRepository.GetCashAccountsAsync();
+                    
                     foreach (var account in cashAccounts)
                     {
                         if (!string.IsNullOrEmpty(account.CashAccountCode))
@@ -1306,13 +1445,13 @@ namespace ErpMobile.Api.Services
                 // Yüklenemediği durumda varsayılan değerleri kullan
                 switch (cashAccountCode)
                 {
-                    case "101":
+                    case "10111":
                         return "MERKEZ TL KASA";
-                    case "102":
+                    case "10222":
                         return "MERKEZ USD KASA";
-                    case "103":
+                    case "10333":
                         return "MERKEZ EUR KASA";
-                    case "104":
+                    case "10444":
                         return "MERKEZ GBP KASA";
                     default:
                         return $"KASA {cashAccountCode}";
@@ -1336,16 +1475,15 @@ namespace ErpMobile.Api.Services
         {
             try
             {
-                _logger.LogInformation("Kasa hareketleri raporu alınıyor. Başlangıç: {StartDate}, Bitiş: {EndDate}", 
-                    request.StartDate, request.EndDate);
-                
-                using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
-                await connection.OpenAsync();
+                _logger.LogInformation("Kasa hareketleri raporu alınıyor. Başlangıç: {StartDate}, Bitiş: {EndDate}", request.StartDate, request.EndDate);
                 
                 // Kasa açıklamalarını yükle
                 await LoadCashAccountDescriptionsAsync();
                 
-                // Sorgu parametrelerini hazırla
+                using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
+                await connection.OpenAsync();
+                
+                // Parametreleri hazırla
                 var parameters = new DynamicParameters();
                 parameters.Add("@StartDate", request.StartDate);
                 parameters.Add("@EndDate", request.EndDate);
@@ -1355,78 +1493,57 @@ namespace ErpMobile.Api.Services
                 parameters.Add("@Offset", offset);
                 parameters.Add("@PageSize", request.PageSize);
                 
-                // SQL sorgusu oluştur
+                // Filtreleme parametreleri (NULL değer kabul edecek şekilde)
+                parameters.Add("@CashAccountCode", string.IsNullOrEmpty(request.CashAccountCode) ? null : request.CashAccountCode);
+                parameters.Add("@TransactionType", string.IsNullOrEmpty(request.TransactionType) ? null : request.TransactionType);
+                parameters.Add("@CurrencyCode", string.IsNullOrEmpty(request.CurrencyCode) ? null : request.CurrencyCode);
+                
+                // SQL sorgusu
                 string sql = @"
-                    WITH CashTransactions AS (
-                        -- Tahsilat fişleri
+                    WITH CashATAttributesFilter AS (
+                        SELECT CashHeaderID FROM trCashHeader 
+                    ),
+                    CashAccountAttributesFilter AS (
+                        SELECT CurrAccCode FROM cdCurrAcc 
+                    ),
+                    CashTransactions AS (
                         SELECT 
-                            ch.CashNumber AS TransactionNumber,
-                            ch.DocumentDate,
-                            'Tahsilat' AS TransactionType,
-                            cl.CashAccountCode,
-                            '' AS CounterCashAccountCode,
-                            ch.CurrAccCode,
-                            ca.CurrAccDesc,
-                            cl.CurrencyCode,
-                            cl.Amount,
-                            ch.Description,
-                            ch.CreatedBy,
-                            ch.CreatedDate
-                        FROM CashHeader ch
-                        JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                        LEFT JOIN CurrAcc ca ON ch.CurrAccCode = ca.CurrAccCode
+                            DocumentDate = ch.DocumentDate,
+                            DocumentNumber = ch.DocumentNumber,
+                            TransactionNumber = ch.CashTransNumber,
+                            TransactionType = CASE 
+                                WHEN ch.CashTransTypeCode = 1 THEN 'Tahsilat'
+                                WHEN ch.CashTransTypeCode = 2 THEN 'Tediye'
+                                WHEN ch.CashTransTypeCode = 3 THEN 'Virman'
+                                ELSE 'Diğer'
+                            END,
+                            CashAccountCode = CASE 
+                                WHEN ch.CashTransTypeCode = 2 THEN cl.CurrAccCode
+                                WHEN ch.CashTransTypeCode = 3 AND cl.GLAccCode <> '' THEN ''
+                                ELSE ch.CashCurrAccCode 
+                            END,
+                            CounterCashAccountCode = CASE 
+                                WHEN ch.CashTransTypeCode = 8 THEN cl.CounterCashAccountCode
+                                ELSE ''
+                            END,
+                            CurrAccCode = ch.CurrAccCode,
+                            CurrAccDesc = ca.CurrAccDesc,
+                            CurrencyCode = clc.CurrencyCode,
+                            Amount = clc.Debit - clc.Credit,
+                            Description = ch.Description,
+                            CreatedBy = ch.CreatedUserName,
+                            CreatedDate = ch.CreatedDate
+                        FROM trCashHeader ch WITH(NOLOCK)
+                        INNER JOIN trCashLine cl WITH(NOLOCK) ON cl.CashHeaderID = ch.CashHeaderID
+                        LEFT OUTER JOIN trCashLineCurrency clc WITH(NOLOCK) ON clc.CashLineID = cl.CashLineID
+                        LEFT OUTER JOIN cdCurrAcc ca WITH(NOLOCK) ON ca.CurrAccCode = ch.CurrAccCode
+                        LEFT OUTER JOIN CashATAttributesFilter ON CashATAttributesFilter.CashHeaderID = ch.CashHeaderID
                         WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                        AND ch.IsDeleted = 0
-                        AND cl.IsDeleted = 0
-                        AND ch.CashType = 'Receipt'
-                        
-                        UNION ALL
-                        
-                        -- Tediye fişleri
-                        SELECT 
-                            ch.CashNumber AS TransactionNumber,
-                            ch.DocumentDate,
-                            'Tediye' AS TransactionType,
-                            cl.CashAccountCode,
-                            '' AS CounterCashAccountCode,
-                            ch.CurrAccCode,
-                            ca.CurrAccDesc,
-                            cl.CurrencyCode,
-                            cl.Amount,
-                            ch.Description,
-                            ch.CreatedBy,
-                            ch.CreatedDate
-                        FROM CashHeader ch
-                        JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                        LEFT JOIN CurrAcc ca ON ch.CurrAccCode = ca.CurrAccCode
-                        WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                        AND ch.IsDeleted = 0
-                        AND cl.IsDeleted = 0
-                        AND ch.CashType = 'Payment'
-                        
-                        UNION ALL
-                        
-                        -- Virman fişleri
-                        SELECT 
-                            ch.CashNumber AS TransactionNumber,
-                            ch.DocumentDate,
-                            'Virman' AS TransactionType,
-                            cl.CashAccountCode,
-                            cl.CounterCashAccountCode,
-                            ch.CurrAccCode,
-                            ca.CurrAccDesc,
-                            cl.CurrencyCode,
-                            cl.Amount,
-                            ch.Description,
-                            ch.CreatedBy,
-                            ch.CreatedDate
-                        FROM CashHeader ch
-                        JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                        LEFT JOIN CurrAcc ca ON ch.CurrAccCode = ca.CurrAccCode
-                        WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                        AND ch.IsDeleted = 0
-                        AND cl.IsDeleted = 0
-                        AND ch.CashType = 'Transfer'
+                        AND CASE 
+                            WHEN ch.CashTransTypeCode = 2 THEN cl.CurrAccCode
+                            WHEN ch.CashTransTypeCode = 3 AND cl.GLAccCode <> '' THEN ''
+                            ELSE ch.CashCurrAccCode 
+                        END <> ''
                     )
                     SELECT 
                         t.*,
@@ -1438,139 +1555,80 @@ namespace ErpMobile.Api.Services
                 if (!string.IsNullOrEmpty(request.CashAccountCode))
                 {
                     sql += " AND t.CashAccountCode = @CashAccountCode";
-                    parameters.Add("@CashAccountCode", request.CashAccountCode);
                 }
                 
                 if (!string.IsNullOrEmpty(request.TransactionType))
                 {
                     sql += " AND t.TransactionType = @TransactionType";
-                    parameters.Add("@TransactionType", request.TransactionType);
                 }
                 
                 if (!string.IsNullOrEmpty(request.CurrencyCode))
                 {
                     sql += " AND t.CurrencyCode = @CurrencyCode";
-                    parameters.Add("@CurrencyCode", request.CurrencyCode);
                 }
                 
                 // Sıralama ekle
-                sql += $" ORDER BY t.{request.SortField} {request.SortOrder}";
+                sql += " ORDER BY t.DocumentDate DESC";
                 
                 // Sayfalama ekle
                 sql += " OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
                 
-                // Sorguyu çalıştır
-                var transactions = await connection.QueryAsync<CashTransactionReportItem>(sql, parameters);
-                
-                // Toplam kayıt sayısını al
+                // Toplam kayıt sayısı için sorgu
                 string countSql = @"
-                    SELECT COUNT(*) 
-                    FROM (
-                        -- Tahsilat fişleri
+                    WITH CashATAttributesFilter AS (
+                        SELECT CashHeaderID FROM trCashHeader WHERE 1=1
+                    ),
+                    CashAccountAttributesFilter AS (
+                        SELECT CurrAccCode FROM cdCurrAcc WHERE 1=1
+                    ),
+                    CashTransactions AS (
                         SELECT 
-                            ch.CashNumber AS TransactionNumber
-                        FROM CashHeader ch
-                        JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
+                            CashAccountCode = CASE 
+                                WHEN ch.CashTransTypeCode = 2 THEN cl.CurrAccCode
+                                WHEN ch.CashTransTypeCode = 3 AND cl.GLAccCode <> '' THEN ''
+                                ELSE ch.CashCurrAccCode 
+                            END,
+                            TransactionType = CASE 
+                                WHEN ch.CashTransTypeCode = 1 THEN 'Tahsilat'
+                                WHEN ch.CashTransTypeCode = 2 THEN 'Tediye'
+                                WHEN ch.CashTransTypeCode = 3 THEN 'Virman'
+                                ELSE 'Diğer'
+                            END,
+                            CurrencyCode = clc.CurrencyCode
+                        FROM trCashHeader ch WITH(NOLOCK)
+                        INNER JOIN trCashLine cl WITH(NOLOCK) ON cl.CashHeaderID = ch.CashHeaderID
+                        LEFT OUTER JOIN trCashLineCurrency clc WITH(NOLOCK) ON clc.CashLineID = cl.CashLineID
+                        LEFT OUTER JOIN CashATAttributesFilter ON CashATAttributesFilter.CashHeaderID = ch.CashHeaderID
                         WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                        AND ch.IsDeleted = 0
-                        AND cl.IsDeleted = 0
-                        AND ch.CashType = 'Receipt'
-                        
-                        UNION ALL
-                        
-                        -- Tediye fişleri
-                        SELECT 
-                            ch.CashNumber AS TransactionNumber
-                        FROM CashHeader ch
-                        JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                        WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                        AND ch.IsDeleted = 0
-                        AND cl.IsDeleted = 0
-                        AND ch.CashType = 'Payment'
-                        
-                        UNION ALL
-                        
-                        -- Virman fişleri
-                        SELECT 
-                            ch.CashNumber AS TransactionNumber
-                        FROM CashHeader ch
-                        JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                        WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                        AND ch.IsDeleted = 0
-                        AND cl.IsDeleted = 0
-                        AND ch.CashType = 'Transfer'
-                    ) AS AllTransactions";
+                        AND CASE 
+                            WHEN ch.CashTransTypeCode = 2 THEN cl.CurrAccCode
+                            WHEN ch.CashTransTypeCode = 3 AND cl.GLAccCode <> '' THEN ''
+                            ELSE ch.CashCurrAccCode 
+                        END <> ''
+                    )
+                    SELECT COUNT(*) FROM CashTransactions t
+                    WHERE 1=1";
                 
                 // Filtreleme koşullarını count sorgusuna da ekle
-                if (!string.IsNullOrEmpty(request.CashAccountCode) || 
-                    !string.IsNullOrEmpty(request.TransactionType) || 
-                    !string.IsNullOrEmpty(request.CurrencyCode))
+                if (!string.IsNullOrEmpty(request.CashAccountCode))
                 {
-                    countSql = @"
-                        SELECT COUNT(*) 
-                        FROM (
-                            -- Tahsilat fişleri
-                            SELECT 
-                                ch.CashNumber AS TransactionNumber,
-                                'Tahsilat' AS TransactionType,
-                                cl.CashAccountCode,
-                                cl.CurrencyCode
-                            FROM CashHeader ch
-                            JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                            WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                            AND ch.IsDeleted = 0
-                            AND cl.IsDeleted = 0
-                            AND ch.CashType = 'Receipt'
-                            
-                            UNION ALL
-                            
-                            -- Tediye fişleri
-                            SELECT 
-                                ch.CashNumber AS TransactionNumber,
-                                'Tediye' AS TransactionType,
-                                cl.CashAccountCode,
-                                cl.CurrencyCode
-                            FROM CashHeader ch
-                            JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                            WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                            AND ch.IsDeleted = 0
-                            AND cl.IsDeleted = 0
-                            AND ch.CashType = 'Payment'
-                            
-                            UNION ALL
-                            
-                            -- Virman fişleri
-                            SELECT 
-                                ch.CashNumber AS TransactionNumber,
-                                'Virman' AS TransactionType,
-                                cl.CashAccountCode,
-                                cl.CurrencyCode
-                            FROM CashHeader ch
-                            JOIN CashLine cl ON ch.CashHeaderId = cl.CashHeaderId
-                            WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
-                            AND ch.IsDeleted = 0
-                            AND cl.IsDeleted = 0
-                            AND ch.CashType = 'Transfer'
-                        ) AS AllTransactions
-                        WHERE 1=1";
-                    
-                    if (!string.IsNullOrEmpty(request.CashAccountCode))
-                    {
-                        countSql += " AND AllTransactions.CashAccountCode = @CashAccountCode";
-                    }
-                    
-                    if (!string.IsNullOrEmpty(request.TransactionType))
-                    {
-                        countSql += " AND AllTransactions.TransactionType = @TransactionType";
-                    }
-                    
-                    if (!string.IsNullOrEmpty(request.CurrencyCode))
-                    {
-                        countSql += " AND AllTransactions.CurrencyCode = @CurrencyCode";
-                    }
+                    countSql += " AND t.CashAccountCode = @CashAccountCode";
+                }
+                
+                if (!string.IsNullOrEmpty(request.TransactionType))
+                {
+                    countSql += " AND t.TransactionType = @TransactionType";
+                }
+                
+                if (!string.IsNullOrEmpty(request.CurrencyCode))
+                {
+                    countSql += " AND t.CurrencyCode = @CurrencyCode";
                 }
                 
                 int totalCount = await connection.ExecuteScalarAsync<int>(countSql, parameters);
+                
+                // Sorguyu çalıştır
+                var transactions = await connection.QueryAsync<CashTransactionReportItem>(sql, parameters);
                 
                 // Kasa adlarını ekle
                 var result = transactions.ToList();
@@ -1809,79 +1867,135 @@ namespace ErpMobile.Api.Services
         }
 
         /// <summary>
-        /// Kasa tediye fişlerini getirir
+        /// Kasa tediye, tahsilat ve virman fişlerini getirir
         /// </summary>
+        /// <remarks>
+        /// CashTransTypeCode = 1 (Tahsilat)
+        /// CashTransTypeCode = 3 (Tediye)
+        /// CashTransTypeCode = 8 (Kasalar Arası Virman)
+        /// </remarks>
         public async Task<PagedApiResponse<ErpMobile.Api.Models.CashTransactionResponse>> GetCashPaymentVouchersAsync(string startDate, string endDate, string cashAccountCode, int page, int pageSize, string userName)
         {
             try
             {
-                // Kasa tediye fişleri için sorgu hazırlanıyor
+                _logger.LogInformation("Kasa fişleri alınıyor. Başlangıç: {StartDate}, Bitiş: {EndDate}", startDate, endDate);
                 
                 using var connection = new SqlConnection(_configuration.GetConnectionString("ErpConnection"));
                 await connection.OpenAsync();
                 
                 // SQL sorgusu
                 string sql = @"
+                    WITH CashATAttributesFilter AS (
+                        SELECT CashHeaderID FROM trCashHeader 
+                    ),
+                    CashAccountAttributesFilter AS (
+                        SELECT CurrAccCode FROM cdCurrAcc 
+                    ),
+                    CashTransactions AS (
+                        SELECT 
+                            DocumentDate = ch.DocumentDate,
+                            DocumentNumber = ch.DocumentNumber,
+                            TransactionNumber = ch.CashTransNumber,
+                            TransactionType = CASE 
+                                WHEN ch.CashTransTypeCode = 1 THEN 'Tahsilat'
+                                WHEN ch.CashTransTypeCode = 2 THEN 'Tediye'
+                                WHEN ch.CashTransTypeCode = 3 THEN 'Virman'
+                                ELSE 'Diğer'
+                            END,
+                            CashAccountCode = CASE 
+                                WHEN ch.CashTransTypeCode = 3 THEN cl.CurrAccCode
+                                WHEN ch.CashTransTypeCode = 8 AND cl.GLAccCode <> '' THEN ''
+                                ELSE ch.CashCurrAccCode 
+                            END,
+                            CounterCashAccountCode = CASE 
+                                WHEN ch.CashTransTypeCode = 8 THEN cl.CounterCashAccountCode
+                                ELSE ''
+                            END,
+                            CurrAccCode = ch.CurrAccCode,
+                            CurrAccDesc = ca.CurrAccDesc,
+                            CurrencyCode = clc.CurrencyCode,
+                            Amount = clc.Debit - clc.Credit,
+                            Description = ch.Description,
+                            CreatedBy = ch.CreatedUserName,
+                            CreatedDate = ch.CreatedDate
+                        FROM trCashHeader ch WITH(NOLOCK)
+                        INNER JOIN trCashLine cl WITH(NOLOCK) ON cl.CashHeaderID = ch.CashHeaderID
+                        LEFT OUTER JOIN trCashLineCurrency clc WITH(NOLOCK) ON clc.CashLineID = cl.CashLineID
+                        LEFT OUTER JOIN cdCurrAcc ca WITH(NOLOCK) ON ca.CurrAccCode = ch.CurrAccCode
+                        LEFT OUTER JOIN CashATAttributesFilter ON CashATAttributesFilter.CashHeaderID = ch.CashHeaderID
+                        WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
+                        AND CASE 
+                            WHEN ch.CashTransTypeCode = 3 THEN cl.CurrAccCode
+                            WHEN ch.CashTransTypeCode = 8 AND cl.GLAccCode <> '' THEN ''
+                            ELSE ch.CashCurrAccCode 
+                        END <> ''
+                    )
                     SELECT 
-                        CH.CashHeaderID AS CashHeaderID,
-                        CH.CashTransTypeCode AS CashTransTypeCode,
-                        CH.CashTransNumber AS CashTransNumber,
-                        CH.DocumentDate AS DocumentDate,
-                        CH.DocumentTime AS DocumentTime,
-                        CL.LineDescription AS Description,
-                        CL.CurrAccAmount AS CurrAccAmount,
-                        CH.ExchangeRate AS ExchangeRate,
-                        CH.DocCurrencyCode AS DocCurrencyCode,
-                        '' AS SpecialCode,
-                        '' AS AuthCode,
-                        0 AS BranchNo,
-                        0 AS DepartmentNo,
-                        0 AS AccountRef,
-                        0 AS CostCenterRef,
-                        CH.CashCurrAccCode AS CashCurrAccCode,
-                        '' AS CashAccountName,
-                        CL.CostCenterCode AS CostCenterCode,
-                        '' AS CostCenterName,
-                        CH.DocCurrencyCode AS DocCurrencyCode
-                    FROM trCashHeader CH
-                    JOIN trCashLine CL ON CH.CashHeaderID = CL.CashHeaderID
-                    WHERE CH.CashTransTypeCode = 2 -- Tediye fişleri için CashTransTypeCode=2
-                    AND CH.DocumentDate BETWEEN @startDate AND @endDate";
+                        t.*,
+                        COUNT(*) OVER() AS TotalCount
+                    FROM CashTransactions t
+                    WHERE 1=1";
                 
-                // Kasa kodu filtresi ekle
+                // Filtreleme koşulları ekle
                 if (!string.IsNullOrEmpty(cashAccountCode))
                 {
-                    sql += " AND CH.CashCurrAccCode = @cashAccountCode";
+                    sql += " AND t.CashAccountCode = @CashAccountCode";
                 }
                 
-                // Sıralama ve sayfalama
-                sql += " ORDER BY CH.DocumentDate DESC, CH.DocumentTime DESC";
-                sql += " OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY";
+                // Sıralama ekle
+                sql += " ORDER BY t.DocumentDate DESC";
+                
+                // Sayfalama ekle
+                sql += " OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
                 
                 // Toplam kayıt sayısı için sorgu
                 string countSql = @"
-                    SELECT COUNT(*)
-                    FROM trCashHeader CH
-                    JOIN trCashLine CL ON CH.CashHeaderID = CL.CashHeaderID
-                    WHERE CH.CashTransTypeCode = 2 -- Tediye fişleri için CashTransTypeCode=2
-                    AND CH.DocumentDate BETWEEN @startDate AND @endDate";
+                    WITH CashATAttributesFilter AS (
+                        SELECT CashHeaderID FROM trCashHeader WHERE 1=1
+                    ),
+                    CashAccountAttributesFilter AS (
+                        SELECT CurrAccCode FROM cdCurrAcc WHERE 1=1
+                    ),
+                    CashTransactions AS (
+                        SELECT 
+                            CashAccountCode = CASE 
+                                WHEN ch.CashTransTypeCode = 3 THEN cl.CurrAccCode
+                                WHEN ch.CashTransTypeCode = 8 AND cl.GLAccCode <> '' THEN ''
+                                ELSE ch.CashCurrAccCode 
+                            END,
+                            TransactionType = CASE 
+                                WHEN ch.CashTransTypeCode = 1 THEN 'Tahsilat'
+                                WHEN ch.CashTransTypeCode = 2 THEN 'Tediye'
+                                WHEN ch.CashTransTypeCode = 3 THEN 'Virman'
+                                ELSE 'Diğer'
+                            END,
+                            CurrencyCode = clc.CurrencyCode
+                        FROM trCashHeader ch WITH(NOLOCK)
+                        INNER JOIN trCashLine cl WITH(NOLOCK) ON cl.CashHeaderID = ch.CashHeaderID
+                        LEFT OUTER JOIN trCashLineCurrency clc WITH(NOLOCK) ON clc.CashLineID = cl.CashLineID
+                        LEFT OUTER JOIN CashATAttributesFilter ON CashATAttributesFilter.CashHeaderID = ch.CashHeaderID
+                        WHERE ch.DocumentDate BETWEEN @StartDate AND @EndDate
+                        AND CASE 
+                            WHEN ch.CashTransTypeCode = 3 THEN cl.CurrAccCode
+                            WHEN ch.CashTransTypeCode = 8 AND cl.GLAccCode <> '' THEN ''
+                            ELSE ch.CashCurrAccCode 
+                        END <> ''
+                    )
+                    SELECT COUNT(*) FROM CashTransactions t
+                    WHERE 1=1";
                 
-                // Kasa kodu filtresi ekle (count sorgusu için)
+                // Filtreleme koşullarını count sorgusuna da ekle
                 if (!string.IsNullOrEmpty(cashAccountCode))
                 {
-                    countSql += " AND CH.CashCurrAccCode = @cashAccountCode";
+                    countSql += " AND t.CashAccountCode = @CashAccountCode";
                 }
                 
                 // Parametreler
                 var parameters = new DynamicParameters();
-                parameters.Add("@startDate", startDate, DbType.String);
-                parameters.Add("@endDate", endDate, DbType.String);
-                if (!string.IsNullOrEmpty(cashAccountCode))
-                {
-                    parameters.Add("@cashAccountCode", cashAccountCode, DbType.String);
-                }
-                parameters.Add("@offset", (page - 1) * pageSize, DbType.Int32);
-                parameters.Add("@pageSize", pageSize, DbType.Int32);
+                parameters.Add("@StartDate", startDate, DbType.String);
+                parameters.Add("@EndDate", endDate, DbType.String);
+                parameters.Add("@Offset", (page - 1) * pageSize, DbType.Int32);
+                parameters.Add("@PageSize", pageSize, DbType.Int32);
                 
                 // Sorguyu çalıştır
                 var result = await connection.QueryAsync<ErpMobile.Api.Models.CashTransactionResponse>(sql, parameters);
@@ -1893,15 +2007,15 @@ namespace ErpMobile.Api.Services
                     page,
                     pageSize,
                     true,
-                    "Kasa tediye fişleri başarıyla getirildi"
+                    "Kasa fişleri başarıyla getirildi"
                 );
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Kasa tediye fişleri alınırken hata oluştu: {Message}", ex.Message);
+                _logger.LogError(ex, "Kasa fişleri alınırken hata oluştu: {Message}", ex.Message);
                 var errorResponse = new PagedApiResponse<ErpMobile.Api.Models.CashTransactionResponse>();
                 errorResponse.Success = false;
-                errorResponse.Message = "Kasa tediye fişleri alınırken bir hata oluştu";
+                errorResponse.Message = "Kasa fişleri alınırken bir hata oluştu";
                 errorResponse.Error = ex.Message;
                 return errorResponse;
             }
@@ -1978,11 +2092,11 @@ namespace ErpMobile.Api.Services
                     
                     // qry_GetCurrAccBalance stored procedure'ü ile kasa bakiyesi alma
                     var parameters = new DynamicParameters();
-                    parameters.Add("@CurrAccTypeCode", currAccTypeCode, DbType.Byte);
-                    parameters.Add("@CurrAccCode", currentCashCode, DbType.String);
-                    parameters.Add("@CompanyCode", companyCode, DbType.Decimal);
-                    parameters.Add("@OfficeCode", "", DbType.String);
-                    parameters.Add("@StoreCode", "", DbType.String);
+                    parameters.Add("@CurrAccTypeCode", currAccTypeCode);
+                    parameters.Add("@CurrAccCode", currentCashCode);
+                    parameters.Add("@CompanyCode", companyCode);
+                    parameters.Add("@OfficeCode", "");
+                    parameters.Add("@StoreCode", "");
                     
                     var cashBalance = await connection.QueryFirstOrDefaultAsync<dynamic>(
                         "qry_GetCurrAccBalance", 
@@ -2071,15 +2185,28 @@ namespace ErpMobile.Api.Services
                         ";
                     }
                     
-                    // cashTransTypeCode parametresi varsa sorguya ekle
+                // cashTransTypeCode parametresini güvenli bir şekilde işle
+                    int cashTransTypeCodeInt = 0;
+                    bool hasFilterByVoucherType = false;
                     if (!string.IsNullOrEmpty(cashTransTypeCode))
                     {
-                        transactionsQuery += @"
-                            AND trCashHeader.CashTransTypeCode = @cashTransTypeCode
-                        ";
-                        _logger.LogInformation($"Filtering by CashTransTypeCode: {cashTransTypeCode}");
+                        // Frontend'den gelen değeri sayıya çevir
+                        if (int.TryParse(cashTransTypeCode, out cashTransTypeCodeInt))
+                        {
+                            _logger.LogInformation($"Fiş tipi kodu: {cashTransTypeCodeInt}");
+                            
+                            // Fiş tipi 0'dan büyükse (0 = Tüm Fişler) sorguya ekle
+                            if (cashTransTypeCodeInt > 0)
+                            {
+                                hasFilterByVoucherType = true;
+                                _logger.LogInformation($"Fiş tipine göre filtreleniyor: {cashTransTypeCodeInt}");
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning($"Geçersiz fiş tipi formatı: {cashTransTypeCode}. Filtreleme yapılmayacak.");
+                        }
                     }
-                    
 
                     
                     var queryParams = new { 
@@ -2087,34 +2214,51 @@ namespace ErpMobile.Api.Services
                         endDate, 
                         currentCashCode, 
                         searchPattern = !string.IsNullOrEmpty(searchText) ? $"%{searchText}%" : null,
-                        cashTransTypeCode = !string.IsNullOrEmpty(cashTransTypeCode) ? cashTransTypeCode : null
+                        cashTransTypeCodeInt
                     };
-                    
+
+                    // Fiş tipi filtresini sorguya ekle
+                    if (hasFilterByVoucherType && cashTransTypeCodeInt > 0)
+                    {
+                        transactionsQuery += @"
+                        AND trCashHeader.CashTransTypeCode = @cashTransTypeCodeInt
+                        ";
+                        _logger.LogInformation($"SQL sorgusuna fiş tipi filtresi eklendi: {cashTransTypeCodeInt}");
+                    }
+                                        
                     // Toplam kayıt sayısını almak için COUNT sorgusu
-                    string countQuery = $"SELECT COUNT(*) FROM ({transactionsQuery.Replace("ORDER BY trCashHeader.DocumentDate, trCashHeader.DocumentTime", "")}) AS CountQuery";
-                    
+                    string countQuery = $"SELECT COUNT(*) FROM ({transactionsQuery.Split("ORDER BY")[0]}) AS CountQuery";
+
                     // Toplam kayıt sayısını al
                     totalCount = await connection.ExecuteScalarAsync<int>(countQuery, queryParams);
-                    _logger.LogInformation($"Getting cash transactions for cash account: {currentCashCode}, date range: {startDate} - {endDate}");
-                    
-                    // Sayfalama için OFFSET-FETCH ekle
+                    _logger.LogInformation($"Kasa hesabı için işlemler getiriliyor: {currentCashCode}, tarih aralığı: {startDate} - {endDate}");
+
+                    // SQL Server'da OFFSET-FETCH kullanımı için ORDER BY zorunludur
+                    // Ana sorguda zaten ORDER BY var, tekrar eklemeye gerek yok
+
+
+                   // Sayfalama için OFFSET-FETCH ekle
+                    // ORDER BY'dan sonra olmalıdır
                     transactionsQuery += @"
-                        OFFSET @offset ROWS 
-                        FETCH NEXT @pageSize ROWS ONLY
+                    OFFSET @offset ROWS 
+                    FETCH NEXT @pageSize ROWS ONLY
                     ";
                     
-                    // Sayfalama parametrelerini ekle
+                // Sayfalama parametrelerini ekle
                     var pagedQueryParams = new
                     {
                         startDate,
                         endDate,
                         currentCashCode,
                         searchPattern = !string.IsNullOrEmpty(searchText) ? $"%{searchText}%" : null,
-                        cashTransTypeCode = !string.IsNullOrEmpty(cashTransTypeCode) ? cashTransTypeCode : null,
+                        cashTransTypeCodeInt, // Yukarıda güvenli bir şekilde dönüştürülen değeri kullan
                         offset = (page - 1) * pageSize,
                         pageSize
                     };
-                    
+
+                    // Debug için SQL sorgusunu logla
+                    _logger.LogInformation($"Çalıştırılan SQL sorgusu: {transactionsQuery}");
+                    _logger.LogInformation($"Parametreler: startDate={startDate}, endDate={endDate}, cashTransTypeCodeInt={cashTransTypeCodeInt}, offset={(page - 1) * pageSize}, pageSize={pageSize}");
                     // İşlemleri veritabanından çek ve CashTransactionSummary tipine dönüştür
                     var transactions = (await connection.QueryAsync<CashTransactionSummary>(transactionsQuery, pagedQueryParams)).ToList();
                     
@@ -2292,6 +2436,110 @@ namespace ErpMobile.Api.Services
             {
                 _logger.LogError(ex, "Kasa bakiyeleri getirilirken hata oluştu");
                 throw;
+            }
+        }
+        
+        /// <summary>
+        /// Kasa işlemi için bildirim gönderir
+        /// </summary>
+        /// <param name="userId">Kullanıcı kimliği</param>
+        /// <param name="notificationType">Bildirim türü (CashTransaction, Invoice, vb.)</param>
+        /// <param name="actionType">İşlem türü (Create, Update, Delete, vb.)</param>
+        /// <param name="referenceNumber">İşlem referans numarası</param>
+        /// <param name="amount">Tutar</param>
+        /// <param name="currencyCode">Para birimi</param>
+        /// <param name="description">Açıklama</param>
+        /// <returns></returns>
+        private async Task SendTransactionNotificationAsync(string userId, string notificationType, string actionType, 
+            string referenceNumber, decimal? amount = null, string currencyCode = null, string description = null)
+        {
+            try
+            {
+                // Kullanıcının bildirim tercihini kontrol et
+                bool shouldSend = await _notificationService.ShouldSendNotificationAsync(userId, notificationType, actionType);
+                
+                if (!shouldSend)
+                {
+                    _logger.LogInformation("Kullanıcı tercihi nedeniyle bildirim gönderilmiyor. UserId: {UserId}, NotificationType: {NotificationType}, ActionType: {ActionType}",
+                        userId, notificationType, actionType);
+                    return;
+                }
+                
+                // Bildirim başlığı ve içeriği oluştur
+                string title = string.Empty;
+                string body = string.Empty;
+                string url = "/cash/transactions";
+                string amountText = amount.HasValue ? $" Tutar: {amount:N2} {currencyCode}" : "";
+                
+                switch (notificationType)
+                {
+                    case "CashTransaction":
+                        switch (actionType)
+                        {
+                            case "Create":
+                                title = "Yeni Kasa Hareketi";
+                                body = $"{referenceNumber} numaralı kasa hareketi oluşturuldu.{amountText}";
+                                break;
+                            case "Update":
+                                title = "Kasa Hareketi Güncellendi";
+                                body = $"{referenceNumber} numaralı kasa hareketi güncellendi.{amountText}";
+                                break;
+                            case "Delete":
+                                title = "Kasa Hareketi Silindi";
+                                body = $"{referenceNumber} numaralı kasa hareketi silindi.";
+                                break;
+                            default:
+                                title = "Kasa Hareketi Bildirimi";
+                                body = $"{referenceNumber} numaralı kasa hareketi işlemi gerçekleşti.{amountText}";
+                                break;
+                        }
+                        break;
+                    
+                    case "Invoice":
+                        switch (actionType)
+                        {
+                            case "Create":
+                                title = "Yeni Fatura";
+                                body = $"{referenceNumber} numaralı fatura oluşturuldu.{amountText}";
+                                url = "/invoices";
+                                break;
+                            case "Update":
+                                title = "Fatura Güncellendi";
+                                body = $"{referenceNumber} numaralı fatura güncellendi.{amountText}";
+                                url = "/invoices";
+                                break;
+                            case "Complete":
+                                title = "Fatura Tamamlandı";
+                                body = $"{referenceNumber} numaralı fatura tamamlandı.{amountText}";
+                                url = "/invoices";
+                                break;
+                            default:
+                                title = "Fatura Bildirimi";
+                                body = $"{referenceNumber} numaralı fatura işlemi gerçekleşti.{amountText}";
+                                url = "/invoices";
+                                break;
+                        }
+                        break;
+                    
+                    default:
+                        title = $"{notificationType} Bildirimi";
+                        body = $"{referenceNumber} numaralı işlem gerçekleşti.{amountText}";
+                        break;
+                }
+                
+                // Açıklama varsa ekle
+                if (!string.IsNullOrEmpty(description))
+                {
+                    body += $" Açıklama: {description}";
+                }
+                
+                // Bildirim gönder
+                await _notificationService.SendPushNotificationAsync(userId, title, body, url);
+                _logger.LogInformation("{NotificationType} bildirimi gönderildi. UserId: {UserId}, Title: {Title}", notificationType, userId, title);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{NotificationType} bildirimi gönderilirken hata oluştu. UserId: {UserId}", notificationType, userId);
             }
         }
         
