@@ -545,6 +545,18 @@ builder.Services.AddScoped<ICustomerCreditService, CustomerCreditService>();
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 builder.Services.AddScoped<TcmbExchangeRateService>();
 
+// Döviz kuru günlük senkronizasyon servisi
+builder.Services.AddHostedService<ExchangeRateBackgroundService>();
+
+// Global ayarlar servisi
+builder.Services.AddScoped<IGlobalSettingsService, GlobalSettingsService>();
+
+// Veritabanı yedekleme servisi
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IDatabaseBackupService, DatabaseBackupService>();
+// Otomatik yedekleme servisi
+builder.Services.AddHostedService<AutoBackupService>();
+
 // Tüm gereksiz referanslar kaldırıldı çünkü ERP veritabanına yazma işlemi yapmıyoruz
 
 builder.Services.AddHttpClient();
