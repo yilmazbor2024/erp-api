@@ -43,6 +43,7 @@ namespace ErpMobile.Api.Models.Responses
         public bool IsTurnover { get; set; }
         public bool IsPostingJournal { get; set; }
         public DateTime? JournalDate { get; set; }
+        public DateTime? CreatedDate { get; set; }
         public string JournalNumber { get; set; }
         public string ImportFileNumber { get; set; }
         public string ExportFileNumber { get; set; }

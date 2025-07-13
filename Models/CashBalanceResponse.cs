@@ -72,6 +72,11 @@ namespace ErpMobile.Api.Models
         /// <summary>
         /// İşlem tarihi
         /// </summary>
+        public DateTime CreatedDate { get; set; }
+
+          /// <summary>
+        /// İşlem tarihi
+        /// </summary>
         public DateTime DocumentDate { get; set; }
         
         /// <summary>
@@ -158,5 +163,10 @@ namespace ErpMobile.Api.Models
         /// Cari hesap açıklaması
         /// </summary>
         public string CurrAccDescription { get; set; }
+
+        /// <summary>
+        /// Bağlı uygulama açıklaması (Fatura, Nakit, N.Kasa.Hs vb.)
+        /// </summary>
+        public string ApplicationDescription { get; set; }
     }
 }
